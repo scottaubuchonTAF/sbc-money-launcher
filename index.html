@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SBC Money</title>
+<!-- iPhone home-screen icon (Apps Script can't set this; this launcher can) -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SBC Money">
+<meta name="theme-color" content="#0E9384">
+<style>
+html,body{height:100%;margin:0}
+body{
+  background:#0d3b36;color:#fff;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:18px;text-align:center;
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+.name{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.name span{color:#5eead4}
+a.btn{
+  background:#0d9488;color:#fff;text-decoration:none;font-weight:700;
+  border-radius:99px;padding:13px 30px;font-size:16px;margin-top:8px;
+}
+.hint{color:#9fc0bb;font-size:12.5px;max-width:300px}
+.spin{width:22px;height:22px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;
+  border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="SBC Money">
+<div class="name">SBC <span>Money</span></div>
+<div class="spin" id="spin"></div>
+<a class="btn" id="open" href="#">Open SBC Money</a>
+<div class="hint" id="hint">To install on your phone: open this page, tap Share → Add to Home Screen.</div>
+<script>
+/* ⬇️ PASTE YOUR WEB APP /exec URL BETWEEN THE QUOTES ⬇️ */
+var APP_URL = 'https://script.google.com/a/macros/theaubuchonfamily.com/s/AKfycbyzvzQEx27XIohQybzhTj8jQE-x-TfjfnfEALjZ7DKpILJkVOl7DJNC-t-sBnbLkhxBcA/exec';
+/* ⬆️ ------------------------------------------------ ⬆️ */
+document.getElementById('open').href = APP_URL;
+var stay = location.search.indexOf('setup') !== -1 || APP_URL.indexOf('PASTE_') === 0;
+if(!stay){
+  setTimeout(function(){ location.replace(APP_URL); }, 400);
+} else {
+  document.getElementById('spin').style.display='none';
+}
+</script>
+</body>
+</html>
