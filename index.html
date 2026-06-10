@@ -333,6 +333,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="envelopes"></button>
     <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
+    <button class="nav" data-v="accounts"></button>
     <button class="nav" data-v="history"></button>
     <button class="nav" data-v="about"></button>
     <div class="foot" id="sideFoot"></div>
@@ -366,9 +367,10 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
 /* ============================ helpers ============================ */
 var state = {
   view:'dash', boot:null, dash:null, inbox:null, picker:null, history:null,
-  sel:{}, split:{}, register:{q:'', account:'', envelope:'', items:null}, resplit:{},
+  sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
-  accounts:null, envOpen:{}, envDetail:null, move:null, envTxnCache:{}, confirmRes:null
+  accounts:null, accountsFull:null, envOpen:{}, envDetail:null, move:null,
+  envTxnCache:{}, confirmRes:null, importing:false
 };
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 function $(s){ return document.querySelector(s); }
@@ -457,12 +459,13 @@ var ICONS = {
   envelopes:'<rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 7l8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   plans:'<path d="M5 4h14v16H5zM9 4v16M5 9h14M5 14h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
   txns:'<path d="M4 7h16M4 12h16M4 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  accounts:'<path d="M3 9.5l9-5.5 9 5.5M4.5 9.5V18M9.5 9.5V18M14.5 9.5V18M19.5 9.5V18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   history:'<path d="M12 8v4l3 2M21 12a9 9 0 11-2.6-6.3M21 3v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
   about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
-  plans:'Plans', txns:'Transactions', history:'History', more:'More', about:'About'};
+  plans:'Plans', txns:'Transactions', accounts:'Accounts', history:'History', more:'More', about:'About'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -482,7 +485,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='more' && ['plans','txns','history','about'].indexOf(view)!==-1));
+      (b.dataset.v==='more' && ['plans','txns','accounts','history','about'].indexOf(view)!==-1));
   });
   render();
 }
@@ -525,10 +528,13 @@ function prewarm(){
   }, 2600);
   setTimeout(function(){
     var r=state.register;
-    if(!r.items) run('apiRegister',{q:'',account:'',envelope:'',limit:50}).then(function(it){
-      r.items=it; r.sig='||';
+    if(!r.items) run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50}).then(function(it){
+      r.items=it; r.sig='|||0';
     }).catch(function(){});
   }, 3400);
+  setTimeout(function(){
+    if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; }).catch(function(){});
+  }, 4200);
 }
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
@@ -564,6 +570,7 @@ function render(){
   else if(state.view==='envdetail') renderEnvDetail();
   else if(state.view==='plans') renderPlans();
   else if(state.view==='txns') renderTxns();
+  else if(state.view==='accounts') renderAccounts();
   else if(state.view==='more') renderMore();
   else if(state.view==='about') renderAbout();
   else renderHistory();
@@ -682,7 +689,7 @@ function findEnv(id){
   return hit;
 }
 function openEnvelope(id){
-  state.envDetail = { id:id, txns:null };
+  state.envDetail = { id:id, txns:null, filter:'all' };
   state.move = null;
   go('envdetail');
 }
@@ -712,14 +719,30 @@ function renderEnvDetail(){
       '<button class="btn sm" data-act="env-move-start">⇄ Move money</button></div>';
   }
   h += '</div>';
-  h += '<div class="grp" style="margin-top:18px"><h3>Transactions</h3><div class="card" id="envTxns">';
+  h += '<div class="grp" style="margin-top:18px"><h3>Activity</h3>'+
+    '<div class="filterbar" style="margin:0 0 10px">'+
+    '<button class="pill'+(d.filter==='all'?' sel':'')+'" data-act="env-filter" data-arg="all">All activity</button>'+
+    '<button class="pill'+(d.filter==='spend'?' sel':'')+'" data-act="env-filter" data-arg="spend">Spending only</button>'+
+    '</div><div class="card" id="envTxns">';
   if(!d.txns){ h += '<div class="spin"></div>'; }
-  else if(!d.txns.length){ h += '<div class="empty">No transactions assigned to this envelope yet.</div>'; }
   else {
-    d.txns.forEach(function(t){
+    var items = d.filter==='spend'
+      ? d.txns.filter(function(t){ return t.kind!=='journal'; })
+      : d.txns;
+    if(!items.length){
+      h += '<div class="empty">'+(d.filter==='spend'
+        ? 'No transactions assigned to this envelope yet.'
+        : 'No activity in this envelope yet.')+'</div>';
+    }
+    items.forEach(function(t){
+      var isJ = t.kind==='journal';
+      var chip = isJ
+        ? '<span class="legchip">'+esc({allocation:'funded',income:'income',move:'moved',
+            adjustment:'adjustment',cover:'cover',undo:'undo'}[t.type]||t.type)+'</span>'
+        : '<span class="acctchip">'+esc(t.account)+'</span>';
       h += '<div class="regrow"><div class="l1"><span class="desc">'+esc(t.description)+'</span>'+
         '<span class="amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span></div>'+
-        '<div class="meta">'+esc(t.date)+' · <span class="acctchip">'+esc(t.account)+'</span></div></div>';
+        '<div class="meta">'+esc(t.date)+' · '+chip+'</div></div>';
     });
   }
   h += '</div></div>';
@@ -730,7 +753,7 @@ function renderEnvDetail(){
       renderEnvDetail();
       return;
     }
-    run('apiEnvelopeTxns', d.id, 100).then(function(txns){
+    run('apiEnvelopeTxns', d.id, 150, {funding:true}).then(function(txns){
       state.envTxnCache[d.id] = txns;
       if(state.envDetail && state.envDetail.id===d.id){
         state.envDetail.txns = txns;
@@ -768,7 +791,9 @@ function renderInbox(){
   }).catch(function(e){ if(!state.inbox) fail(e); });
 }
 function drawInbox(){
-  var h = '<h2 class="viewtitle">Inbox</h2>';
+  var h = '<div class="viewhead"><h2>Inbox</h2>'+
+    '<button class="btn ghost sm" data-act="import-now"'+(state.importing?' disabled':'')+
+    '>↻ Check for new</button></div>';
   if(!state.inbox.length){
     h += '<div class="empty">Inbox zero. Every transaction has a job.</div>';
     $('#shell').innerHTML = h; return;
@@ -1091,12 +1116,13 @@ function planToggle(planId, on){
 /* ============================ transactions ============================ */
 function renderTxns(){
   var r = state.register;
-  var sig = r.q+'|'+r.account+'|'+r.envelope;
+  var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
   var cached = r.items && r.sig===sig;
   if(cached){ drawTxns(); }
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Transactions</h2><div class="spin"></div>'; }
   Promise.all([
-    run('apiRegister', { q:r.q, account:r.account, envelope:r.envelope, limit:50 }),
+    run('apiRegister', { q:r.q, account:r.account, envelope:r.envelope,
+      includeHidden:r.includeHidden, limit:50 }),
     state.accounts ? Promise.resolve(state.accounts) : run('apiAccounts')
   ]).then(function(res){
     var changed = JSON.stringify(res[0]) !== JSON.stringify(r.items);
@@ -1118,6 +1144,8 @@ function drawTxns(){
     (r.envelope
       ? '<button class="pill sel" data-act="reg-env-clear">'+esc(envName(r.envelope))+' ✕</button>'
       : '<button class="pill" data-act="open-picker" data-arg="regenv|x|0">Filter by envelope…</button>')+
+    '<button class="pill'+(r.includeHidden?' sel':'')+'" data-act="reg-hidden">'+
+      (r.includeHidden?'Hidden shown ✕':'Show hidden')+'</button>'+
     ((r.q||r.account||r.envelope)?'<button class="pill" data-act="reg-clear">Clear all</button>':'')+
     '</div>';
   var items = r.items || [];
@@ -1180,9 +1208,84 @@ function unapprove(txnId){
   });
 }
 
+/* ============================ accounts (v3.2) ============================ */
+function renderAccounts(){
+  if(state.accountsFull){ drawAccounts(); }
+  else { $('#shell').innerHTML = '<h2 class="viewtitle">Accounts</h2><div class="spin"></div>'; }
+  run('apiAccountsFull').then(function(rows){
+    var changed = JSON.stringify(rows) !== JSON.stringify(state.accountsFull);
+    state.accountsFull = rows;
+    if(state.view==='accounts' && changed) drawAccounts();
+  }).catch(function(e){ if(!state.accountsFull) fail(e); });
+}
+function drawAccounts(){
+  var rows = state.accountsFull || [];
+  var hiddenN = rows.filter(function(a){ return a.hidden; }).length;
+  var h = '<div class="viewhead"><h2>Accounts</h2></div>';
+  if(hiddenN){
+    h += '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
+      hiddenN+' hidden account'+(hiddenN>1?'s':'')+
+      ' — transactions stay in your envelopes, they’re just filtered off the Transactions page.</div>';
+  }
+  if(!rows.length){
+    h += '<div class="empty">No accounts found yet.</div>';
+  } else {
+    h += '<div class="card">';
+    rows.forEach(function(a){
+      var meta = [a.institution, a.klass, a.group].filter(String).join(' · ');
+      h += '<div class="envrow"'+(a.hidden?' style="opacity:.55"':'')+'><div style="flex:1;min-width:0">'+
+        '<div class="nm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.name)+'</div>'+
+        '<div style="color:var(--ink-3);font-size:12px;margin-top:1px">'+
+        esc(meta || '')+(meta?' · ':'')+a.txnCount+' txns'+(a.lastTxn?' · last '+esc(a.lastTxn):'')+'</div></div>'+
+        '<button class="btn ghost sm" data-act="acct-toggle" data-arg="'+esc(a.name)+'">'+
+        (a.hidden?'Show':'Hide')+'</button></div>';
+    });
+    h += '</div>';
+  }
+  $('#shell').innerHTML = h;
+}
+function acctToggle(name){
+  var rows = state.accountsFull || [];
+  var a = rows.find(function(x){ return x.name===name; });
+  if(!a) return;
+  a.hidden = !a.hidden; // optimistic
+  drawAccounts();
+  run('apiSetAccountHidden', { name:name, hidden:a.hidden })
+  .then(function(){
+    toast(a.hidden ? 'Hidden — won’t show in Transactions' : 'Visible again ✓');
+    state.register.sig = null; // register must refetch with new hidden set
+  }).catch(function(e){
+    a.hidden = !a.hidden;
+    drawAccounts();
+    toast('⚠ '+(e.message||e));
+  });
+}
+
+/* ============================ import (v3.2) ============================ */
+function importNowUi(){
+  if(state.importing) return;
+  state.importing = true;
+  toast('Checking Tiller for new transactions…');
+  $all('[data-act="import-now"]').forEach(function(b){ b.disabled = true; });
+  run('apiImportNow').then(function(r){
+    state.importing = false;
+    toast(r.newCount > 0
+      ? r.newCount+' new transaction'+(r.newCount>1?'s':'')+' → Inbox ✓'
+      : 'No new transactions in Tiller');
+    state.inbox = null;
+    updateBadges(r.inboxCount);
+    refreshBoot();
+    if(state.view==='inbox') renderInbox();
+  }).catch(function(e){
+    state.importing = false;
+    $all('[data-act="import-now"]').forEach(function(b){ b.disabled = false; });
+    toast('⚠ '+(e.message||e));
+  });
+}
+
 /* ============================ more (phone) ============================ */
 function renderMore(){
-  var rows = [['plans','Funding plans'],['txns','Transactions'],['history','History & undo'],['about','About']];
+  var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],['history','History & undo'],['about','About']];
   var h = '<h2 class="viewtitle">More</h2><div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
@@ -1381,13 +1484,18 @@ document.addEventListener('click', function(ev){
     case 'plan-on': planToggle(arg, true); break;
     case 'reg-search': state.register.q = $('#regQ').value; renderTxns(); break;
     case 'reg-env-clear': state.register.envelope=''; renderTxns(); break;
-    case 'reg-clear': state.register.q=''; state.register.account=''; state.register.envelope=''; renderTxns(); break;
+    case 'reg-hidden': state.register.includeHidden = !state.register.includeHidden; renderTxns(); break;
+    case 'reg-clear': state.register.q=''; state.register.account=''; state.register.envelope='';
+      state.register.includeHidden=false; renderTxns(); break;
     case 'grp-toggle':
       state.envOpen[arg] = state.envOpen[arg]===false ? true : false;
       try{ localStorage.setItem('sbcEnvOpen', JSON.stringify(state.envOpen)); }catch(e2){}
       renderEnvelopes(); break;
     case 'env-open': openEnvelope(arg); break;
     case 'env-back': go('envelopes'); break;
+    case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
+    case 'acct-toggle': acctToggle(arg); break;
+    case 'import-now': importNowUi(); break;
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
