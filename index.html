@@ -1431,7 +1431,8 @@ function drawSync(){
       '<div class="meta">'+esc(r.date)+' · '+esc(r.changes.join(' · '))+'</div>'+
       (r.hint?'<div class="meta" style="color:var(--amber);font-weight:600">'+esc(r.hint)+'</div>':'')+
       '<div class="reglinks"><button data-act="accept-tiller" data-arg="'+esc(r.txnId)+'">'+
-      '✓ Accept Tiller’s version</button></div>'+
+      '✓ Accept Tiller’s version</button>'+
+      '<button data-act="inspect-txn" data-arg="'+esc(r.txnId)+'">🔍 Inspect</button></div>'+
       '</div>';
   }, 'No amount/description/date changes on transactions SBC already has.');
 
@@ -1468,6 +1469,44 @@ function drawSync(){
     'category backfill, conflict resolution (you pick the winner), split mirroring, and Categories-tab upserts — '+
     'all behind the Write Authorization gate, every write audited.</div>';
   $('#shell').innerHTML = h;
+}
+
+/* v3.4 forensics: everything the system knows about one transaction. */
+function inspectTxn(txnId){
+  toast('Inspecting…');
+  run('apiInspectTxn', txnId).then(function(d){
+    var h = '<div class="ovl" data-act="inspect-close"><div class="panel" data-stop="1" '+
+      'style="max-height:84vh"><div style="overflow:auto;font-size:13px;line-height:1.6">'+
+      '<div style="font-weight:800;font-size:15px;margin-bottom:6px">Transaction forensics</div>'+
+      '<div style="color:var(--ink-3);font-size:11px;word-break:break-all;margin-bottom:10px">'+esc(d.txnId)+'</div>';
+    h += '<div style="font-weight:700;margin-top:8px">SBC register · '+d.register.length+' row'+(d.register.length!==1?'s':'')+'</div>';
+    if(!d.register.length) h += '<div style="color:var(--ink-3)">none</div>';
+    d.register.forEach(function(r){
+      h += '<div style="border-left:3px solid '+(r.approvedBy==='migration'?'var(--amber)':'var(--teal-500)')+
+        ';padding-left:8px;margin:6px 0">'+
+        esc(r.date)+' · '+money(r.amount)+' → '+esc(r.envelope)+'<br>'+
+        '<span style="color:var(--ink-3)">sheet row '+r.sheetRow+' · by <b>'+esc(r.approvedBy)+'</b>'+
+        (r.approvedAt?' at '+esc(r.approvedAt):'')+(r.note?' · '+esc(r.note):'')+'</span></div>';
+    });
+    h += '<div style="font-weight:700;margin-top:8px">Inbox</div>'+
+      '<div style="color:var(--ink-3)">'+(d.inbox?esc(d.inbox.description)+' · '+money(d.inbox.amount):'not in inbox')+'</div>';
+    h += '<div style="font-weight:700;margin-top:8px">Dedupe index (_Index)</div>'+
+      '<div style="color:var(--ink-3)">'+(d.indexSeenAt?'remembered '+esc(d.indexSeenAt):'⚠ NOT in the dedupe index')+'</div>';
+    h += '<div style="font-weight:700;margin-top:8px">Tiller today · '+d.tiller.length+' row'+(d.tiller.length!==1?'s':'')+'</div>';
+    d.tiller.forEach(function(t){
+      h += '<div style="color:var(--ink-3)">'+esc(t.date)+' · '+money(t.amount)+' · '+esc(t.description)+
+        (t.dateAdded?' · added '+esc(t.dateAdded):'')+'</div>';
+    });
+    h += '<div style="font-weight:700;margin-top:8px">Audit trail · '+d.audit.length+' op'+(d.audit.length!==1?'s':'')+'</div>';
+    if(!d.audit.length) h += '<div style="color:var(--ink-3)">no audit ops reference this txn</div>';
+    d.audit.forEach(function(a){
+      h += '<div style="margin:5px 0"><b>'+esc(a.action)+'</b> · '+esc(a.timestamp)+' · '+esc(a.opId)+
+        '<br><span style="color:var(--ink-3)">'+esc(a.note)+'</span></div>';
+    });
+    h += '</div><div class="actions" style="justify-content:flex-end;margin-top:10px">'+
+      '<button class="btn ghost" data-act="inspect-close">Close</button></div></div></div>';
+    $('#ovl').innerHTML = h;
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 
 /* v3.4: make SBC's copy of one transaction match Tiller's bank data.
@@ -1736,6 +1775,10 @@ document.addEventListener('click', function(ev){
       state.sync = null;
       renderSync(); break;
     case 'accept-tiller': acceptTiller(arg); break;
+    case 'inspect-txn': inspectTxn(arg); break;
+    case 'inspect-close':
+      if(el.tagName==='BUTTON' || ev.target===el) $('#ovl').innerHTML='';
+      break;
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
