@@ -1241,16 +1241,22 @@ function unapprove(txnId){
 function renderAccounts(){
   if(state.accountsFull){ drawAccounts(); }
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Accounts</h2><div class="spin"></div>'; }
-  run('apiAccountsFull').then(function(rows){
-    var changed = JSON.stringify(rows) !== JSON.stringify(state.accountsFull);
-    state.accountsFull = rows;
+  run('apiAccountsFull').then(function(res){
+    var changed = JSON.stringify(res) !== JSON.stringify(state.accountsFull);
+    state.accountsFull = res;
     if(state.view==='accounts' && changed) drawAccounts();
   }).catch(function(e){ if(!state.accountsFull) fail(e); });
 }
 function drawAccounts(){
-  var rows = state.accountsFull || [];
+  var rows = (state.accountsFull && state.accountsFull.accounts) || [];
+  var dups = (state.accountsFull && state.accountsFull.dups) || [];
   var hiddenN = rows.filter(function(a){ return a.hidden; }).length;
   var h = '<div class="viewhead"><h2>Accounts</h2></div>';
+  if(dups.length){
+    h += '<div class="empty" style="padding:0 4px 10px;text-align:left;font-size:12.5px;color:var(--amber)">'+
+      '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(dups.join(', '))+
+      '. Delete the extras in Tiller to avoid surprises.</div>';
+  }
   if(hiddenN){
     h += '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
       hiddenN+' hidden account'+(hiddenN>1?'s':'')+
@@ -1261,11 +1267,12 @@ function drawAccounts(){
   } else {
     h += '<div class="card">';
     rows.forEach(function(a){
-      var meta = [a.institution, a.klass, a.group].filter(String).join(' · ');
+      var meta = [a.klass, a.group].filter(String).join(' · ');
       h += '<div class="envrow"'+(a.hidden?' style="opacity:.55"':'')+'><div style="flex:1;min-width:0">'+
         '<div class="nm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.name)+'</div>'+
         '<div style="color:var(--ink-3);font-size:12px;margin-top:1px">'+
-        esc(meta || '')+(meta?' · ':'')+a.txnCount+' txns'+(a.lastTxn?' · last '+esc(a.lastTxn):'')+'</div></div>'+
+        esc(meta || '')+(meta?' · ':'')+a.txnCount+' txns'+(a.lastTxn?' · last '+esc(a.lastTxn):'')+
+        (a.tillerHide?' · hidden in Tiller':'')+'</div></div>'+
         '<button class="btn ghost sm" data-act="acct-toggle" data-arg="'+esc(a.name)+'">'+
         (a.hidden?'Show':'Hide')+'</button></div>';
     });
@@ -1274,7 +1281,7 @@ function drawAccounts(){
   $('#shell').innerHTML = h;
 }
 function acctToggle(name){
-  var rows = state.accountsFull || [];
+  var rows = (state.accountsFull && state.accountsFull.accounts) || [];
   var a = rows.find(function(x){ return x.name===name; });
   if(!a) return;
   a.hidden = !a.hidden; // optimistic
@@ -1295,28 +1302,66 @@ function renderBalances(){
   if(state.balances){ drawBalances(); }
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Balances</h2><div class="spin"></div>'; }
   run('apiBalances').then(function(b){
+    if(state.balReorder) return; // don't clobber an in-progress reorder
     var changed = JSON.stringify(b) !== JSON.stringify(state.balances);
     state.balances = b;
     if(state.view==='balances' && changed) drawBalances();
   }).catch(function(e){ if(!state.balances) fail(e); });
 }
 function balGroupHtml(g){
-  var h = '<div class="card balgrp"><div class="bhead"><span>'+esc(g.name)+
-    '</span><span class="v">'+money(g.total)+'</span></div>';
-  g.rows.forEach(function(r){
-    var stale = r.days >= 30;
-    var slow = r.days >= 7 && r.days < 30;
-    h += '<div class="balrow'+(stale?' stale':'')+'">'+
-      '<span class="nm">'+esc(r.name)+'</span>'+
-      '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
-      '<span class="bal">'+money(r.balance)+'</span></div>';
-  });
+  var h = '<div class="card balgrp"><div class="bhead"><span>'+esc(g.name)+'</span>';
+  if(state.balReorder){
+    h += '<span style="display:flex;gap:6px">'+
+      '<button class="btn sm" style="background:rgba(255,255,255,.2);padding:2px 10px" data-act="bal-up" data-arg="'+esc(g.name)+'">↑</button>'+
+      '<button class="btn sm" style="background:rgba(255,255,255,.2);padding:2px 10px" data-act="bal-down" data-arg="'+esc(g.name)+'">↓</button></span>';
+  } else {
+    h += '<span class="v">'+money(g.total)+'</span>';
+  }
+  h += '</div>';
+  if(!state.balReorder){
+    g.rows.forEach(function(r){
+      var stale = r.days >= 30;
+      var slow = r.days >= 7 && r.days < 30;
+      h += '<div class="balrow'+(stale?' stale':'')+'">'+
+        '<span class="nm">'+esc(r.name)+'</span>'+
+        '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
+        '<span class="bal">'+money(r.balance)+'</span></div>';
+    });
+  }
   return h+'</div>';
+}
+function balMove(name, dir){
+  var gs = state.balances.groups;
+  var i = -1;
+  gs.forEach(function(g,idx){ if(g.name===name) i=idx; });
+  if(i===-1) return;
+  // move among groups in the SAME column (asset vs liability)
+  var sibs = [];
+  gs.forEach(function(g,idx){ if(g.liability===gs[i].liability) sibs.push(idx); });
+  var pos = sibs.indexOf(i);
+  var tgt = pos + dir;
+  if(tgt<0 || tgt>=sibs.length) return;
+  var j = sibs[tgt];
+  var tmp = gs[i]; gs[i]=gs[j]; gs[j]=tmp;
+  drawBalances();
+}
+function balSaveOrder(){
+  var names = state.balances.groups.map(function(g){ return g.name; });
+  run('apiSetBalanceGroupOrder', names)
+  .then(function(){ toast('Group order saved ✓'); })
+  .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 function drawBalances(){
   var b = state.balances;
   var h = '<div class="viewhead"><h2>Balances</h2>'+
-    '<span style="color:var(--ink-3);font-size:12.5px">'+esc(b.asOf||'')+'</span></div>';
+    '<span style="display:flex;gap:10px;align-items:center">'+
+    '<span style="color:var(--ink-3);font-size:12.5px">'+esc(b.asOf||'')+'</span>'+
+    '<button class="btn ghost sm" data-act="bal-reorder">'+
+    (state.balReorder?'Done':'Reorder')+'</button></span></div>';
+  if(b.dups && b.dups.length && !state.balReorder){
+    h += '<div class="empty" style="padding:0 4px 12px;text-align:left;font-size:12.5px;color:var(--amber)">'+
+      '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(b.dups.join(', '))+'</div>';
+  }
   h += '<div class="nwhero"><span class="lbl">Net worth</span>'+
     '<span class="num">'+money(b.netWorth)+'</span></div>';
   var aGroups = b.groups.filter(function(g){ return !g.liability; });
@@ -1569,6 +1614,12 @@ document.addEventListener('click', function(ev){
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
     case 'import-now': importNowUi(); break;
+    case 'bal-reorder':
+      state.balReorder = !state.balReorder;
+      if(!state.balReorder) balSaveOrder();
+      drawBalances(); break;
+    case 'bal-up': balMove(arg,-1); break;
+    case 'bal-down': balMove(arg,1); break;
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
