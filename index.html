@@ -360,6 +360,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="accounts"></button>
     <button class="nav" data-v="balances"></button>
+    <button class="nav" data-v="sync"></button>
     <button class="nav" data-v="history"></button>
     <button class="nav" data-v="about"></button>
     <div class="foot" id="sideFoot"></div>
@@ -395,7 +396,7 @@ var state = {
   view:'dash', boot:null, dash:null, inbox:null, picker:null, history:null,
   sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
-  accounts:null, accountsFull:null, balances:null, envOpen:{}, envDetail:null, move:null,
+  accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false
 };
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
@@ -487,13 +488,14 @@ var ICONS = {
   txns:'<path d="M4 7h16M4 12h16M4 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   accounts:'<path d="M3 9.5l9-5.5 9 5.5M4.5 9.5V18M9.5 9.5V18M14.5 9.5V18M19.5 9.5V18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   balances:'<path d="M12 4v2.5M12 4l-6 2.5M12 4l6 2.5M6 6.5L3.5 12a3 3 0 0 0 5 0L6 6.5zM18 6.5L15.5 12a3 3 0 0 0 5 0L18 6.5zM12 6.5V19M8.5 19h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  sync:'<path d="M20 12a8 8 0 0 1-14.6 4.5M4 12a8 8 0 0 1 14.6-4.5M18.6 3v4.5H14M5.4 21v-4.5H10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   history:'<path d="M12 8v4l3 2M21 12a9 9 0 11-2.6-6.3M21 3v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
   about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
   plans:'Plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
-  history:'History', more:'More', about:'About'};
+  sync:'Sync', history:'History', more:'More', about:'About'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -513,7 +515,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='more' && ['plans','txns','accounts','balances','history','about'].indexOf(view)!==-1));
+      (b.dataset.v==='more' && ['plans','txns','accounts','balances','sync','history','about'].indexOf(view)!==-1));
   });
   render();
 }
@@ -579,6 +581,7 @@ function invalidateData(){
   state.dash = null;
   state.envTxnCache = {};
   state.register.sig = null;
+  state.sync = null;
 }
 /* Skip background re-draws while the user is typing or mid-edit. */
 function userBusy(){
@@ -600,6 +603,7 @@ function render(){
   else if(state.view==='txns') renderTxns();
   else if(state.view==='accounts') renderAccounts();
   else if(state.view==='balances') renderBalances();
+  else if(state.view==='sync') renderSync();
   else if(state.view==='more') renderMore();
   else if(state.view==='about') renderAbout();
   else renderHistory();
@@ -1378,6 +1382,90 @@ function drawBalances(){
   $('#shell').innerHTML = h;
 }
 
+/* ============================ sync (v3.3 Phase A — read-only) ============================ */
+function renderSync(){
+  if(state.sync){ drawSync(); return; }
+  $('#shell').innerHTML = '<h2 class="viewtitle">Tiller sync</h2>'+
+    '<div class="empty" style="padding-top:24px">Comparing SBC with your Tiller sheet…</div><div class="spin"></div>';
+  syncFetch();
+}
+function syncFetch(){
+  run('apiSyncStatus', { days: state.syncDays||90 }).then(function(s){
+    state.sync = s;
+    if(state.view==='sync') drawSync();
+  }).catch(function(e){ if(state.view==='sync') fail(e); });
+}
+function syncSection(title, rows, count, rowFn, okMsg){
+  var h = '<div class="grp"><h3>'+title+(count? ' · '+count : '')+'</h3><div class="card">';
+  if(!count){ h += '<div class="empty" style="padding:18px 16px">'+okMsg+'</div>'; }
+  else {
+    rows.forEach(function(r){ h += rowFn(r); });
+    if(count > rows.length){
+      h += '<div class="empty" style="padding:10px 16px;font-size:12px">…and '+(count-rows.length)+' more</div>';
+    }
+  }
+  return h+'</div></div>';
+}
+function drawSync(){
+  var s = state.sync;
+  var totalIssues = s.counts.bankEdits + s.counts.deleted + s.counts.drift +
+    s.counts.splitOnlyInSBC + s.missingCatsCount;
+  var h = '<div class="viewhead"><h2>Tiller sync</h2>'+
+    '<button class="btn ghost sm" data-act="sync-refresh">↻ Re-check</button></div>'+
+    '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
+    'Read-only preview (Phase A): nothing is written to either sheet yet. '+
+    'Window: last '+s.days+' days · checked '+s.sbcTxnCount+' approved + '+s.inboxCount+
+    ' inbox transactions · '+esc(s.generatedAt)+'</div>';
+
+  h += '<div class="stats" style="grid-template-columns:1fr 1fr">'+
+    '<div class="stat'+(totalIssues? '':' hero')+'"><div class="lbl">Drift items</div>'+
+    '<div class="num">'+totalIssues+'</div><div class="sub">'+
+    (totalIssues?'review below':'sheets agree ✓')+'</div></div>'+
+    '<div class="stat"><div class="lbl">Ready to backfill</div>'+
+    '<div class="num">'+s.counts.backfill+'</div>'+
+    '<div class="sub">Tiller categories Phase B will write</div></div></div>';
+
+  h += syncSection('Bank data changed in Tiller', s.bankEdits, s.counts.bankEdits, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="acctchip">'+esc(r.where)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+' · '+esc(r.changes.join(' · '))+'</div></div>';
+  }, 'No amount/description/date changes on transactions SBC already has.');
+
+  h += syncSection('Deleted in Tiller', s.deleted, s.counts.deleted, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="amt">'+money(r.amount)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+' · still in SBC '+esc(r.where)+'</div></div>';
+  }, 'Every SBC transaction in the window still exists in Tiller.');
+
+  h += syncSection('Category conflicts', s.drift, s.counts.drift, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="amt">'+money(r.amount)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+' · Tiller says <b>'+esc(r.tillerCategory)+
+      '</b> · SBC says <b>'+esc(r.sbcEnvelope)+'</b></div></div>';
+  }, 'No transactions where Tiller and SBC disagree on category.');
+
+  h += syncSection('Splits not yet mirrored in Tiller', s.splitOnlyInSBC, s.counts.splitOnlyInSBC, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="amt">'+money(r.amount)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+' · SBC: '+esc(r.sbcSplits)+' · Tiller: '+
+      r.tillerRows+' row'+(r.tillerRows>1?'s':'')+' ('+esc(r.tillerCategory)+')</div></div>';
+  }, 'No SBC splits waiting to be mirrored.');
+
+  if(s.catTabFound){
+    h += syncSection('Envelopes missing from Tiller Categories', s.missingCats, s.missingCatsCount, function(r){
+      return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.name)+'</span>'+
+        '<span class="acctchip">'+esc(r.group||'')+'</span></div></div>';
+    }, 'Every SBC envelope exists as a Tiller category.');
+  } else {
+    h += '<div class="empty">No "Categories" tab found in the Tiller sheet — skipped that check.</div>';
+  }
+
+  h += '<div class="empty" style="font-size:12.5px;padding-top:8px">Phase B will add Apply buttons: '+
+    'category backfill, conflict resolution (you pick the winner), split mirroring, and Categories-tab upserts — '+
+    'all behind the Write Authorization gate, every write audited.</div>';
+  $('#shell').innerHTML = h;
+}
+
 /* ============================ import (v3.2) ============================ */
 function importNowUi(){
   if(state.importing) return;
@@ -1403,7 +1491,7 @@ function importNowUi(){
 /* ============================ more (phone) ============================ */
 function renderMore(){
   var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
-    ['balances','Balances'],['history','History & undo'],['about','About']];
+    ['balances','Balances'],['sync','Tiller sync'],['history','History & undo'],['about','About']];
   var h = '<h2 class="viewtitle">More</h2><div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
@@ -1620,6 +1708,9 @@ document.addEventListener('click', function(ev){
       drawBalances(); break;
     case 'bal-up': balMove(arg,-1); break;
     case 'bal-down': balMove(arg,1); break;
+    case 'sync-refresh':
+      state.sync = null;
+      renderSync(); break;
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
