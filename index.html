@@ -258,6 +258,31 @@ aside.side{display:none}
 .acctchip{background:var(--bg);border:1px solid var(--line);color:var(--ink-2);
   font-size:11.5px;font-weight:600;border-radius:8px;padding:1px 7px}
 
+/* ================= balances (v3.2) ================= */
+.nwhero{background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px 18px;display:flex;justify-content:space-between;
+  align-items:center;margin-bottom:16px}
+.nwhero .lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85}
+.nwhero .num{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.balcols{display:block}
+@media(min-width:900px){.balcols{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}}
+.balsect{display:flex;justify-content:space-between;align-items:center;background:var(--ink);
+  color:#fff;border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px}
+.balsect .v{font-variant-numeric:tabular-nums;font-size:14px}
+.balgrp{margin-bottom:14px}
+.balgrp .bhead{display:flex;justify-content:space-between;align-items:center;
+  background:var(--teal-700);color:#fff;padding:8px 14px;font-size:12.5px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.04em}
+.balgrp .bhead .v{font-variant-numeric:tabular-nums;font-size:13.5px}
+.balrow{display:flex;align-items:baseline;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line)}
+.balrow:last-child{border-bottom:none}
+.balrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
+.balrow .upd{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.balrow .upd.stale{color:var(--red);font-style:italic}
+.balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px}
+.balrow.stale .nm,.balrow.stale .bal{color:var(--ink-3);font-style:italic}
+
 /* ================= history / misc ================= */
 .oprow{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);align-items:center}
 .oprow:last-child{border-bottom:none}
@@ -334,6 +359,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="accounts"></button>
+    <button class="nav" data-v="balances"></button>
     <button class="nav" data-v="history"></button>
     <button class="nav" data-v="about"></button>
     <div class="foot" id="sideFoot"></div>
@@ -369,7 +395,7 @@ var state = {
   view:'dash', boot:null, dash:null, inbox:null, picker:null, history:null,
   sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
-  accounts:null, accountsFull:null, envOpen:{}, envDetail:null, move:null,
+  accounts:null, accountsFull:null, balances:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false
 };
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
@@ -460,12 +486,14 @@ var ICONS = {
   plans:'<path d="M5 4h14v16H5zM9 4v16M5 9h14M5 14h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
   txns:'<path d="M4 7h16M4 12h16M4 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   accounts:'<path d="M3 9.5l9-5.5 9 5.5M4.5 9.5V18M9.5 9.5V18M14.5 9.5V18M19.5 9.5V18M3 18h18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  balances:'<path d="M12 4v2.5M12 4l-6 2.5M12 4l6 2.5M6 6.5L3.5 12a3 3 0 0 0 5 0L6 6.5zM18 6.5L15.5 12a3 3 0 0 0 5 0L18 6.5zM12 6.5V19M8.5 19h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   history:'<path d="M12 8v4l3 2M21 12a9 9 0 11-2.6-6.3M21 3v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
   about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
-  plans:'Plans', txns:'Transactions', accounts:'Accounts', history:'History', more:'More', about:'About'};
+  plans:'Plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
+  history:'History', more:'More', about:'About'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -485,7 +513,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='more' && ['plans','txns','accounts','history','about'].indexOf(view)!==-1));
+      (b.dataset.v==='more' && ['plans','txns','accounts','balances','history','about'].indexOf(view)!==-1));
   });
   render();
 }
@@ -571,6 +599,7 @@ function render(){
   else if(state.view==='plans') renderPlans();
   else if(state.view==='txns') renderTxns();
   else if(state.view==='accounts') renderAccounts();
+  else if(state.view==='balances') renderBalances();
   else if(state.view==='more') renderMore();
   else if(state.view==='about') renderAbout();
   else renderHistory();
@@ -1261,6 +1290,49 @@ function acctToggle(name){
   });
 }
 
+/* ============================ balances (v3.2) ============================ */
+function renderBalances(){
+  if(state.balances){ drawBalances(); }
+  else { $('#shell').innerHTML = '<h2 class="viewtitle">Balances</h2><div class="spin"></div>'; }
+  run('apiBalances').then(function(b){
+    var changed = JSON.stringify(b) !== JSON.stringify(state.balances);
+    state.balances = b;
+    if(state.view==='balances' && changed) drawBalances();
+  }).catch(function(e){ if(!state.balances) fail(e); });
+}
+function balGroupHtml(g){
+  var h = '<div class="card balgrp"><div class="bhead"><span>'+esc(g.name)+
+    '</span><span class="v">'+money(g.total)+'</span></div>';
+  g.rows.forEach(function(r){
+    var stale = r.days >= 30;
+    var slow = r.days >= 7 && r.days < 30;
+    h += '<div class="balrow'+(stale?' stale':'')+'">'+
+      '<span class="nm">'+esc(r.name)+'</span>'+
+      '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
+      '<span class="bal">'+money(r.balance)+'</span></div>';
+  });
+  return h+'</div>';
+}
+function drawBalances(){
+  var b = state.balances;
+  var h = '<div class="viewhead"><h2>Balances</h2>'+
+    '<span style="color:var(--ink-3);font-size:12.5px">'+esc(b.asOf||'')+'</span></div>';
+  h += '<div class="nwhero"><span class="lbl">Net worth</span>'+
+    '<span class="num">'+money(b.netWorth)+'</span></div>';
+  var aGroups = b.groups.filter(function(g){ return !g.liability; });
+  var lGroups = b.groups.filter(function(g){ return g.liability; });
+  h += '<div class="balcols"><div>';
+  h += '<div class="balsect"><span>Assets</span><span class="v">'+money(b.assets)+'</span></div>';
+  if(!aGroups.length) h += '<div class="empty">No asset accounts found.</div>';
+  aGroups.forEach(function(g){ h += balGroupHtml(g); });
+  h += '</div><div>';
+  h += '<div class="balsect"><span>Liabilities</span><span class="v">'+money(b.liabilities)+'</span></div>';
+  if(!lGroups.length) h += '<div class="empty">No liability accounts found.</div>';
+  lGroups.forEach(function(g){ h += balGroupHtml(g); });
+  h += '</div></div>';
+  $('#shell').innerHTML = h;
+}
+
 /* ============================ import (v3.2) ============================ */
 function importNowUi(){
   if(state.importing) return;
@@ -1285,7 +1357,8 @@ function importNowUi(){
 
 /* ============================ more (phone) ============================ */
 function renderMore(){
-  var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],['history','History & undo'],['about','About']];
+  var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
+    ['balances','Balances'],['history','History & undo'],['about','About']];
   var h = '<h2 class="viewtitle">More</h2><div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
