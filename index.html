@@ -1413,7 +1413,7 @@ function drawSync(){
   var h = '<div class="viewhead"><h2>Tiller sync</h2>'+
     '<button class="btn ghost sm" data-act="sync-refresh">↻ Re-check</button></div>'+
     '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
-    'Read-only preview (Phase A): nothing is written to either sheet yet. '+
+    'Nothing changes unless you tap a ✎ Write or ✓ Accept button — every write is audited and undoable. '+
     'Window: last '+s.days+' days · checked '+s.sbcTxnCount+' approved + '+s.inboxCount+
     ' inbox transactions · '+esc(s.generatedAt)+'</div>';
 
@@ -1423,7 +1423,7 @@ function drawSync(){
     (totalIssues?'review below':'sheets agree ✓')+'</div></div>'+
     '<div class="stat"><div class="lbl">Ready to backfill</div>'+
     '<div class="num">'+s.counts.backfill+'</div>'+
-    '<div class="sub">Tiller categories Phase B will write</div></div></div>';
+    '<div class="sub">'+(s.counts.backfill>0?'tap ✎ Write below':'Tiller categories all set')+'</div></div></div>';
 
   h += syncSection('Bank data changed in Tiller', s.bankEdits, s.counts.bankEdits, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
@@ -1458,10 +1458,26 @@ function drawSync(){
       r.tillerRows+' row'+(r.tillerRows>1?'s':'')+' ('+esc(r.tillerCategory)+')</div></div>';
   }, 'No SBC splits waiting to be mirrored.');
 
+  h += syncSection('Ready to backfill (Tiller category blank)', s.backfill, s.counts.backfill, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="amt">'+money(r.amount)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · will write: <b>'+esc(r.envelope)+'</b></div></div>';
+  }, 'Nothing waiting for category backfill.');
+  if(s.counts.backfill>0){
+    h += '<div class="actions" style="margin:-8px 4px 18px">'+
+      '<button class="btn sm" data-act="backfill-go">✎ Write '+s.counts.backfill+
+      ' categor'+(s.counts.backfill===1?'y':'ies')+' to Tiller</button>'+
+      '<span style="color:var(--ink-3);font-size:12px">blank cells only · undoable from History</span></div>';
+  }
+
   if(s.tillerDupIds !== undefined){
+    var dupAll = s.tillerDupIds;
+    var dupShown = state.showAllDups ? dupAll : dupAll.filter(function(r){ return r.complete===false; });
+    var okN = dupAll.filter(function(r){ return r.complete!==false; }).length;
     var dupTitle = 'Shared Transaction IDs in Tiller (all-time)'+
       (s.tillerDupIdsIncomplete!==undefined?' — '+s.tillerDupIdsIncomplete+' need attention':'');
-    h += syncSection(dupTitle, s.tillerDupIds, s.tillerDupIdsCount, function(r){
+    h += syncSection(dupTitle, dupShown,
+      state.showAllDups ? s.tillerDupIdsCount : (s.tillerDupIdsIncomplete||0), function(r){
       var verdict;
       if(r.complete===true){
         verdict = '<div class="meta" style="color:var(--green);font-weight:600">✓ All '+r.count+
@@ -1481,19 +1497,15 @@ function drawSync(){
         '<div class="meta">'+r.count+' rows share this ID: '+
         r.rows.map(function(x){ return esc(x.date)+' '+money(x.amount); }).join(' · ')+'</div>'+
         verdict+'</div>';
-    }, 'Every Transaction ID in Tiller is unique. (Copy-pasted manual rows would show here.)');
-  }
-
-  h += syncSection('Ready to backfill (Tiller category blank)', s.backfill, s.counts.backfill, function(r){
-    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
-      '<span class="amt">'+money(r.amount)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · will write: <b>'+esc(r.envelope)+'</b></div></div>';
-  }, 'Nothing waiting for category backfill.');
-  if(s.counts.backfill>0){
-    h += '<div class="actions" style="margin:-8px 4px 18px">'+
-      '<button class="btn sm" data-act="backfill-go">✎ Write '+s.counts.backfill+
-      ' categor'+(s.counts.backfill===1?'y':'ies')+' to Tiller</button>'+
-      '<span style="color:var(--ink-3);font-size:12px">blank cells only · undoable from History</span></div>';
+    }, state.showAllDups
+        ? 'Every Transaction ID in Tiller is unique. (Copy-pasted manual rows would show here.)'
+        : 'None need attention — all '+s.tillerDupIdsCount+' shared-ID clusters are fully in SBC ✓');
+    if(okN>0){
+      h += '<div class="actions" style="margin:-8px 4px 18px">'+
+        '<button class="btn ghost sm" data-act="sync-dups-toggle">'+
+        (state.showAllDups ? 'Hide the healthy clusters' : 'Show all '+s.tillerDupIdsCount+' clusters (incl. ✓ healthy)')+
+        '</button></div>';
+    }
   }
 
   if(s.catTabFound){
@@ -1505,9 +1517,9 @@ function drawSync(){
     h += '<div class="empty">No "Categories" tab found in the Tiller sheet — skipped that check.</div>';
   }
 
-  h += '<div class="empty" style="font-size:12.5px;padding-top:8px">Phase B will add Apply buttons: '+
-    'category backfill, conflict resolution (you pick the winner), split mirroring, and Categories-tab upserts — '+
-    'all behind the Write Authorization gate, every write audited.</div>';
+  h += '<div class="empty" style="font-size:12.5px;padding-top:8px">Coming next: manual entries for '+
+    'feed-less accounts, auto-categorize at approval, split mirroring, conflict resolver, and '+
+    'Categories-tab upserts — all behind the Write Authorization gate.</div>';
   $('#shell').innerHTML = h;
 }
 
@@ -1832,6 +1844,9 @@ document.addEventListener('click', function(ev){
     case 'sync-refresh':
       state.sync = null;
       renderSync(); break;
+    case 'sync-dups-toggle':
+      state.showAllDups = !state.showAllDups;
+      drawSync(); break;
     case 'accept-tiller': acceptTiller(arg); break;
     case 'backfill-go': backfillGo(); break;
     case 'inspect-txn': inspectTxn(arg); break;
