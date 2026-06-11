@@ -1487,8 +1487,14 @@ function drawSync(){
   h += syncSection('Ready to backfill (Tiller category blank)', s.backfill, s.counts.backfill, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="amt">'+money(r.amount)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · SBC envelope: <b>'+esc(r.envelope)+'</b></div></div>';
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · will write: <b>'+esc(r.envelope)+'</b></div></div>';
   }, 'Nothing waiting for category backfill.');
+  if(s.counts.backfill>0){
+    h += '<div class="actions" style="margin:-8px 4px 18px">'+
+      '<button class="btn sm" data-act="backfill-go">✎ Write '+s.counts.backfill+
+      ' categor'+(s.counts.backfill===1?'y':'ies')+' to Tiller</button>'+
+      '<span style="color:var(--ink-3);font-size:12px">blank cells only · undoable from History</span></div>';
+  }
 
   if(s.catTabFound){
     h += syncSection('Envelopes missing from Tiller Categories', s.missingCats, s.missingCatsCount, function(r){
@@ -1503,6 +1509,24 @@ function drawSync(){
     'category backfill, conflict resolution (you pick the winner), split mirroring, and Categories-tab upserts — '+
     'all behind the Write Authorization gate, every write audited.</div>';
   $('#shell').innerHTML = h;
+}
+
+/* v3.5: write SBC envelope names into BLANK Tiller Category cells. */
+function backfillGo(){
+  var n = state.sync && state.sync.counts ? state.sync.counts.backfill : 0;
+  confirmUi('Write '+n+' categor'+(n===1?'y':'ies')+' into Tiller?\n\n'+
+    'Only BLANK Category cells are filled — existing categories are never touched. '+
+    'Undoable from History.', 'Write to Tiller')
+  .then(function(ok){
+    if(!ok) return;
+    toast('Writing to Tiller…');
+    run('apiBackfillCategories', {days:90}).then(function(r){
+      toast(r.written>0 ? 'Wrote '+r.written+' categor'+(r.written===1?'y':'ies')+' to Tiller ✓'
+                        : (r.note||'Nothing to write'));
+      state.sync = null;
+      if(state.view==='sync') renderSync();
+    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  });
 }
 
 /* v3.4 forensics: everything the system knows about one transaction. */
@@ -1809,6 +1833,7 @@ document.addEventListener('click', function(ev){
       state.sync = null;
       renderSync(); break;
     case 'accept-tiller': acceptTiller(arg); break;
+    case 'backfill-go': backfillGo(); break;
     case 'inspect-txn': inspectTxn(arg); break;
     case 'inspect-close':
       if(el.tagName==='BUTTON' || ev.target===el) $('#ovl').innerHTML='';
