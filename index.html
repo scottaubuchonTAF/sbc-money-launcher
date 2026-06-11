@@ -1428,6 +1428,7 @@ function drawSync(){
   h += syncSection('Bank data changed in Tiller', s.bankEdits, s.counts.bankEdits, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="acctchip">'+esc(r.where)+'</span></div>'+
+      (r.account?'<div class="meta"><span class="acctchip">'+esc(r.account)+'</span></div>':'')+
       '<div class="meta">'+esc(r.date)+' · '+esc(r.changes.join(' · '))+'</div>'+
       (r.hint?'<div class="meta" style="color:var(--amber);font-weight:600">'+esc(r.hint)+'</div>':'')+
       '<div class="reglinks"><button data-act="accept-tiller" data-arg="'+esc(r.txnId)+'">'+
@@ -1439,22 +1440,29 @@ function drawSync(){
   h += syncSection('Deleted in Tiller', s.deleted, s.counts.deleted, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="amt">'+money(r.amount)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+' · still in SBC '+esc(r.where)+'</div></div>';
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · still in SBC '+esc(r.where)+'</div></div>';
   }, 'Every SBC transaction in the window still exists in Tiller.');
 
   h += syncSection('Category conflicts', s.drift, s.counts.drift, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="amt">'+money(r.amount)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+' · Tiller says <b>'+esc(r.tillerCategory)+
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+'</div>'+
+      '<div class="meta">Tiller says <b>'+esc(r.tillerCategory)+
       '</b> · SBC says <b>'+esc(r.sbcEnvelope)+'</b></div></div>';
   }, 'No transactions where Tiller and SBC disagree on category.');
 
   h += syncSection('Splits not yet mirrored in Tiller', s.splitOnlyInSBC, s.counts.splitOnlyInSBC, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="amt">'+money(r.amount)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+' · SBC: '+esc(r.sbcSplits)+' · Tiller: '+
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · SBC: '+esc(r.sbcSplits)+' · Tiller: '+
       r.tillerRows+' row'+(r.tillerRows>1?'s':'')+' ('+esc(r.tillerCategory)+')</div></div>';
   }, 'No SBC splits waiting to be mirrored.');
+
+  h += syncSection('Ready to backfill (Tiller category blank)', s.backfill, s.counts.backfill, function(r){
+    return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+      '<span class="amt">'+money(r.amount)+'</span></div>'+
+      '<div class="meta">'+esc(r.date)+(r.account?' · '+esc(r.account):'')+' · SBC envelope: <b>'+esc(r.envelope)+'</b></div></div>';
+  }, 'Nothing waiting for category backfill.');
 
   if(s.catTabFound){
     h += syncSection('Envelopes missing from Tiller Categories', s.missingCats, s.missingCatsCount, function(r){
