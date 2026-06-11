@@ -1428,7 +1428,11 @@ function drawSync(){
   h += syncSection('Bank data changed in Tiller', s.bankEdits, s.counts.bankEdits, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="acctchip">'+esc(r.where)+'</span></div>'+
-      '<div class="meta">'+esc(r.date)+' · '+esc(r.changes.join(' · '))+'</div></div>';
+      '<div class="meta">'+esc(r.date)+' · '+esc(r.changes.join(' · '))+'</div>'+
+      (r.hint?'<div class="meta" style="color:var(--amber);font-weight:600">'+esc(r.hint)+'</div>':'')+
+      '<div class="reglinks"><button data-act="accept-tiller" data-arg="'+esc(r.txnId)+'">'+
+      '✓ Accept Tiller’s version</button></div>'+
+      '</div>';
   }, 'No amount/description/date changes on transactions SBC already has.');
 
   h += syncSection('Deleted in Tiller', s.deleted, s.counts.deleted, function(r){
@@ -1464,6 +1468,26 @@ function drawSync(){
     'category backfill, conflict resolution (you pick the winner), split mirroring, and Categories-tab upserts — '+
     'all behind the Write Authorization gate, every write audited.</div>';
   $('#shell').innerHTML = h;
+}
+
+/* v3.4: make SBC's copy of one transaction match Tiller's bank data.
+   Envelope assignment is kept; balance adjusts by the difference; undoable
+   from History. Writes only to the companion sheet. */
+function acceptTiller(txnId){
+  var item = ((state.sync&&state.sync.bankEdits)||[]).find(function(x){ return x.txnId===txnId; });
+  var what = item ? '"'+item.description+'"\n'+item.changes.join('\n') : txnId;
+  confirmUi('Update SBC to match Tiller?\n\n'+what+'\n\nEnvelope assignment is kept; undoable from History.', 'Accept')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiAcceptTillerTxn', txnId).then(function(){
+      toast('SBC updated to match Tiller ✓');
+      invalidateData();
+      state.inbox = null;
+      refreshBoot();
+      state.sync = null;
+      if(state.view==='sync') renderSync();
+    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  });
 }
 
 /* ============================ import (v3.2) ============================ */
@@ -1711,6 +1735,7 @@ document.addEventListener('click', function(ev){
     case 'sync-refresh':
       state.sync = null;
       renderSync(); break;
+    case 'accept-tiller': acceptTiller(arg); break;
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
