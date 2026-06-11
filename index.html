@@ -1458,6 +1458,21 @@ function drawSync(){
       r.tillerRows+' row'+(r.tillerRows>1?'s':'')+' ('+esc(r.tillerCategory)+')</div></div>';
   }, 'No SBC splits waiting to be mirrored.');
 
+  if(s.tillerDupIds !== undefined){
+    h += syncSection('Same Transaction ID used by multiple Tiller rows (ALL-TIME)',
+      s.tillerDupIds, s.tillerDupIdsCount, function(r){
+      return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
+        '<span class="amt">'+money(r.total)+' total</span></div>'+
+        (r.account?'<div class="meta"><span class="acctchip">'+esc(r.account)+'</span></div>':'')+
+        '<div class="meta">'+r.count+' rows share this ID: '+
+        r.rows.map(function(x){ return esc(x.date)+' '+money(x.amount); }).join(' · ')+'</div>'+
+        '<div class="meta" style="color:var(--amber);font-weight:600">'+
+        (r.inSbc?'SBC only imported the FIRST of these — the rest are missing from your envelopes.'
+                :'None of these are in SBC’s recent window.')+
+        ' Fix: give each Tiller row its own unique Transaction ID + today’s Date Added, then Check for new.</div></div>';
+    }, 'Every Transaction ID in Tiller is unique. (Copy-pasted manual rows would show here.)');
+  }
+
   h += syncSection('Ready to backfill (Tiller category blank)', s.backfill, s.counts.backfill, function(r){
     return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
       '<span class="amt">'+money(r.amount)+'</span></div>'+
