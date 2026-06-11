@@ -1459,17 +1459,28 @@ function drawSync(){
   }, 'No SBC splits waiting to be mirrored.');
 
   if(s.tillerDupIds !== undefined){
-    h += syncSection('Same Transaction ID used by multiple Tiller rows (ALL-TIME)',
-      s.tillerDupIds, s.tillerDupIdsCount, function(r){
+    var dupTitle = 'Shared Transaction IDs in Tiller (all-time)'+
+      (s.tillerDupIdsIncomplete!==undefined?' — '+s.tillerDupIdsIncomplete+' need attention':'');
+    h += syncSection(dupTitle, s.tillerDupIds, s.tillerDupIdsCount, function(r){
+      var verdict;
+      if(r.complete===true){
+        verdict = '<div class="meta" style="color:var(--green);font-weight:600">✓ All '+r.count+
+          ' rows are in SBC ('+money(r.sbcTotal)+') — no action. Just never reuse this ID for new entries.</div>';
+      } else if(r.complete===false){
+        verdict = '<div class="meta" style="color:var(--amber);font-weight:600">⚠ Tiller has '+r.count+
+          ' rows ('+money(r.total)+'), SBC has '+r.sbcRows+' ('+money(r.sbcTotal)+')'+
+          (r.inInbox?' + 1 in Inbox':'')+
+          '. Fix the missing Tiller rows: unique Transaction ID + today’s Date Added, then Check for new.</div>';
+      } else {
+        verdict = '<div class="meta" style="color:var(--amber);font-weight:600">'+
+          'Give each Tiller row its own unique Transaction ID + today’s Date Added, then Check for new.</div>';
+      }
       return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.description)+'</span>'+
         '<span class="amt">'+money(r.total)+' total</span></div>'+
         (r.account?'<div class="meta"><span class="acctchip">'+esc(r.account)+'</span></div>':'')+
         '<div class="meta">'+r.count+' rows share this ID: '+
         r.rows.map(function(x){ return esc(x.date)+' '+money(x.amount); }).join(' · ')+'</div>'+
-        '<div class="meta" style="color:var(--amber);font-weight:600">'+
-        (r.inSbc?'SBC only imported the FIRST of these — the rest are missing from your envelopes.'
-                :'None of these are in SBC’s recent window.')+
-        ' Fix: give each Tiller row its own unique Transaction ID + today’s Date Added, then Check for new.</div></div>';
+        verdict+'</div>';
     }, 'Every Transaction ID in Tiller is unique. (Copy-pasted manual rows would show here.)');
   }
 
