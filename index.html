@@ -659,10 +659,14 @@ function renderDash(){
       (d&&d.health&&d.health.error?': '+esc(d.health.error):'')+'</div>';
   } else {
     var H = d.health;
-    h += '<div class="envrow"><span class="nm">Envelopes total</span>'+
+    h += '<div class="envrow"><span class="nm">Envelopes total · on-budget</span>'+
       '<span class="bal">'+money(H.envelopes)+'</span></div>';
     h += '<div class="envrow"><span class="nm">Bank cash · checking + savings − cards</span>'+
       '<span class="bal">'+money(H.bank)+'</span></div>';
+    if(Number(H.offBudget)!==0){
+      h += '<div class="envrow"><span class="nm" style="opacity:.6">Off-budget envelopes (excluded)</span>'+
+        '<span class="bal" style="opacity:.6">'+money(H.offBudget)+'</span></div>';
+    }
     if(Number(H.pendingInbox)!==0){
       h += '<div class="envrow click" data-act="goview" data-arg="inbox">'+
         '<span class="nm">Pending approval (inbox)</span>'+
