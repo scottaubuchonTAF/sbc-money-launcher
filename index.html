@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.8';
+var FE_VERSION = 'v3.6.9';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -897,14 +897,12 @@ function drawInbox(){
   }
   $('#shell').innerHTML = h;
 }
-/* Eligible for Approve all: has an envelope, isn't mid-split, isn't fundable
-   income (budget-account deposits go through Fund so plan legs aren't
-   skipped). Non-budget positives (401k contributions/gains) ARE eligible —
-   they just land in their envelope (e.g., Stock Transactions). */
+/* Eligible for Approve all: has an envelope and isn't mid-split. v3.6.9:
+   income is included — deposits approve into the Income Cash Pool (default
+   suggestion) and get funded later from the Fund page. */
 function approveAllEligible(t){
   var sp = state.split[t.txnId];
   if(sp && sp.on) return false;
-  if(t.amount>0 && t.budgetAccount!==false) return false;
   return !!(state.sel[t.txnId] || t.suggestedId);
 }
 function inboxCardHtml(t){
@@ -936,9 +934,8 @@ function inboxCardHtml(t){
       }
       h += '<button class="pill" data-act="open-picker" data-arg="sel|'+esc(t.txnId)+'">Choose envelope…</button>'+
         '<button class="pill" data-act="split-on" data-arg="'+esc(t.txnId)+'">Split…</button>';
-      if(t.amount>0 && t.budgetAccount!==false){
-        h += '<button class="pill" data-act="fund-this" data-arg="'+esc(t.txnId)+'">⚡ Fund with plan</button>';
-      }
+      // v3.6.9: no per-txn funding — deposits are approved into the Income
+      // Cash Pool like everything else; funding happens on the Fund page.
       h += '</div><div class="actions">'+
         '<button class="btn" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
         '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this</label>'+
@@ -1068,99 +1065,94 @@ document.addEventListener('keydown', function(ev){
   if(state.split[t.txnId] && state.split[t.txnId].on) approveSplit(t.txnId);
   else if(state.sel[t.txnId] || t.suggestedId) approve(t.txnId);
 });
-/* ============================ fund view ============================ */
+/* ============================ fund view (v3.6.9: pool-driven) ============================
+ * Income is approved into the Income Cash Pool like any other transaction;
+ * this view moves pool money into envelopes ("put the money to work"). */
 function renderFund(){
   $('#shell').innerHTML = '<h2 class="viewtitle">Fund</h2><div class="spin"></div>';
   Promise.all([
-    state.inbox ? Promise.resolve(state.inbox) : run('apiGetInbox'),
-    state.plans ? Promise.resolve(state.plans) : run('apiPlans')
+    state.plans ? Promise.resolve(state.plans) : run('apiPlans'),
+    state.inbox ? Promise.resolve(state.inbox) : run('apiGetInbox')
   ]).then(function(res){
-    state.inbox = res[0]; state.plans = res[1];
+    state.plans = res[0]; state.inbox = res[1];
     updateBadges(state.inbox.length);
     drawFund();
   }).catch(fail);
 }
+function poolBalance(){
+  var b = state.boot, bal = 0;
+  b.groups.forEach(function(g){ g.envelopes.forEach(function(e){
+    if(e.id===b.incomePoolId) bal = e.balance;
+  });});
+  return bal;
+}
 function drawFund(){
-  // v3.6.4: only budget-account deposits are fundable income — 401k/brokerage
-  // positives (fees reversed, contributions, gains) just get approved.
-  var income = state.inbox.filter(function(t){ return t.amount>0 && t.budgetAccount!==false; });
+  var bal = poolBalance();
+  var deposits = (state.inbox||[]).filter(function(t){ return t.amount>0 && t.budgetAccount!==false; });
   var activePlans = (state.plans||[]).filter(function(p){ return p.active; });
+  var f = state.fund['pool'];
   var h = '<h2 class="viewtitle">Fund</h2>';
-  if(!income.length){
-    h += '<div class="empty">No income waiting. When a deposit lands in the inbox, fund it from here.</div>';
+  h += '<div class="txncard"><div class="top"><div class="desc">Income Cash Pool</div>'+
+    '<div class="amt'+(bal>0?' pos':'')+'">'+money(bal)+'</div></div>'+
+    '<div class="meta">money waiting to be put to work</div>';
+  if(deposits.length){
+    h += '<div class="meta" style="margin-top:4px">⚠ '+deposits.length+' deposit'+
+      (deposits.length===1?'':'s')+' waiting in the Inbox — approve into the pool first.</div>';
+  }
+  if(bal<=0){
+    h += '</div><div class="empty">Nothing to fund yet. Approve deposits into the pool, then put the money to work here.</div>';
     $('#shell').innerHTML = h; return;
   }
-  income.forEach(function(t){
-    var f = state.fund[t.txnId];
-    h += '<div class="txncard">'+
-      '<div class="top"><div class="desc">'+esc(t.description)+'</div>'+
-      '<div class="amt pos">'+money(t.amount)+'</div></div>'+
-      '<div class="meta">'+esc(t.date)+' · '+esc(t.account)+'</div>';
-    h += '<div class="pills">';
-    activePlans.forEach(function(p){
-      h += '<button class="pill'+(f&&f.planId===p.planId?' sel':'')+
-        '" data-act="fund-plan" data-arg="'+esc(t.txnId)+'|'+esc(p.planId)+'">'+esc(p.name)+'</button>';
-    });
-    h += '<button class="pill'+(f&&!f.planId?' sel':'')+'" data-act="fund-manual" data-arg="'+
-      esc(t.txnId)+'">Manual split</button></div>';
-    if(f){
-      var incOpts = state.picker.filter(function(e){ return e.type==='Income'; });
-      h += '<div class="formrow" style="margin-top:12px"><label>Income envelope (where the deposit lands first)</label>'+
-        '<select data-act="fund-inc" data-arg="'+esc(t.txnId)+'">'+
-        incOpts.map(function(e){
-          return '<option value="'+esc(e.id)+'"'+(f.incomeEnvelopeId===e.id?' selected':'')+'>'+esc(e.name)+'</option>';
-        }).join('')+'</select></div>';
-      h += splitEditorHtml(t.txnId, t.amount, f.legs, 'fund');
-      h += '<div class="actions">'+
-        '<button class="btn" '+(splitReady(t.amount, f.legs)&&f.incomeEnvelopeId?'':'disabled')+
-        ' data-act="fund-go" data-arg="'+esc(t.txnId)+'">Fund '+money(t.amount)+'</button>'+
-        '<button class="btn ghost" data-act="fund-cancel" data-arg="'+esc(t.txnId)+'">Cancel</button></div>';
-    }
-    h += '</div>';
+  h += '<div class="formrow" style="margin-top:12px"><label>Amount to fund</label>'+
+    '<input type="number" step="0.01" inputmode="decimal" id="fundAmt" value="'+esc(f?f.amount:bal)+'"></div>';
+  h += '<div class="pills">';
+  activePlans.forEach(function(p){
+    h += '<button class="pill'+(f&&f.planId===p.planId?' sel':'')+
+      '" data-act="fund-plan" data-arg="pool|'+esc(p.planId)+'">'+esc(p.name)+'</button>';
   });
+  h += '<button class="pill'+(f&&!f.planId?' sel':'')+'" data-act="fund-manual" data-arg="pool">Manual split</button></div>';
+  if(f){
+    h += splitEditorHtml('pool', f.amount, f.legs, 'fund');
+    h += '<div class="actions">'+
+      '<button class="btn" '+(splitReady(f.amount, f.legs)?'':'disabled')+
+      ' data-act="fund-go" data-arg="pool">Fund '+money(f.amount)+'</button>'+
+      '<button class="btn ghost" data-act="fund-cancel" data-arg="pool">Cancel</button></div>';
+  }
+  h += '</div>';
   if(!activePlans.length){
     h += '<div class="empty">Tip: create a funding plan in Plans to make this one tap.</div>';
   }
   $('#shell').innerHTML = h;
 }
-function fundStart(txnId, planId){
-  var t = state.inbox.find(function(x){return x.txnId===txnId;});
-  if(!t) return;
-  var incOpts = state.picker.filter(function(e){ return e.type==='Income'; });
-  // v3.6.8: the Income Cash Pool (core system envelope) is the default
-  // landing spot for income; rule suggestion, then first income env, fallback.
-  var pool = state.boot.incomePoolId;
-  var inc = (pool && incOpts.some(function(e){return e.id===pool;})) ? pool :
-    (t.suggestedId && incOpts.some(function(e){return e.id===t.suggestedId;})) ?
-    t.suggestedId : (incOpts.length?incOpts[0].id:'');
+function fundStart(key, planId){
+  var amtEl = $('#fundAmt');
+  var amount = Number(amtEl && amtEl.value) || poolBalance();
+  if(!(amount>0)){ toast('Enter a positive amount'); return; }
   if(planId){
-    run('apiPreviewPlan', planId, t.amount).then(function(p){
-      state.fund[txnId] = { planId:planId, incomeEnvelopeId:inc,
+    run('apiPreviewPlan', planId, amount).then(function(p){
+      state.fund['pool'] = { amount: amount, planId: planId,
         legs: p.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:l.amount}; }) };
       if(p.leftover) toast('Plan leaves '+money(p.leftover)+' unassigned — adjust below');
       drawFund();
     }).catch(function(e){ toast('⚠ '+(e.message||e)); });
   } else {
-    state.fund[txnId] = { planId:'', incomeEnvelopeId:inc, legs:[{envelopeId:'', amount:''}] };
+    state.fund['pool'] = { amount: amount, planId:'', legs:[{envelopeId:'', amount:''}] };
     drawFund();
   }
 }
-function fundGo(txnId){
-  var f = state.fund[txnId];
-  var t = state.inbox.find(function(x){return x.txnId===txnId;});
-  if(!f || !t || !splitReady(t.amount, f.legs) || !f.incomeEnvelopeId) return;
+function fundGo(){
+  var f = state.fund['pool'];
+  if(!f || !splitReady(f.amount, f.legs)) return;
   busyButtons(true);
-  run('apiFund', { txnId:txnId, planId:f.planId||null, incomeEnvelopeId:f.incomeEnvelopeId,
-    legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
-  .then(function(r){
-    toast(tillerNote('Funded ✓', r));
-    state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
-    delete state.fund[txnId];
+  run('apiFundFromPool', { amount: Number(f.amount), planId: f.planId||null,
+    legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(f.amount, l.amount)}; }) })
+  .then(function(){
+    toast('Funded ✓');
+    delete state.fund['pool'];
     invalidateData();
-    updateBadges(state.inbox.length);
-    refreshBoot();
-    drawFund();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); drawFund(); });
+    return refreshBoot();
+  }).then(function(){ if(state.view==='fund') drawFund(); })
+  .catch(function(e){ toast('⚠ '+(e.message||e)); drawFund(); });
 }
 
 /* ============================ plans ============================ */
