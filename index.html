@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.0';
+var FE_VERSION = 'v3.6.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -608,7 +608,7 @@ function userBusy(){
 function render(){
   if(!state.boot){ return; }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','history','envelopes','envdetail','about'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -620,6 +620,7 @@ function render(){
   else if(state.view==='balances') renderBalances();
   else if(state.view==='sync') renderSync();
   else if(state.view==='more') renderMore();
+  else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='about') renderAbout();
   else renderHistory();
 }
@@ -652,7 +653,8 @@ function renderDash(){
     '</div>';
 
   h += '<div class="dashcols"><div>';
-  h += '<div class="grp"><h3>Budget health</h3><div class="card">';
+  h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">Budget health'+
+    '<button class="btn ghost sm" data-act="goview" data-arg="healthset" title="Health settings">⚙</button></h3><div class="card">';
   if(!d){ h += '<div class="empty">Loading…</div>'; }
   else if(!d.health || d.health.error){
     h += '<div class="empty">Couldn’t read account balances'+
@@ -1666,13 +1668,65 @@ function importNowUi(){
 /* ============================ more (phone) ============================ */
 function renderMore(){
   var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
-    ['balances','Balances'],['sync','Tiller sync'],['history','History & undo'],['about','About']];
+    ['balances','Balances'],['sync','Tiller sync'],['healthset','Health settings'],
+    ['history','History & undo'],['about','About']];
   var h = '<h2 class="viewtitle">More</h2><div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
   });
   h += '</div><div class="empty" style="padding-top:24px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
   $('#shell').innerHTML = h;
+}
+
+/* ============================ health settings (v3.6) ============================ */
+function renderHealthSettings(){
+  $('#shell').innerHTML = '<h2 class="viewtitle">Health settings</h2><div class="spin"></div>';
+  run('apiHealthSettings').then(function(hs){
+    state.healthset = hs;
+    drawHealthSettings();
+  }).catch(fail);
+}
+function drawHealthSettings(){
+  var hs = state.healthset;
+  var h = '<h2 class="viewtitle">Health settings</h2>';
+  h += '<div class="empty" style="padding:4px 0 14px">The health check compares on-budget envelope money '+
+    'against bank cash (cash groups − debt groups). Changes apply on the next dashboard load.</div>';
+
+  h += '<div class="grp"><h3>Account groups (bank side)</h3><div class="card">';
+  h += '<div class="empty" style="padding:6px 0;font-size:12px">Tap a group to cycle: not counted → 💵 cash → 💳 debt</div>';
+  hs.accountGroups.forEach(function(g){
+    var st = hs.cashGroups.indexOf(g)>-1 ? 'cash' : (hs.debtGroups.indexOf(g)>-1 ? 'debt' : '');
+    h += '<div class="envrow click" data-act="hs-group" data-arg="'+esc(g)+'">'+
+      '<span class="nm">'+esc(g)+'</span>'+
+      '<span class="bal">'+(st==='cash'?'💵 cash':st==='debt'?'💳 debt':'<span style="opacity:.4">not counted</span>')+'</span></div>';
+  });
+  h += '</div></div>';
+
+  h += '<div class="grp"><h3>Envelopes (budget side)</h3><div class="card">';
+  h += '<div class="empty" style="padding:6px 0;font-size:12px">Off-budget = money that lives outside the cash accounts '+
+    '(brokerage, REBA, rewards). Tap to toggle.</div>';
+  hs.envelopes.forEach(function(n){
+    var off = hs.offBudget.indexOf(n)>-1;
+    h += '<div class="envrow click" data-act="hs-env" data-arg="'+esc(n)+'">'+
+      '<span class="nm">'+esc(n)+'</span>'+
+      '<span class="bal'+(off?' neg':'')+'">'+(off?'off-budget':'<span style="opacity:.4">on-budget</span>')+'</span></div>';
+  });
+  h += '</div></div>';
+
+  h += '<div class="actions"><button class="btn" data-act="hs-save">Save</button>'+
+    '<button class="btn ghost" data-act="goview" data-arg="dash">Cancel</button></div>';
+  $('#shell').innerHTML = h;
+}
+function hsSave(){
+  var hs = state.healthset;
+  run('apiSetHealthSettings', { offBudget: hs.offBudget,
+    cashGroups: hs.cashGroups, debtGroups: hs.debtGroups })
+  .then(function(r){
+    state.healthset = r;
+    state.dash = null; // recompute health next dashboard load
+    toast('Health settings saved ✓');
+    go('dash');
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 
 /* ============================ about ============================ */
@@ -1875,6 +1929,21 @@ document.addEventListener('click', function(ev){
       renderEnvelopes(); break;
     case 'env-open': openEnvelope(arg); break;
     case 'env-back': go('envelopes'); break;
+    case 'hs-group': (function(){
+      var hs = state.healthset, g = arg;
+      var ci = hs.cashGroups.indexOf(g), di = hs.debtGroups.indexOf(g);
+      if(ci===-1 && di===-1) hs.cashGroups.push(g);        // not counted → cash
+      else if(ci>-1){ hs.cashGroups.splice(ci,1); hs.debtGroups.push(g); } // cash → debt
+      else hs.debtGroups.splice(di,1);                      // debt → not counted
+      drawHealthSettings();
+    })(); break;
+    case 'hs-env': (function(){
+      var hs = state.healthset;
+      var i = hs.offBudget.indexOf(arg);
+      if(i===-1) hs.offBudget.push(arg); else hs.offBudget.splice(i,1);
+      drawHealthSettings();
+    })(); break;
+    case 'hs-save': hsSave(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
     case 'import-now': importNowUi(); break;
