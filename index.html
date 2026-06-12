@@ -404,6 +404,10 @@ var state = {
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 function $(s){ return document.querySelector(s); }
 function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
+/* Frontend build label — bump on EVERY GitHub upload, in lockstep with
+   CFG.APP_VERSION (server). About shows both; a mismatch means one side of
+   the two-sided deploy didn't take. */
+var FE_VERSION = 'v3.6.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1693,7 +1697,8 @@ function renderAbout(){
     '<text x="121" y="66" text-anchor="middle" font-size="33" font-weight="700" fill="#ffffff" font-family="inherit">C</text>'+
     '</svg>'+
     '<div class="abname">SBC <span>Money</span></div>'+
-    '<div class="abver">'+esc(b.version||'')+' · '+esc(b.versionDate||'')+'</div>'+
+    '<div class="abver">Server '+esc(b.version||'')+' · UI '+esc(FE_VERSION)+' · '+esc(b.versionDate||'')+'</div>'+
+    (b.version!==FE_VERSION?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
     '<div class="absub">Signed in as '+esc(b.user)+'</div>'+
     '<div class="absoon">Instructions and helpful stuff coming soon.</div>'+
     '</div>';
