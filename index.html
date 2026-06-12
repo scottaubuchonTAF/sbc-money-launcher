@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.7';
+var FE_VERSION = 'v3.6.8';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -635,9 +635,9 @@ function renderDash(){
   // txns still awaiting approval); inbox chip navigates to the Inbox.
   var spentNum = d ? (d.spentActual!=null ? d.spentActual : d.totals.spent) : null;
   var h = '<div class="stats">'+
-    '<div class="stat hero"><div class="lbl">Available to fund</div>'+
+    '<div class="stat hero click" data-act="goview" data-arg="fund"><div class="lbl">Available to fund</div>'+
       '<div class="num">'+(d?money(d.availableToFund):'…')+'</div>'+
-      '<div class="sub">cash in income envelopes</div></div>'+
+      '<div class="sub">in the income pool · put it to work →</div></div>'+
     '<div class="stat"><div class="lbl">Funded · '+(d?esc(d.monthLabel):'this month')+'</div>'+
       '<div class="num">'+(d?money(d.totals.funded):'…')+'</div>'+
       (d?'<div class="bar"><i style="width:'+pct+'%"></i></div>'+
@@ -1127,7 +1127,11 @@ function fundStart(txnId, planId){
   var t = state.inbox.find(function(x){return x.txnId===txnId;});
   if(!t) return;
   var incOpts = state.picker.filter(function(e){ return e.type==='Income'; });
-  var inc = (t.suggestedId && incOpts.some(function(e){return e.id===t.suggestedId;})) ?
+  // v3.6.8: the Income Cash Pool (core system envelope) is the default
+  // landing spot for income; rule suggestion, then first income env, fallback.
+  var pool = state.boot.incomePoolId;
+  var inc = (pool && incOpts.some(function(e){return e.id===pool;})) ? pool :
+    (t.suggestedId && incOpts.some(function(e){return e.id===t.suggestedId;})) ?
     t.suggestedId : (incOpts.length?incOpts[0].id:'');
   if(planId){
     run('apiPreviewPlan', planId, t.amount).then(function(p){
