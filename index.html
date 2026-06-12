@@ -415,6 +415,15 @@ function toast(msg){
 function fail(e){
   $('#shell').innerHTML = '<div class="empty">⚠ '+esc(e && e.message || e)+'</div>';
 }
+/* v3.6: approve/fund responses carry a tillerWrite status — reflect it in
+   the success toast. An error here never blocked the approval (backend
+   guarantees that); the daily sweep will pick the cell up later. */
+function tillerNote(base, r){
+  var w = r && r.tillerWrite;
+  if(w && w.error) return base + ' — Tiller category not written (daily sweep will retry)';
+  if(w && w.written) return base + ' · Tiller ✓';
+  return base;
+}
 function envName(id){
   if(!state.picker) return id;
   var e = state.picker.find(function(x){return x.id===id;});
@@ -935,8 +944,8 @@ function approveSplit(txnId){
     .then(afterApprove(txnId)).catch(approveErr);
 }
 function afterApprove(txnId){
-  return function(){
-    toast('Approved ✓');
+  return function(r){
+    toast(tillerNote('Approved ✓', r));
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.sel[txnId]; delete state.split[txnId];
     invalidateData();
@@ -1034,8 +1043,8 @@ function fundGo(txnId){
   busyButtons(true);
   run('apiFund', { txnId:txnId, planId:f.planId||null, incomeEnvelopeId:f.incomeEnvelopeId,
     legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:Number(l.amount)}; }) })
-  .then(function(){
-    toast('Funded ✓');
+  .then(function(r){
+    toast(tillerNote('Funded ✓', r));
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.fund[txnId];
     invalidateData();
