@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.1';
+var FE_VERSION = 'v3.6.2';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -875,7 +875,39 @@ function drawInbox(){
     h += '<div class="empty">Inbox zero. Every transaction has a job.</div>';
     $('#shell').innerHTML = h; return;
   }
+  // v3.6.2: two sections — auto-categorized (rule suggestion or hand-picked
+  // envelope) with Approve all, and the rest that still need a category.
+  var autoTs=[], otherTs=[];
   state.inbox.forEach(function(t){
+    if(state.sel[t.txnId] || t.suggestedId) autoTs.push(t); else otherTs.push(t);
+  });
+  var readyN = autoTs.filter(approveAllEligible).length;
+  if(autoTs.length){
+    h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">'+
+      'Auto-categorized · '+autoTs.length+
+      (readyN ? '<button class="btn sm" data-act="approve-all">✓ Approve all ('+readyN+')</button>' : '')+
+      '</h3>';
+    autoTs.forEach(function(t){ h += inboxCardHtml(t); });
+    h += '</div>';
+  }
+  if(otherTs.length){
+    h += '<div class="grp"><h3>Needs a category · '+otherTs.length+'</h3>';
+    otherTs.forEach(function(t){ h += inboxCardHtml(t); });
+    h += '</div>';
+  }
+  $('#shell').innerHTML = h;
+}
+/* Eligible for Approve all: has an envelope, isn't mid-split, isn't income
+   (deposits go through Fund so plan legs aren't skipped by a bulk approve). */
+function approveAllEligible(t){
+  var sp = state.split[t.txnId];
+  if(sp && sp.on) return false;
+  if(t.amount>0) return false;
+  return !!(state.sel[t.txnId] || t.suggestedId);
+}
+function inboxCardHtml(t){
+  var h = '';
+  {
     var sp = state.split[t.txnId];
     var selId = state.sel[t.txnId] || t.suggestedId || '';
     h += '<div class="txncard">'+
@@ -911,8 +943,35 @@ function drawInbox(){
         '</div>';
     }
     h += '</div>';
+  }
+  return h;
+}
+function approveAll(){
+  var items = state.inbox.filter(approveAllEligible).map(function(t){
+    return { txnId: t.txnId, envelopeId: state.sel[t.txnId] || t.suggestedId };
   });
-  $('#shell').innerHTML = h;
+  if(!items.length){ toast('Nothing ready to approve'); return; }
+  confirmUi('Approve '+items.length+' transaction'+(items.length===1?'':'s')+
+    ' into their suggested envelopes? Each stays individually undoable from History.', 'Approve all')
+  .then(function(ok){
+    if(!ok) return;
+    busyButtons(true);
+    run('apiApproveBatch', items).then(function(r){
+      var doneIds = {};
+      r.results.forEach(function(x){ if(!x.error) doneIds[x.txnId]=1; });
+      state.inbox = state.inbox.filter(function(t){ return !doneIds[t.txnId]; });
+      Object.keys(doneIds).forEach(function(id){ delete state.sel[id]; delete state.split[id]; });
+      invalidateData();
+      updateBadges(state.inbox.length);
+      refreshBoot();
+      drawInbox();
+      var failed = r.results.length - r.approved;
+      var msg = 'Approved '+r.approved+' ✓';
+      if(failed) msg += ' · '+failed+' failed (still in inbox)';
+      if(r.tillerWrite && r.tillerWrite.written) msg += ' · Tiller ✓';
+      toast(msg);
+    }).catch(function(e){ toast('⚠ '+(e.message||e)); drawInbox(); });
+  });
 }
 function cssId(s){ return String(s).replace(/[^a-zA-Z0-9_-]/g,'_'); }
 
@@ -1872,6 +1931,7 @@ document.addEventListener('click', function(ev){
   switch(act){
     case 'goview': go(arg); break;
     case 'approve': approve(arg); break;
+    case 'approve-all': approveAll(); break;
     case 'approve-split': approveSplit(arg); break;
     case 'pick-sel': state.sel[p[0]]=p[1]; drawInbox(); break;
     case 'split-on':
