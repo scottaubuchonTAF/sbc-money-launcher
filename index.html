@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.2';
+var FE_VERSION = 'v3.6.4';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -897,12 +897,14 @@ function drawInbox(){
   }
   $('#shell').innerHTML = h;
 }
-/* Eligible for Approve all: has an envelope, isn't mid-split, isn't income
-   (deposits go through Fund so plan legs aren't skipped by a bulk approve). */
+/* Eligible for Approve all: has an envelope, isn't mid-split, isn't fundable
+   income (budget-account deposits go through Fund so plan legs aren't
+   skipped). Non-budget positives (401k contributions/gains) ARE eligible —
+   they just land in their envelope (e.g., Stock Transactions). */
 function approveAllEligible(t){
   var sp = state.split[t.txnId];
   if(sp && sp.on) return false;
-  if(t.amount>0) return false;
+  if(t.amount>0 && t.budgetAccount!==false) return false;
   return !!(state.sel[t.txnId] || t.suggestedId);
 }
 function inboxCardHtml(t){
@@ -934,7 +936,7 @@ function inboxCardHtml(t){
       }
       h += '<button class="pill" data-act="open-picker" data-arg="sel|'+esc(t.txnId)+'">Choose envelope…</button>'+
         '<button class="pill" data-act="split-on" data-arg="'+esc(t.txnId)+'">Split…</button>';
-      if(t.amount>0){
+      if(t.amount>0 && t.budgetAccount!==false){
         h += '<button class="pill" data-act="fund-this" data-arg="'+esc(t.txnId)+'">⚡ Fund with plan</button>';
       }
       h += '</div><div class="actions">'+
@@ -980,7 +982,7 @@ function splitEditorHtml(key, total, lines, kind){
   var sum = 0;
   var h = '<div class="splitbox">';
   lines.forEach(function(l,i){
-    sum += cents(l.amount);
+    sum += cents(splitAmt(total, l.amount));
     h += '<div class="splitline">'+
       '<button class="envbtn'+(l.envelopeId?'':' unset')+'" data-act="open-picker" data-arg="'+
         kind+'line|'+esc(key)+'|'+i+'">'+(l.envelopeId?esc(envName(l.envelopeId)):'Pick envelope…')+'</button>'+
@@ -992,16 +994,23 @@ function splitEditorHtml(key, total, lines, kind){
   var left = cents(total)-sum;
   h += '<div class="splitfoot">'+
     '<button class="addline" data-act="split-add" data-arg="'+kind+'|'+esc(key)+'">+ Add envelope</button>'+
-    '<span class="left'+(left!==0?' bad':'')+'">'+(left===0?'Fully assigned ✓':'Remaining: '+money(left/100))+'</span>'+
+    '<span class="left'+(left!==0?' bad':'')+'">'+(left===0?'Fully assigned ✓':'Remaining: '+money(Math.abs(left)/100))+'</span>'+
     '</div></div>';
   return h;
+}
+/* v3.6.3: split amounts are typed WITHOUT a sign — the transaction's sign
+   is applied automatically (a $-408 spend split as 204/204 means -204/-204).
+   Typing a minus anyway still works (abs first). */
+function splitAmt(total, v){
+  var n = Math.abs(Number(v)||0);
+  return Number(total)<0 ? -n : n;
 }
 function splitReady(total, lines){
   if(!lines.length) return false;
   var sum=0;
   for(var i=0;i<lines.length;i++){
-    if(!lines[i].envelopeId || cents(lines[i].amount)===0) return false;
-    sum += cents(lines[i].amount);
+    if(!lines[i].envelopeId || cents(splitAmt(total, lines[i].amount))===0) return false;
+    sum += cents(splitAmt(total, lines[i].amount));
   }
   return sum===cents(total);
 }
@@ -1034,7 +1043,7 @@ function approveSplit(txnId){
   if(!sp || !t || !splitReady(t.amount, sp.lines)) return;
   busyButtons(true);
   run('apiApprove', { txnId:txnId,
-    splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:Number(l.amount)}; }) })
+    splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
     .then(afterApprove(txnId)).catch(approveErr);
 }
 function afterApprove(txnId){
@@ -1072,7 +1081,9 @@ function renderFund(){
   }).catch(fail);
 }
 function drawFund(){
-  var income = state.inbox.filter(function(t){ return t.amount>0; });
+  // v3.6.4: only budget-account deposits are fundable income — 401k/brokerage
+  // positives (fees reversed, contributions, gains) just get approved.
+  var income = state.inbox.filter(function(t){ return t.amount>0 && t.budgetAccount!==false; });
   var activePlans = (state.plans||[]).filter(function(p){ return p.active; });
   var h = '<h2 class="viewtitle">Fund</h2>';
   if(!income.length){
@@ -1136,7 +1147,7 @@ function fundGo(txnId){
   if(!f || !t || !splitReady(t.amount, f.legs) || !f.incomeEnvelopeId) return;
   busyButtons(true);
   run('apiFund', { txnId:txnId, planId:f.planId||null, incomeEnvelopeId:f.incomeEnvelopeId,
-    legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:Number(l.amount)}; }) })
+    legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
   .then(function(r){
     toast(tillerNote('Funded ✓', r));
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
@@ -1320,8 +1331,10 @@ function drawTxns(){
 }
 function resplitGo(txnId){
   var lines = state.resplit[txnId];
+  var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
+  var total = t ? t.amount : 0; // 0 → splitAmt keeps positive (won't flip sign)
   run('apiResplit', { txnId:txnId,
-    splits: lines.map(function(l){ return {envelopeId:l.envelopeId, amount:Number(l.amount)}; }) })
+    splits: lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(total, l.amount)}; }) })
   .then(function(){
     toast('Split saved ✓');
     delete state.resplit[txnId];
