@@ -229,6 +229,8 @@ aside.side{display:none}
 
 /* ================= envelopes: groups + detail ================= */
 .envrow.click{cursor:pointer}
+.stat.click{cursor:pointer}
+.stat.click:hover{outline:1px solid rgba(57,208,189,.35)}
 .envrow.click:hover{background:var(--teal-50)}
 .envrow .chev{color:var(--ink-3);font-size:16px;margin-left:2px}
 .card.income{border-left:4px solid var(--teal-500);border-radius:var(--radius)}
@@ -621,39 +623,62 @@ function render(){
 /* ============================ dashboard ============================ */
 function renderDash(){
   var b = state.boot;
-  var bufBal = 0;
-  b.groups.forEach(function(g){ g.envelopes.forEach(function(e){
-    if(e.id===b.bufferEnvelopeId) bufBal = e.balance;
-  });});
   var d = state.dash;
   var pct = d && d.totals.target>0 ? Math.min(100, Math.round(d.totals.funded/d.totals.target*100)) : 0;
+  // v3.6: hero = Available to fund (income-envelope cash); Funded counts only
+  // real Fund-flow money; Spent comes from the Tiller sheet by date (includes
+  // txns still awaiting approval); inbox chip navigates to the Inbox.
+  var spentNum = d ? (d.spentActual!=null ? d.spentActual : d.totals.spent) : null;
   var h = '<div class="stats">'+
-    '<div class="stat hero"><div class="lbl">Available to spend</div>'+
-      '<div class="num">'+money(b.availableToSpend)+'</div>'+
-      '<div class="sub">across all envelopes</div></div>'+
+    '<div class="stat hero"><div class="lbl">Available to fund</div>'+
+      '<div class="num">'+(d?money(d.availableToFund):'…')+'</div>'+
+      '<div class="sub">cash in income envelopes</div></div>'+
     '<div class="stat"><div class="lbl">Funded · '+(d?esc(d.monthLabel):'this month')+'</div>'+
       '<div class="num">'+(d?money(d.totals.funded):'…')+'</div>'+
       (d?'<div class="bar"><i style="width:'+pct+'%"></i></div>'+
-        '<div class="sub">'+pct+'% of '+money(d.totals.target)+' target</div>'
+        '<div class="sub">'+pct+'% of '+money(d.totals.target)+' budget</div>'
        :'<div class="sub">loading…</div>')+'</div>'+
     '<div class="stat"><div class="lbl">Spent this month</div>'+
-      '<div class="num">'+(d?money(d.totals.spent):'…')+'</div>'+
-      '<div class="sub">from approved transactions</div></div>'+
-    '<div class="stat"><div class="lbl">Waiting in inbox</div>'+
+      '<div class="num">'+(spentNum!=null?money(spentNum):'…')+'</div>'+
+      '<div class="sub">'+(d&&d.spentActual!=null?'all transactions, incl. pending':'from approved transactions')+'</div></div>'+
+    '<div class="stat click" data-act="goview" data-arg="inbox">'+
+      '<div class="lbl">Waiting in inbox</div>'+
       '<div class="num">'+b.inboxCount+'</div>'+
-      '<div class="sub">Buffer: '+money(bufBal)+'</div></div>'+
+      '<div class="sub">tap to review →</div></div>'+
     '</div>';
 
   h += '<div class="dashcols"><div>';
-  h += '<div class="grp"><h3>Envelope balances</h3><div class="card">';
-  var shown = 0;
-  b.groups.forEach(function(g){ g.envelopes.forEach(function(e){
-    if(e.hidden || shown>=12) return;
-    shown++;
-    h += '<div class="envrow click" data-act="env-open" data-arg="'+esc(e.id)+'">'+
-      '<span class="nm">'+esc(e.name)+'</span>'+
-      '<span class="bal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</span></div>';
-  });});
+  h += '<div class="grp"><h3>Budget health</h3><div class="card">';
+  if(!d){ h += '<div class="empty">Loading…</div>'; }
+  else if(!d.health || d.health.error){
+    h += '<div class="empty">Couldn’t read account balances'+
+      (d&&d.health&&d.health.error?': '+esc(d.health.error):'')+'</div>';
+  } else {
+    var H = d.health;
+    h += '<div class="envrow"><span class="nm">Envelopes total</span>'+
+      '<span class="bal">'+money(H.envelopes)+'</span></div>';
+    h += '<div class="envrow"><span class="nm">Bank cash · checking + savings − cards</span>'+
+      '<span class="bal">'+money(H.bank)+'</span></div>';
+    if(Number(H.pendingInbox)!==0){
+      h += '<div class="envrow click" data-act="goview" data-arg="inbox">'+
+        '<span class="nm">Pending approval (inbox)</span>'+
+        '<span class="bal">'+money(H.pendingInbox)+'</span></div>';
+    }
+    h += H.ok
+      ? '<div class="envrow"><span class="nm">✓ Envelopes match your accounts</span>'+
+          '<span class="bal">'+money(H.residual)+'</span></div>'
+      : '<div class="envrow"><span class="nm">⚠ Off by</span>'+
+          '<span class="bal neg">'+money(H.residual)+'</span></div>';
+    if(d.negatives && d.negatives.count){
+      h += '<div class="envrow click" data-act="goview" data-arg="envelopes">'+
+        '<span class="nm">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span>'+
+        '<span class="bal neg">'+money(d.negatives.total)+'</span></div>';
+    }
+    if(H.stalest){
+      h += '<div class="envrow"><span class="nm" style="opacity:.6">Oldest balance update</span>'+
+        '<span class="bal" style="opacity:.6">'+esc(H.stalest)+'</span></div>';
+    }
+  }
   h += '</div><div style="margin-top:8px;text-align:right">'+
     '<button class="btn ghost sm" data-act="goview" data-arg="envelopes">All envelopes →</button></div></div>';
   h += '</div><div>';
