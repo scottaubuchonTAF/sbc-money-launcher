@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.11';
+var FE_VERSION = 'v3.6.12';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -792,8 +792,14 @@ function renderEnvDetail(){
       '<button class="btn sm" data-act="env-move-go">Move</button>'+
       '<button class="btn ghost sm" data-act="env-move-cancel">Cancel</button></div></div>';
   } else {
+    // v3.6.12: one-tap sweep of an income envelope's full balance into the
+    // Income Cash Pool (the income→envelope→pool→fund flow). Partial moves
+    // still available via "Move money".
+    var poolId = state.boot.incomePoolId;
+    var canSweep = (e.type==='Income' && e.id!==poolId && e.balance>0);
     h += '<div class="actions" style="margin-top:14px;padding:0 16px 16px">'+
-      '<button class="btn sm" data-act="env-move-start">⇄ Move money</button></div>';
+      (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move all to pool</button>' : '')+
+      '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button></div>';
   }
   h += '</div>';
   h += '<div class="grp" style="margin-top:18px"><h3>Activity</h3>'+
@@ -854,6 +860,28 @@ function moveGo(){
     return refreshBoot();
   }).then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function sweepToPool(){
+  var d = state.envDetail; if(!d) return;
+  var e = findEnv(d.id); if(!e) return;
+  var poolId = state.boot.incomePoolId;
+  if(!poolId){ toast('No Income Cash Pool configured'); return; }
+  if(e.id===poolId){ toast('That is the pool'); return; }
+  var amt = e.balance;
+  if(!(amt>0)){ toast('Nothing to move'); return; }
+  confirmUi('Move '+money(amt)+' from '+e.name+' into the Income Cash Pool?', 'Move to pool')
+  .then(function(ok){
+    if(!ok) return;
+    return run('apiMove', { fromId:e.id, toId:poolId, amount:amt })
+    .then(function(){
+      toast('Moved '+money(amt)+' to pool ✓');
+      state.move = null;
+      invalidateData();
+      if(state.envDetail) state.envDetail.txns = null;
+      return refreshBoot();
+    }).then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
+    .catch(function(err){ toast('⚠ '+(err.message||err)); });
+  });
 }
 
 /* ============================ inbox + splits ============================ */
@@ -2038,6 +2066,7 @@ document.addEventListener('click', function(ev){
     case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
+    case 'env-sweep-pool': sweepToPool(); break;
     case 'resplit-on':
       var rt = (state.register.items||[]).find(function(x){return x.txnId===arg;});
       if(rt) state.resplit[arg] = rt.legs.map(function(l){
