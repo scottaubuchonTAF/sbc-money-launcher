@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.6.10';
+var FE_VERSION = 'v3.6.11';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -897,9 +897,10 @@ function drawInbox(){
   }
   $('#shell').innerHTML = h;
 }
-/* Eligible for Approve all: has an envelope and isn't mid-split. v3.6.9:
-   income is included — deposits approve into the Income Cash Pool (default
-   suggestion) and get funded later from the Fund page. */
+/* Eligible for Approve all: has an envelope and isn't mid-split. v3.6.11:
+   income is included — deposits approve into an income envelope (Regular Pay
+   etc., the default suggestion). You then move income → the Income Cash Pool
+   and fund envelopes from the pool on the Fund page. */
 function approveAllEligible(t){
   var sp = state.split[t.txnId];
   if(sp && sp.on) return false;
@@ -1088,7 +1089,7 @@ function poolBalance(){
 }
 function drawFund(){
   var bal = poolBalance();
-  var deposits = (state.inbox||[]).filter(function(t){ return t.amount>0 && t.budgetAccount!==false; });
+  var deposits = (state.inbox||[]).filter(function(t){ return t.amount>0 && t.cashAccount===true; });
   var activePlans = (state.plans||[]).filter(function(p){ return p.active; });
   var f = state.fund['pool'];
   var h = '<h2 class="viewtitle">Fund</h2>';
@@ -1097,7 +1098,7 @@ function drawFund(){
     '<div class="meta">money waiting to be put to work</div>';
   if(deposits.length){
     h += '<div class="meta" style="margin-top:4px">⚠ '+deposits.length+' deposit'+
-      (deposits.length===1?'':'s')+' waiting in the Inbox — approve into the pool first.</div>';
+      (deposits.length===1?'':'s')+' waiting in the Inbox — approve into an income envelope, then move it here to the pool.</div>';
   }
   if(bal<=0){
     h += '</div><div class="empty">Nothing to fund yet. Approve deposits into the pool, then put the money to work here.</div>';
