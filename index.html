@@ -360,11 +360,8 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="envelopes"></button>
     <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
-    <button class="nav" data-v="accounts"></button>
-    <button class="nav" data-v="balances"></button>
-    <button class="nav" data-v="sync"></button>
-    <button class="nav" data-v="history"></button>
-    <button class="nav" data-v="about"></button>
+    <div class="navlbl">More</div>
+    <button class="nav" data-v="settings"></button>
     <div class="foot" id="sideFoot"></div>
   </aside>
   <div class="main">
@@ -378,7 +375,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
   <button data-v="inbox"></button>
   <button data-v="fund"></button>
   <button data-v="envelopes"></button>
-  <button data-v="more"></button>
+  <button data-v="settings"></button>
 </nav>
 
 <div class="toast" id="toast"></div>
@@ -407,7 +404,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.7.3';
+var FE_VERSION = 'v3.8.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -506,11 +503,14 @@ var ICONS = {
   sync:'<path d="M20 12a8 8 0 0 1-14.6 4.5M4 12a8 8 0 0 1 14.6-4.5M18.6 3v4.5H14M5.4 21v-4.5H10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   history:'<path d="M12 8v4l3 2M21 12a9 9 0 11-2.6-6.3M21 3v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
+  settings:'<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H9.6l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L5.6 11a7.7 7.7 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8c.5.4 1.1.7 1.7 1l.3 2.1h4.8l.3-2.1c.6-.3 1.2-.6 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  admin:'<circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  logout:'<path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 12h9M16 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
   plans:'Plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
-  sync:'Sync', history:'History', more:'More', about:'About'};
+  sync:'Sync', history:'History', more:'More', settings:'Settings', admin:'Access', about:'About'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -530,7 +530,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='more' && ['plans','txns','accounts','balances','sync','history','about'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','accounts','balances','sync','history','about','healthset','admin'].indexOf(view)!==-1));
   });
   render();
 }
@@ -608,7 +608,7 @@ function userBusy(){
 function render(){
   if(!state.boot){ return; }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -619,7 +619,8 @@ function render(){
   else if(state.view==='accounts') renderAccounts();
   else if(state.view==='balances') renderBalances();
   else if(state.view==='sync') renderSync();
-  else if(state.view==='more') renderMore();
+  else if(state.view==='more' || state.view==='settings') renderSettings();
+  else if(state.view==='admin') renderAdmin();
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='about') renderAbout();
   else renderHistory();
@@ -1763,16 +1764,86 @@ function importNowUi(){
 }
 
 /* ============================ more (phone) ============================ */
-function renderMore(){
+function renderSettings(){
   var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
     ['balances','Balances'],['sync','Tiller sync'],['healthset','Health settings'],
-    ['history','History & undo'],['about','About']];
-  var h = '<h2 class="viewtitle">More</h2><div class="card morelist">';
+    ['history','History & undo'],['admin','Access (who can sign in)'],['about','About']];
+  var h = '<h2 class="viewtitle">Settings</h2><div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
   });
-  h += '</div><div class="empty" style="padding-top:24px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
+  h += '</div>';
+  h += '<div class="actions" style="margin-top:18px">'+
+    '<button class="btn ghost" data-act="logout">Log out</button></div>';
+  h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
   $('#shell').innerHTML = h;
+}
+
+/* ============================ access / admin (v3.8) ============================ */
+function renderAdmin(){
+  $('#shell').innerHTML = '<h2 class="viewtitle">Access</h2><div class="spin"></div>';
+  run('apiAccess').then(function(a){ state.access = a; drawAdmin(); }).catch(fail);
+}
+function drawAdmin(){
+  var a = state.access;
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Access</h2>';
+  h += '<div class="empty" style="padding:4px 0 14px">These '+esc('@'+a.domain)+' accounts can sign in to SBC Money. '+
+    (a.isAdmin?'Add a family member’s email to give them access.':'Only an admin can change this list.')+'</div>';
+  h += '<div class="card">';
+  a.allowed.forEach(function(em){
+    var isAdm = a.admins.indexOf(em)>-1;
+    var isMe = em===String(a.me).toLowerCase();
+    h += '<div class="envrow"><span class="nm">'+esc(em)+
+      (isAdm?' <span class="bal" style="opacity:.6">· admin</span>':'')+
+      (isMe?' <span class="bal" style="opacity:.6">· you</span>':'')+'</span>'+
+      (a.isAdmin && !isAdm ? '<button class="btn ghost sm warn" data-act="admin-remove" data-arg="'+esc(em)+'">Remove</button>'
+        : '<span style="opacity:.3">—</span>')+
+      '</div>';
+  });
+  h += '</div>';
+  if(a.isAdmin){
+    h += '<div class="grp"><h3>Add access</h3><div class="card" style="padding:12px">'+
+      '<input id="adminEmail" class="amt" style="width:100%;box-sizing:border-box" '+
+        'placeholder="name@'+esc(a.domain)+'" autocomplete="off">'+
+      '<div class="actions" style="margin-top:10px"><button class="btn" data-act="admin-add">Add to allowlist</button></div>'+
+      '</div></div>';
+  }
+  $('#shell').innerHTML = h;
+}
+function adminSave(list){
+  return run('apiSetAllowedEmails', { emails: list }).then(function(a){
+    state.access = a; drawAdmin();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function adminAdd(){
+  var el = $('#adminEmail'); if(!el) return;
+  var em = String(el.value||'').trim().toLowerCase();
+  if(!em){ toast('Enter an email'); return; }
+  var list = (state.access.allowed||[]).slice();
+  if(list.indexOf(em)>-1){ toast('Already on the list'); return; }
+  list.push(em);
+  adminSave(list).then(function(){ toast('Access granted ✓'); });
+}
+function adminRemove(em){
+  confirmUi('Remove access for '+em+'?', 'Remove').then(function(ok){
+    if(!ok) return;
+    var list = (state.access.allowed||[]).filter(function(x){ return x!==em; });
+    adminSave(list).then(function(){ toast('Access removed ✓'); });
+  });
+}
+
+/* Explicit sign-out: drop the cached token + GIS auto-select, show sign-in. */
+function signOut(){
+  confirmUi('Log out of SBC Money?', 'Log out').then(function(ok){
+    if(!ok) return;
+    auth = { token:'', email:'', exp:0 }; persistAuth();
+    try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+    state.boot = null;
+    var si = $('#signin'); if(si) si.style.display = 'flex';
+    if(gsiUp) try{ google.accounts.id.prompt(); }catch(e2){}
+    toast('Logged out');
+  });
 }
 
 /* ============================ health settings (v3.6) ============================ */
@@ -2042,6 +2113,9 @@ document.addEventListener('click', function(ev){
       drawHealthSettings();
     })(); break;
     case 'hs-save': hsSave(); break;
+    case 'admin-add': adminAdd(); break;
+    case 'admin-remove': adminRemove(arg); break;
+    case 'logout': signOut(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
     case 'import-now': importNowUi(); break;
