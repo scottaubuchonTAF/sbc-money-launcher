@@ -360,6 +360,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="envelopes"></button>
     <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
+    <button class="nav" data-v="balances"></button>
     <div class="navlbl">More</div>
     <button class="nav" data-v="settings"></button>
     <div class="foot" id="sideFoot"></div>
@@ -404,7 +405,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.8.0';
+var FE_VERSION = 'v3.8.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -530,7 +531,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','accounts','balances','sync','history','about','healthset','admin'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','accounts','sync','history','about','healthset','admin'].indexOf(view)!==-1));
   });
   render();
 }
