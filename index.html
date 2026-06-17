@@ -405,7 +405,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.9.0';
+var FE_VERSION = 'v3.10.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -531,7 +531,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','accounts','sync','history','about','healthset','admin','removetxn'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','accounts','sync','history','about','healthset','admin','removetxn','reconcile'].indexOf(view)!==-1));
   });
   render();
 }
@@ -609,7 +609,7 @@ function userBusy(){
 function render(){
   if(!state.boot){ return; }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -623,6 +623,7 @@ function render(){
   else if(state.view==='more' || state.view==='settings') renderSettings();
   else if(state.view==='admin') renderAdmin();
   else if(state.view==='removetxn') renderRemoveTxn();
+  else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='about') renderAbout();
   else renderHistory();
@@ -1792,6 +1793,7 @@ function importNowUi(){
 function renderSettings(){
   var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
     ['balances','Balances'],['sync','Tiller sync'],['healthset','Health settings'],
+    ['reconcile','Reconcile accounts'],
     ['history','History & undo'],['removetxn','Remove a transaction'],
     ['admin','Access (who can sign in)'],['about','About']];
   var h = '<h2 class="viewtitle">Settings</h2><div class="card morelist">';
@@ -1921,6 +1923,80 @@ function removeTxnGo(txnId){
       if(state.view==='removetxn') renderRemoveTxn();
     }).catch(function(e){ toast('⚠ '+(e.message||e)); });
   });
+}
+
+/* ============================ reconcile accounts (v3.10) ============================ */
+function reconciledMap(){ try{ return JSON.parse(localStorage.getItem('sbcReconciled')||'{}'); }catch(e){ return {}; } }
+function renderReconcile(){
+  if(!state.reconcile){ $('#shell').innerHTML='<h2 class="viewtitle">Reconcile accounts</h2><div class="spin"></div>'; }
+  else { drawReconcile(); }
+  run('apiReconcile').then(function(r){
+    if(Object.keys(state.baledit||{}).length) return; // don't clobber an in-progress edit
+    state.reconcile=r; if(state.view==='reconcile') drawReconcile();
+  }).catch(function(e){ if(!state.reconcile) fail(e); });
+}
+function reconRow(a, rev){
+  var stale = a.days!=null && a.days>=30 && !a.dormant;
+  var editing = state.baledit && state.baledit.account===a.name;
+  var h = '<div class="balrow" style="flex-wrap:wrap">'+
+    '<span class="nm">'+esc(a.name)+'</span>'+
+    '<span class="upd'+(stale?' stale':'')+'">'+esc(a.updated||'')+(a.pending?' · '+a.pending+' pending':'')+'</span>'+
+    '<span class="bal">'+money(a.balance)+'</span>'+
+    '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end;align-items:center">';
+  if(rev[a.name]) h += '<span style="font-size:11px;color:var(--ink-3)">reviewed '+esc(rev[a.name])+'</span>';
+  h += '<button class="btn ghost sm" data-act="recon-update" data-arg="'+esc(a.name)+'">Update balance</button>'+
+    '<button class="btn ghost sm" data-act="recon-reviewed" data-arg="'+esc(a.name)+'">✓ Reviewed</button></span>';
+  if(editing){
+    h += '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:8px">'+
+      '<input id="balInput" class="amt" style="flex:1" inputmode="decimal" placeholder="Current balance" value="'+esc(a.balance)+'">'+
+      '<button class="btn sm" data-act="recon-save" data-arg="'+esc(a.name)+'">Save</button>'+
+      '<button class="btn ghost sm" data-act="recon-cancel">Cancel</button></span>';
+  }
+  return h+'</div>';
+}
+function drawReconcile(){
+  var r = state.reconcile, rev = reconciledMap();
+  var active = (r.accounts||[]).filter(function(a){ return !a.dormant; });
+  var dormant = (r.accounts||[]).filter(function(a){ return a.dormant; });
+  var h = '<h2 class="viewtitle">Reconcile accounts</h2>'+
+    '<div class="empty" style="padding:2px 0 12px;text-align:left">Check each account against your bank. '+
+    'For dead-feed accounts (e.g. CC Rewards, REBA, Health Equity) tap <b>Update balance</b> to enter the '+
+    'current value — it’s written back to Tiller so both stay in sync. Accounts with no feed for over 6 months '+
+    'are parked under Closed / Dormant.</div>';
+  h += '<div class="card">';
+  if(active.length) active.forEach(function(a){ h += reconRow(a, rev); });
+  else h += '<div class="empty">No active accounts.</div>';
+  h += '</div>';
+  if(dormant.length){
+    h += '<div class="grp" style="margin-top:14px"><h3 data-act="recon-dormant-toggle" style="cursor:pointer">'+
+      (state.showDormant?'▾':'▸')+' Closed / Dormant · '+dormant.length+'</h3>';
+    if(state.showDormant){
+      h += '<div class="card">';
+      dormant.forEach(function(a){ h += reconRow(a, rev); });
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  $('#shell').innerHTML = h;
+}
+function reconUpdate(account){ state.baledit = { account: account }; drawReconcile();
+  var el=$('#balInput'); if(el){ el.focus(); el.select(); } }
+function reconCancel(){ state.baledit = null; drawReconcile(); }
+function reconSave(account){
+  var el=$('#balInput'); if(!el) return;
+  var v=el.value;
+  if(v===''||isNaN(Number(v))){ toast('Enter a number'); return; }
+  run('apiManualBalance', { account:account, balance:Number(v) }).then(function(){
+    toast('Balance updated · Tiller ✓');
+    state.baledit=null; state.reconcile=null; state.balances=null; invalidateData();
+    renderReconcile();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function reconReviewed(account){
+  var m = reconciledMap();
+  m[account] = new Date().toLocaleDateString();
+  try{ localStorage.setItem('sbcReconciled', JSON.stringify(m)); }catch(e){}
+  toast('Marked reviewed ✓'); drawReconcile();
 }
 
 /* ============================ health settings (v3.6) ============================ */
@@ -2195,6 +2271,11 @@ document.addEventListener('click', function(ev){
     case 'logout': signOut(); break;
     case 'rmtxn-search': removeTxnSearch(); break;
     case 'rmtxn-go': removeTxnGo(arg); break;
+    case 'recon-update': reconUpdate(arg); break;
+    case 'recon-cancel': reconCancel(); break;
+    case 'recon-save': reconSave(arg); break;
+    case 'recon-reviewed': reconReviewed(arg); break;
+    case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
     case 'import-now': importNowUi(); break;
