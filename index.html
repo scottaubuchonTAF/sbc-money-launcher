@@ -361,6 +361,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="balances"></button>
+    <button class="nav" data-v="accounts"></button>
     <div class="navlbl">More</div>
     <button class="nav" data-v="settings"></button>
     <div class="foot" id="sideFoot"></div>
@@ -405,7 +406,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.10.0';
+var FE_VERSION = 'v3.11.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -510,7 +511,7 @@ var ICONS = {
   about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
-  plans:'Plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
+  plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   sync:'Sync', history:'History', more:'More', settings:'Settings', admin:'Access', about:'About'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
@@ -531,7 +532,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','accounts','sync','history','about','healthset','admin','removetxn','reconcile'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile'].indexOf(view)!==-1));
   });
   render();
 }
@@ -541,7 +542,9 @@ function boot(){
   run('apiBoot').then(function(res){
     state.boot = res.boot; state.picker = res.picker;
     updateBadges(state.boot.inboxCount);
-    $('#sideFoot').textContent = state.boot.user;
+    $('#sideFoot').innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
+      '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
+      'background:rgba(255,255,255,.08);color:#d7efe9;border:1px solid rgba(255,255,255,.16);font-size:12.5px">Log out</button>';
     var h = new Date().getHours();
     var nm = String(auth.email || state.boot.user || '').split('@')[0];
     nm = nm ? nm.charAt(0).toUpperCase()+nm.slice(1) : '';
@@ -1790,19 +1793,33 @@ function importNowUi(){
 }
 
 /* ============================ more (phone) ============================ */
-function renderSettings(){
-  var rows = [['plans','Funding plans'],['txns','Transactions'],['accounts','Accounts'],
-    ['balances','Balances'],['sync','Tiller sync'],['healthset','Health settings'],
-    ['reconcile','Reconcile accounts'],
-    ['history','History & undo'],['removetxn','Remove a transaction'],
-    ['admin','Access (who can sign in)'],['about','About']];
-  var h = '<h2 class="viewtitle">Settings</h2><div class="card morelist">';
+function settingsSectionLabel(t){
+  return '<div style="color:var(--ink-3);font-size:11px;font-weight:700;letter-spacing:.08em;margin:14px 2px 6px">'+t+'</div>';
+}
+function settingsList(rows){
+  var h = '<div class="card morelist">';
   rows.forEach(function(r){
     h += '<div class="envrow" data-act="goview" data-arg="'+r[0]+'"><span class="nm">'+r[1]+'</span><span>›</span></div>';
   });
-  h += '</div>';
-  h += '<div class="actions" style="margin-top:18px">'+
-    '<button class="btn ghost" data-act="logout">Log out</button></div>';
+  return h+'</div>';
+}
+function renderSettings(){
+  var desktop = window.innerWidth >= 900;
+  var h = '<h2 class="viewtitle">Settings</h2>';
+  // On phones the sidebar is hidden, so surface the Money pages here too.
+  // On desktop they live in the sidebar's Money group, so we don't repeat them.
+  if(!desktop){
+    h += settingsSectionLabel('MONEY')+settingsList([['plans','Funding plans'],
+      ['txns','Transactions'],['balances','Balances'],['accounts','Accounts']]);
+    h += settingsSectionLabel('SETTINGS');
+  }
+  h += settingsList([['sync','Tiller sync'],['reconcile','Reconcile accounts'],
+    ['healthset','Health settings'],['history','History & undo'],
+    ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],['about','About']]);
+  // Log out: on phones it lives here; on desktop it's in the sidebar footer.
+  if(!desktop){
+    h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
+  }
   h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
   $('#shell').innerHTML = h;
 }
@@ -1944,8 +1961,9 @@ function reconRow(a, rev){
     '<span class="bal">'+money(a.balance)+'</span>'+
     '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end;align-items:center">';
   if(rev[a.name]) h += '<span style="font-size:11px;color:var(--ink-3)">reviewed '+esc(rev[a.name])+'</span>';
-  h += '<button class="btn ghost sm" data-act="recon-update" data-arg="'+esc(a.name)+'">Update balance</button>'+
-    '<button class="btn ghost sm" data-act="recon-reviewed" data-arg="'+esc(a.name)+'">✓ Reviewed</button></span>';
+  h += '<button class="btn ghost sm" data-act="recon-manual" data-arg="'+esc(a.name)+'">'+(a.manual?'✓ Manual':'Mark manual')+'</button>';
+  if(a.manual) h += '<button class="btn ghost sm" data-act="recon-update" data-arg="'+esc(a.name)+'">Update balance</button>';
+  h += '<button class="btn ghost sm" data-act="recon-reviewed" data-arg="'+esc(a.name)+'">✓ Reviewed</button></span>';
   if(editing){
     h += '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:8px">'+
       '<input id="balInput" class="amt" style="flex:1" inputmode="decimal" placeholder="Current balance" value="'+esc(a.balance)+'">'+
@@ -1986,17 +2004,37 @@ function reconSave(account){
   var el=$('#balInput'); if(!el) return;
   var v=el.value;
   if(v===''||isNaN(Number(v))){ toast('Enter a number'); return; }
-  run('apiManualBalance', { account:account, balance:Number(v) }).then(function(){
+  var amt=Number(v);
+  var btn=document.querySelector('[data-act="recon-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('Balance updated · Tiller ✓');
-    state.baledit=null; state.reconcile=null; state.balances=null; invalidateData();
-    renderReconcile();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    // Optimistic update: patch this one account locally instead of re-scanning
+    // the 27k-row Balance History (that refetch was the slow part).
+    var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
+    if(a){ a.balance=amt; a.days=0; a.updated='today'; a.dormant=false; }
+    state.baledit=null; state.balances=null; invalidateData();
+    drawReconcile();
+  }).catch(function(e){
+    if(btn){ btn.disabled=false; btn.textContent='Save'; }
+    toast('⚠ '+(e.message||e));
+  });
 }
 function reconReviewed(account){
   var m = reconciledMap();
   m[account] = new Date().toLocaleDateString();
   try{ localStorage.setItem('sbcReconciled', JSON.stringify(m)); }catch(e){}
   toast('Marked reviewed ✓'); drawReconcile();
+}
+function reconToggleManual(account){
+  var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
+  var on = !(a&&a.manual);
+  run('apiSetManualAccount', { account:account, manual:on }).then(function(){
+    if(a) a.manual=on;
+    if(!on && state.baledit && state.baledit.account===account) state.baledit=null;
+    toast(on?'Marked manual ✓':'Set to auto');
+    drawReconcile();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 
 /* ============================ health settings (v3.6) ============================ */
@@ -2275,6 +2313,7 @@ document.addEventListener('click', function(ev){
     case 'recon-cancel': reconCancel(); break;
     case 'recon-save': reconSave(arg); break;
     case 'recon-reviewed': reconReviewed(arg); break;
+    case 'recon-manual': reconToggleManual(arg); break;
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
