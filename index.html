@@ -282,7 +282,9 @@ aside.side{display:none}
 .balrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
 .balrow .upd{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .balrow .upd.stale{color:var(--red);font-style:italic}
-.balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px}
+.balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px;text-align:right}
+.balrow .balact{flex:none;width:20px;text-align:center}
+.balrow .balact button{cursor:pointer;border:none;background:none;color:var(--teal-700);font-size:14px;padding:0;line-height:1}
 .balrow.stale .nm,.balrow.stale .bal{color:var(--ink-3);font-style:italic}
 
 /* ================= history / misc ================= */
@@ -406,7 +408,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.11.1';
+var FE_VERSION = 'v3.12.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1478,7 +1480,7 @@ function balGroupHtml(g){
         '<span class="nm">'+esc(r.name)+(r.manual?' <span style="font-size:10px;opacity:.55">manual</span>':'')+'</span>'+
         '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
         '<span class="bal">'+money(r.balance)+'</span>'+
-        (r.manual?'<button class="btn ghost sm" data-act="bal-edit" data-arg="'+esc(r.name)+'" style="margin-left:8px;padding:2px 9px">✎</button>':'')+
+        '<span class="balact">'+(r.manual?'<button data-act="bal-edit" data-arg="'+esc(r.name)+'" title="Update balance">✎</button>':'')+'</span>'+
         '</div>';
       if(state.balEdit===r.name){
         h += '<div class="balrow" style="gap:8px">'+
@@ -1841,6 +1843,8 @@ function renderSettings(){
   h += settingsList([['sync','Tiller sync'],['reconcile','Reconcile accounts'],
     ['healthset','Health settings'],['history','History & undo'],
     ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],['about','About']]);
+  h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
+    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // Log out: on phones it lives here; on desktop it's in the sidebar footer.
   if(!desktop){
     h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
@@ -2055,6 +2059,17 @@ function reconReviewed(account){
   m[account] = new Date().toLocaleDateString();
   try{ localStorage.setItem('sbcReconciled', JSON.stringify(m)); }catch(e){}
   toast('Marked reviewed ✓'); drawReconcile();
+}
+function snapshotToTiller(){
+  var btn=document.querySelector('[data-act="snapshot-tiller"]');
+  if(btn){ btn.disabled=true; btn.textContent='Backing up…'; }
+  run('apiSnapshotEnvelopesToTiller').then(function(r){
+    toast('Backed up '+r.count+' envelopes to Tiller ✓');
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Back up envelopes to Tiller'; }
+  }).catch(function(e){
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Back up envelopes to Tiller'; }
+    toast('⚠ '+(e.message||e));
+  });
 }
 function reconToggleManual(account){
   var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
@@ -2344,6 +2359,7 @@ document.addEventListener('click', function(ev){
     case 'recon-save': reconSave(arg); break;
     case 'recon-reviewed': reconReviewed(arg); break;
     case 'recon-manual': reconToggleManual(arg); break;
+    case 'snapshot-tiller': snapshotToTiller(); break;
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
