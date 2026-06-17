@@ -406,7 +406,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.11.0';
+var FE_VERSION = 'v3.11.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1454,7 +1454,7 @@ function renderBalances(){
   if(state.balances){ drawBalances(); }
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Balances</h2><div class="spin"></div>'; }
   run('apiBalances').then(function(b){
-    if(state.balReorder) return; // don't clobber an in-progress reorder
+    if(state.balReorder || state.balEdit) return; // don't clobber an in-progress reorder/edit
     var changed = JSON.stringify(b) !== JSON.stringify(state.balances);
     state.balances = b;
     if(state.view==='balances' && changed) drawBalances();
@@ -1475,9 +1475,17 @@ function balGroupHtml(g){
       var stale = r.days >= 30;
       var slow = r.days >= 7 && r.days < 30;
       h += '<div class="balrow'+(stale?' stale':'')+'">'+
-        '<span class="nm">'+esc(r.name)+'</span>'+
+        '<span class="nm">'+esc(r.name)+(r.manual?' <span style="font-size:10px;opacity:.55">manual</span>':'')+'</span>'+
         '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
-        '<span class="bal">'+money(r.balance)+'</span></div>';
+        '<span class="bal">'+money(r.balance)+'</span>'+
+        (r.manual?'<button class="btn ghost sm" data-act="bal-edit" data-arg="'+esc(r.name)+'" style="margin-left:8px;padding:2px 9px">✎</button>':'')+
+        '</div>';
+      if(state.balEdit===r.name){
+        h += '<div class="balrow" style="gap:8px">'+
+          '<input id="balEditInput" class="amt" style="flex:1" inputmode="decimal" value="'+esc(r.balance)+'">'+
+          '<button class="btn sm" data-act="bal-edit-save" data-arg="'+esc(r.name)+'">Save</button>'+
+          '<button class="btn ghost sm" data-act="bal-edit-cancel">Cancel</button></div>';
+      }
     });
   } else {
     // reorder mode: list accounts with up/down so they can be ordered within the group
@@ -1525,6 +1533,23 @@ function balSaveOrder(){
     .then(function(){ return run('apiSetBalanceAccountOrder', accts); })
     .then(function(){ toast('Order saved ✓'); })
     .catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function balEdit(account){ state.balEdit = account; drawBalances();
+  var el=$('#balEditInput'); if(el){ el.focus(); el.select(); } }
+function balEditCancel(){ state.balEdit = null; drawBalances(); }
+function balEditSave(account){
+  var el=$('#balEditInput'); if(!el) return;
+  var v=el.value; if(v===''||isNaN(Number(v))){ toast('Enter a number'); return; }
+  var amt=Number(v);
+  var btn=document.querySelector('[data-act="bal-edit-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  run('apiManualBalance', { account:account, balance:amt }).then(function(){
+    toast('Balance updated · Tiller ✓');
+    (state.balances.groups||[]).forEach(function(g){ (g.rows||[]).forEach(function(rr){
+      if(rr.name===account){ rr.balance = g.liability?Math.abs(amt):amt; rr.days=0; rr.updated='today'; } }); });
+    state.balEdit=null; state.reconcile=null; invalidateData();
+    drawBalances();
+  }).catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
 }
 function drawBalances(){
   var b = state.balances;
@@ -1974,16 +1999,21 @@ function reconRow(a, rev){
 }
 function drawReconcile(){
   var r = state.reconcile, rev = reconciledMap();
-  var active = (r.accounts||[]).filter(function(a){ return !a.dormant; });
+  var manual  = (r.accounts||[]).filter(function(a){ return a.manual && !a.dormant; });
+  var auto    = (r.accounts||[]).filter(function(a){ return !a.manual && !a.dormant; });
   var dormant = (r.accounts||[]).filter(function(a){ return a.dormant; });
   var h = '<h2 class="viewtitle">Reconcile accounts</h2>'+
     '<div class="empty" style="padding:2px 0 12px;text-align:left">Check each account against your bank. '+
-    'For dead-feed accounts (e.g. CC Rewards, REBA, Health Equity) tap <b>Update balance</b> to enter the '+
-    'current value — it’s written back to Tiller so both stay in sync. Accounts with no feed for over 6 months '+
-    'are parked under Closed / Dormant.</div>';
-  h += '<div class="card">';
-  if(active.length) active.forEach(function(a){ h += reconRow(a, rev); });
-  else h += '<div class="empty">No active accounts.</div>';
+    '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
+    'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
+    'No feed for over 6 months → Closed / Dormant.</div>';
+  h += settingsSectionLabel('✋ MANUAL — UPDATE BY HAND')+'<div class="card">';
+  if(manual.length) manual.forEach(function(a){ h += reconRow(a, rev); });
+  else h += '<div class="empty" style="padding:12px;text-align:left">None yet — tap “Mark manual” on a fed account below to move it here.</div>';
+  h += '</div>';
+  h += settingsSectionLabel('🔄 AUTOMATIC — FED')+'<div class="card">';
+  if(auto.length) auto.forEach(function(a){ h += reconRow(a, rev); });
+  else h += '<div class="empty" style="padding:12px">No automatic accounts.</div>';
   h += '</div>';
   if(dormant.length){
     h += '<div class="grp" style="margin-top:14px"><h3 data-act="recon-dormant-toggle" style="cursor:pointer">'+
@@ -2326,6 +2356,9 @@ document.addEventListener('click', function(ev){
     case 'bal-down': balMove(arg,1); break;
     case 'bal-acct-up': balMoveAccount(p[0],p[1],-1); break;
     case 'bal-acct-down': balMoveAccount(p[0],p[1],1); break;
+    case 'bal-edit': balEdit(arg); break;
+    case 'bal-edit-save': balEditSave(arg); break;
+    case 'bal-edit-cancel': balEditCancel(); break;
     case 'sync-refresh':
       state.sync = null;
       renderSync(); break;
