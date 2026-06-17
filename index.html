@@ -407,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.12.2';
+var FE_VERSION = 'v3.13.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1205,6 +1205,7 @@ function renderPlans(){
 }
 function drawPlans(){
   var h = '<div class="viewhead"><h2>Funding plans</h2>'+
+    '<button class="btn sm ghost" data-act="plan-tiller">↓ From Tiller (this month)</button>'+
     '<button class="btn sm" data-act="plan-new">+ New plan</button></div>';
   if(state.planEdit){ h += planFormHtml(); }
   if(!state.plans.length && !state.planEdit){
@@ -1282,6 +1283,24 @@ function planSave(){
     state.planEdit = null;
     renderPlans();
   }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function planFromTiller(){
+  confirmUi('Build a funding plan from this month’s Tiller category targets? '+
+    'Each budgeted expense category becomes a fixed line. Re-running updates that month’s plan.',
+    'Build plan').then(function(ok){
+      if(!ok) return;
+      toast('Reading Tiller targets…');
+      run('apiPlanFromTiller', {}).then(function(r){
+        var msg = 'Built “'+r.name+'” — '+r.lineCount+' envelopes, '+money(r.total);
+        if(!r.balanced) msg += ' (income target '+money(r.expectedIncome)+')';
+        toast(msg+' ✓');
+        if(r.skipped && r.skipped.length){
+          toast('Skipped '+r.skipped.length+': '+r.skipped.map(function(s){return s.name;}).join(', '));
+        }
+        state.plans = null;
+        renderPlans();
+      }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    });
 }
 function planToggle(planId, on){
   var p = state.plans.find(function(x){return x.planId===planId;});
@@ -2305,6 +2324,7 @@ document.addEventListener('click', function(ev){
       state.planEdit = {planId:'', name:'', mode:'fixed', incomeMatch:'', active:true,
         lines:[{envelopeId:'',fixed:'',percent:'',remainder:false}]};
       drawPlans(); break;
+    case 'plan-tiller': planFromTiller(); break;
     case 'plan-edit':
       var pl = state.plans.find(function(x){return x.planId===arg;});
       state.planEdit = JSON.parse(JSON.stringify(pl));
