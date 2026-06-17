@@ -282,9 +282,8 @@ aside.side{display:none}
 .balrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
 .balrow .upd{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .balrow .upd.stale{color:var(--red);font-style:italic}
-.balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px;text-align:right}
-.balrow .balact{flex:none;width:20px;text-align:center}
-.balrow .balact button{cursor:pointer;border:none;background:none;color:var(--teal-700);font-size:14px;padding:0;line-height:1}
+.balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px}
+.balrow .baledit{flex:none;cursor:pointer;border:none;background:none;color:var(--teal-700);font-size:13px;padding:0 2px;line-height:1}
 .balrow.stale .nm,.balrow.stale .bal{color:var(--ink-3);font-style:italic}
 
 /* ================= history / misc ================= */
@@ -408,7 +407,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.12.1';
+var FE_VERSION = 'v3.12.2';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1478,9 +1477,9 @@ function balGroupHtml(g){
       var slow = r.days >= 7 && r.days < 30;
       h += '<div class="balrow'+(stale?' stale':'')+'">'+
         '<span class="nm">'+esc(r.name)+(r.manual?' <span style="font-size:10px;opacity:.55">manual</span>':'')+'</span>'+
+        (r.manual?'<button class="baledit" data-act="bal-edit" data-arg="'+esc(r.name)+'" title="Update balance">✎</button>':'')+
         '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
         '<span class="bal">'+money(r.balance)+'</span>'+
-        '<span class="balact">'+(r.manual?'<button data-act="bal-edit" data-arg="'+esc(r.name)+'" title="Update balance">✎</button>':'')+'</span>'+
         '</div>';
       if(state.balEdit===r.name){
         h += '<div class="balrow" style="gap:8px">'+
