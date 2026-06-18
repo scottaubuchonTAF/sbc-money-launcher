@@ -213,6 +213,9 @@ aside.side{display:none}
 .sechead{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);margin-bottom:6px}
 .sechead .sectitle{font-size:14px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin:0}
 .sechead .grow{flex:1}
+.dh-rename{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.dh-rename input{font-size:16px;font-weight:700;padding:6px 9px;border:1px solid var(--line);border-radius:8px;min-width:140px;flex:1}
+.unarch{color:var(--teal-700);font-weight:700;font-size:12.5px;margin-left:auto}
 .phead .chev{color:var(--ink-3);font-size:12px;margin-right:2px;align-self:center}
 .phead .nm{flex:1}
 .versblock .phead{margin-bottom:4px}
@@ -414,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.13.3';
+var FE_VERSION = 'v3.14.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -750,7 +753,9 @@ function renderEnvelopes(){
     }
   });
 
-  var h = '<h2 class="viewtitle">Envelopes</h2>';
+  var h = '<div class="viewhead"><h2>Envelopes</h2>'+
+    '<button class="btn sm" data-act="env-new">+ New envelope</button></div>';
+  if(state.envNew){ h += envNewFormHtml(); }
   if(income.length){
     h += '<div class="grp"><h3>Income</h3><div class="card income">';
     income.forEach(function(e){ h += envRowHtml(e); });
@@ -769,7 +774,48 @@ function renderEnvelopes(){
     }
     h += '</div>';
   });
+  h += archivedSectionHtml();
   $('#shell').innerHTML = h;
+  // Lazy-load the archived list when that section is expanded.
+  if(state.showArchived && !state.archived){
+    run('apiArchivedEnvelopes').then(function(list){
+      state.archived = list;
+      if(state.view==='envelopes') renderEnvelopes();
+    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  }
+}
+function envNewFormHtml(){
+  var n = state.envNew;
+  var groups = (state.boot.groups||[]).map(function(g){ return g.name; });
+  return '<div class="card plform" style="padding:16px;margin-bottom:14px">'+
+    '<div class="formrow"><label>Name</label>'+
+    '<input type="text" id="enName" value="'+esc(n.name||'')+'" placeholder="e.g. Vacation 🌴"></div>'+
+    '<div class="formrow"><label>Group</label>'+
+    '<input type="text" id="enGroup" list="enGroupList" value="'+esc(n.group||'')+'" placeholder="e.g. Savings">'+
+    '<datalist id="enGroupList">'+groups.map(function(g){ return '<option value="'+esc(g)+'">'; }).join('')+'</datalist></div>'+
+    '<div class="formrow"><label>Type</label><select id="enType">'+
+    ['Expense','Income','Transfer'].map(function(t){
+      return '<option value="'+t+'"'+((n.type||'Expense')===t?' selected':'')+'>'+t+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div class="actions"><button class="btn" data-act="env-new-save">Create</button>'+
+    '<button class="btn ghost" data-act="env-new-cancel">Cancel</button></div></div>';
+}
+function archivedSectionHtml(){
+  var open = !!state.showArchived;
+  var h = '<div class="plansec"><div class="sechead phead" data-act="env-show-archived">'+
+    '<span class="chev">'+(open?'▾':'▸')+'</span>'+
+    '<h3 class="sectitle">Archived</h3><span class="grow"></span></div>';
+  if(open){
+    var list = state.archived;
+    if(!list){ h += '<div class="spin"></div>'; }
+    else if(!list.length){ h += '<div class="empty">No archived envelopes.</div>'; }
+    else { list.forEach(function(e){
+      h += '<div class="envrow"><span class="nm">'+esc(e.name)+'</span>'+
+        '<span class="acctchip">'+esc(e.group)+'</span>'+
+        '<button class="unarch" data-act="env-unarchive" data-arg="'+esc(e.id)+'">Unarchive</button></div>';
+    }); }
+  }
+  return h+'</div>';
 }
 
 /* ============================ envelope detail ============================ */
@@ -790,9 +836,14 @@ function renderEnvDetail(){
   if(!d){ go('envelopes'); return; }
   var e = findEnv(d.id);
   if(!e){ go('envelopes'); return; }
+  var renaming = state.envRename && state.envRename.id===e.id;
   var h = '<button class="backlink" data-act="env-back">‹ Envelopes</button>'+
-    '<div class="card detailhead"><div class="dh1"><div>'+
-    '<div class="dnm">'+esc(e.name)+'</div>'+
+    '<div class="card detailhead"><div class="dh1"><div style="flex:1">'+
+    (renaming
+      ? '<div class="dh-rename"><input type="text" id="renInput" value="'+esc(state.envRename.name)+'">'+
+        '<button class="btn sm" data-act="env-rename-save">Save</button>'+
+        '<button class="btn ghost sm" data-act="env-rename-cancel">Cancel</button></div>'
+      : '<div class="dnm">'+esc(e.name)+'</div>')+
     '<div class="dgrp">'+esc(e.group)+(e.type==='Income'?' · income':'')+'</div></div>'+
     '<div class="dbal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</div></div>';
   if(state.move){
@@ -812,9 +863,12 @@ function renderEnvDetail(){
     // still available via "Move money".
     var poolId = state.boot.incomePoolId;
     var canSweep = (e.type==='Income' && e.id!==poolId && e.balance>0);
-    h += '<div class="actions" style="margin-top:14px;padding:0 16px 16px">'+
+    h += '<div class="actions" style="margin-top:14px;padding:0 16px 16px;flex-wrap:wrap">'+
       (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move all to pool</button>' : '')+
-      '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button></div>';
+      '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button>'+
+      (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Rename</button>')+
+      (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="env-archive" data-arg="'+esc(e.id)+'">Archive</button>')+
+      '</div>';
   }
   h += '</div>';
   h += '<div class="grp" style="margin-top:18px"><h3>Activity</h3>'+
@@ -859,6 +913,46 @@ function renderEnvDetail(){
       }
     }).catch(function(e){ toast('⚠ '+(e.message||e)); });
   }
+}
+function envNewSave(){
+  var name = (($('#enName')||{}).value||'').trim();
+  var group = (($('#enGroup')||{}).value||'').trim();
+  var type = ($('#enType')||{}).value || 'Expense';
+  if(!name){ toast('Name required'); return; }
+  var btn = document.querySelector('[data-act="env-new-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Creating…'; }
+  run('apiCreateEnvelope', { name:name, group:group||'Other', type:type })
+  .then(function(){ toast('Envelope created ✓'); state.envNew=null; invalidateData(); return refreshBoot(); })
+  .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
+  .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Create'; } toast('⚠ '+(e.message||e)); });
+}
+function envRenameSave(){
+  var r = state.envRename; if(!r) return;
+  var name = (($('#renInput')||{}).value||'').trim();
+  if(!name){ toast('Name required'); return; }
+  var btn = document.querySelector('[data-act="env-rename-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  run('apiRenameEnvelope', { envelopeId:r.id, name:name })
+  .then(function(){ toast('Renamed ✓'); state.envRename=null; invalidateData();
+    if(state.envDetail) state.envDetail.txns=null; return refreshBoot(); })
+  .then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
+  .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
+}
+function envArchive(id){
+  confirmUi('Archive this envelope? It will be hidden from your lists (unarchive later from Envelopes ▸ Archived). Its history is kept.', 'Archive')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiArchiveEnvelope', { envelopeId:id, archive:true })
+    .then(function(){ toast('Archived ✓'); state.archived=null; invalidateData(); return refreshBoot(); })
+    .then(function(){ go('envelopes'); })
+    .catch(function(e){ toast('⚠ '+(e.message||e)); });
+  });
+}
+function envUnarchive(id){
+  run('apiArchiveEnvelope', { envelopeId:id, archive:false })
+  .then(function(){ toast('Unarchived ✓'); state.archived=null; invalidateData(); return refreshBoot(); })
+  .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
+  .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 function moveGo(){
   var m = state.move, d = state.envDetail;
@@ -2449,6 +2543,15 @@ document.addEventListener('click', function(ev){
       renderEnvelopes(); break;
     case 'env-open': openEnvelope(arg); break;
     case 'env-back': go('envelopes'); break;
+    case 'env-new': state.envNew={name:'',group:'',type:'Expense'}; renderEnvelopes(); break;
+    case 'env-new-cancel': state.envNew=null; renderEnvelopes(); break;
+    case 'env-new-save': envNewSave(); break;
+    case 'env-show-archived': state.showArchived=!state.showArchived; renderEnvelopes(); break;
+    case 'env-unarchive': envUnarchive(arg); break;
+    case 'env-rename': (function(){ var e=findEnv(state.envDetail.id); if(e){ state.envRename={id:e.id, name:e.name}; renderEnvDetail(); } })(); break;
+    case 'env-rename-cancel': state.envRename=null; renderEnvDetail(); break;
+    case 'env-rename-save': envRenameSave(); break;
+    case 'env-archive': envArchive(arg); break;
     case 'hs-group': (function(){
       var hs = state.healthset, g = arg;
       var ci = hs.cashGroups.indexOf(g), di = hs.debtGroups.indexOf(g);
