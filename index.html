@@ -209,6 +209,10 @@ aside.side{display:none}
   padding:18px;margin-bottom:14px}
 .plancard .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .phead{cursor:pointer;user-select:none}
+.plansec{margin-top:22px}
+.sechead{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);margin-bottom:6px}
+.sechead .sectitle{font-size:14px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin:0}
+.sechead .grow{flex:1}
 .phead .chev{color:var(--ink-3);font-size:12px;margin-right:2px;align-self:center}
 .phead .nm{flex:1}
 .versblock .phead{margin-bottom:4px}
@@ -363,7 +367,6 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
     <button class="nav" data-v="fund"></button>
     <div class="navlbl">Money</div>
     <button class="nav" data-v="envelopes"></button>
-    <button class="nav" data-v="plans"></button>
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="balances"></button>
     <button class="nav" data-v="accounts"></button>
@@ -411,7 +414,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.13.2';
+var FE_VERSION = 'v3.13.3';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1130,7 +1133,7 @@ function poolBalance(){
 function drawFund(){
   var bal = poolBalance();
   var deposits = (state.inbox||[]).filter(function(t){ return t.amount>0 && t.cashAccount===true; });
-  var activePlans = (state.plans||[]).filter(function(p){ return p.active; });
+  var activePlans = (state.plans||[]).filter(function(p){ return p.active && !isPlanVersion(p); });
   var f = state.fund['pool'];
   var h = '<h2 class="viewtitle">Fund</h2>';
   h += '<div class="txncard"><div class="top"><div class="desc">Income Cash Pool</div>'+
@@ -1141,28 +1144,30 @@ function drawFund(){
       (deposits.length===1?'':'s')+' waiting in the Inbox — approve into an income envelope, then move it here to the pool.</div>';
   }
   if(bal<=0){
-    h += '</div><div class="empty">Nothing to fund yet. Approve deposits into the pool, then put the money to work here.</div>';
-    $('#shell').innerHTML = h; return;
+    h += '</div><div class="empty">Nothing to fund yet. Approve deposits into the pool, then put the money to work below.</div>';
+  } else {
+    h += '<div class="formrow" style="margin-top:12px"><label>Amount to fund</label>'+
+      '<input type="number" step="0.01" inputmode="decimal" id="fundAmt" value="'+esc(f?f.amount:bal)+'"></div>';
+    h += '<div class="pills">';
+    activePlans.forEach(function(p){
+      h += '<button class="pill'+(f&&f.planId===p.planId?' sel':'')+
+        '" data-act="fund-plan" data-arg="pool|'+esc(p.planId)+'">'+esc(p.name)+'</button>';
+    });
+    h += '<button class="pill'+(f&&!f.planId?' sel':'')+'" data-act="fund-manual" data-arg="pool">Manual split</button></div>';
+    if(f){
+      h += splitEditorHtml('pool', f.amount, f.legs, 'fund');
+      h += '<div class="actions">'+
+        '<button class="btn" '+(splitReady(f.amount, f.legs)?'':'disabled')+
+        ' data-act="fund-go" data-arg="pool">Fund '+money(f.amount)+'</button>'+
+        '<button class="btn ghost" data-act="fund-cancel" data-arg="pool">Cancel</button></div>';
+    }
+    h += '</div>';
+    if(!activePlans.length){
+      h += '<div class="empty">Tip: create a funding plan below to make this one tap.</div>';
+    }
   }
-  h += '<div class="formrow" style="margin-top:12px"><label>Amount to fund</label>'+
-    '<input type="number" step="0.01" inputmode="decimal" id="fundAmt" value="'+esc(f?f.amount:bal)+'"></div>';
-  h += '<div class="pills">';
-  activePlans.forEach(function(p){
-    h += '<button class="pill'+(f&&f.planId===p.planId?' sel':'')+
-      '" data-act="fund-plan" data-arg="pool|'+esc(p.planId)+'">'+esc(p.name)+'</button>';
-  });
-  h += '<button class="pill'+(f&&!f.planId?' sel':'')+'" data-act="fund-manual" data-arg="pool">Manual split</button></div>';
-  if(f){
-    h += splitEditorHtml('pool', f.amount, f.legs, 'fund');
-    h += '<div class="actions">'+
-      '<button class="btn" '+(splitReady(f.amount, f.legs)?'':'disabled')+
-      ' data-act="fund-go" data-arg="pool">Fund '+money(f.amount)+'</button>'+
-      '<button class="btn ghost" data-act="fund-cancel" data-arg="pool">Cancel</button></div>';
-  }
-  h += '</div>';
-  if(!activePlans.length){
-    h += '<div class="empty">Tip: create a funding plan in Plans to make this one tap.</div>';
-  }
+  // Plans live on this same page now (no separate Funding plans tab).
+  h += plansSection();
   $('#shell').innerHTML = h;
 }
 function fundStart(key, planId){
@@ -1197,16 +1202,8 @@ function fundGo(){
 }
 
 /* ============================ plans ============================ */
-function renderPlans(){
-  if(state.plans){ drawPlans(); }
-  else { $('#shell').innerHTML = '<h2 class="viewtitle">Plans</h2><div class="spin"></div>'; }
-  run('apiPlans').then(function(plans){
-    var changed = JSON.stringify(plans) !== JSON.stringify(state.plans);
-    state.plans = plans;
-    if(state.view==='plans' && changed && !state.planEdit && !userBusy()) drawPlans();
-    else if(state.view==='plans' && !$('.plancard') && !$('.empty')) drawPlans();
-  }).catch(function(e){ if(!state.plans) fail(e); });
-}
+/* Legacy 'plans' route → the Fund page (plans now live there). */
+function renderPlans(){ go('fund'); }
 function isPlanVersion(p){ return String(p.planId||'').indexOf('fpv-')===0; }
 function planTotal(p){
   var sum=0, hasFixed=false;
@@ -1221,14 +1218,20 @@ function planLinesHtml(p){
   });
   return h+'</div>';
 }
-function drawPlans(){
+/* Plans management block — rendered inside the Fund page (collapsible). */
+function plansSection(){
   state.planOpen = state.planOpen || {};
-  var h = '<div class="viewhead"><h2>Funding plans</h2>'+
-    '<button class="btn sm ghost" data-act="plan-tiller">↓ From Tiller (this month)</button>'+
+  var current = (state.plans||[]).filter(function(p){ return !isPlanVersion(p); });
+  var versions = (state.plans||[]).filter(isPlanVersion);
+  var open = !!state.plansOpen || !!state.planEdit;
+  var h = '<div class="plansec"><div class="sechead phead" data-act="plans-section">'+
+    '<span class="chev">'+(open?'▾':'▸')+'</span>'+
+    '<h3 class="sectitle">My plans'+(current.length?' ('+current.length+')':'')+'</h3>'+
+    '<span class="grow"></span>'+
+    '<button class="btn sm ghost" data-act="plan-tiller">↓ From Tiller</button>'+
     '<button class="btn sm" data-act="plan-new">+ New plan</button></div>';
+  if(!open) return h + '</div>';
   if(state.planEdit){ h += planFormHtml(); }
-  var current = state.plans.filter(function(p){ return !isPlanVersion(p); });
-  var versions = state.plans.filter(isPlanVersion);
   if(!current.length && !state.planEdit){
     h += '<div class="empty">No plans yet. A plan is a saved recipe for splitting a paycheck across envelopes.</div>';
   }
@@ -1276,7 +1279,15 @@ function drawPlans(){
     }
     h += '</div>';
   }
-  $('#shell').innerHTML = h;
+  return h + '</div>';
+}
+/* Plans now live on the Fund page; these delegate so existing handlers work. */
+function drawPlans(){ if(state.view==='fund'||state.view==='plans') drawFund(); }
+function refreshPlansView(){
+  run('apiPlans').then(function(plans){
+    state.plans = plans;
+    if(state.view==='fund'||state.view==='plans') drawFund();
+  }).catch(function(){});
 }
 function planFormHtml(){
   var pe = state.planEdit;
@@ -1337,8 +1348,9 @@ function planSave(){
     toast(isEdit ? 'Plan saved ✓ (previous version kept)' : 'Plan saved ✓');
     if(pe.planId) state.planOpen[pe.planId] = true;
     state.planEdit = null;
+    state.plansOpen = true;
     state.plans = null;
-    renderPlans();
+    refreshPlansView();
   }).catch(function(e){
     if(btn){ btn.disabled = false; btn.textContent = 'Save plan'; }
     if(cancel){ cancel.disabled = false; }
@@ -1358,8 +1370,9 @@ function planFromTiller(){
         if(r.skipped && r.skipped.length){
           toast('Skipped '+r.skipped.length+': '+r.skipped.map(function(s){return s.name;}).join(', '));
         }
+        state.plansOpen = true;
         state.plans = null;
-        renderPlans();
+        refreshPlansView();
       }).catch(function(e){ toast('⚠ '+(e.message||e)); });
     });
 }
@@ -1369,7 +1382,7 @@ function planToggle(planId, on){
   run('apiSavePlan', { planId:p.planId, name:p.name, mode:p.mode, incomeMatch:p.incomeMatch,
     active:on, lines:p.lines.map(function(l){ return {envelopeId:l.envelopeId, fixed:l.fixed,
       percent:l.percent, remainder:l.remainder}; }) })
-  .then(function(){ toast(on?'Plan reactivated':'Plan deactivated'); renderPlans(); })
+  .then(function(){ toast(on?'Plan reactivated':'Plan deactivated'); state.plans=null; refreshPlansView(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 
@@ -1915,7 +1928,7 @@ function renderSettings(){
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
-    h += settingsSectionLabel('MONEY')+settingsList([['plans','Funding plans'],
+    h += settingsSectionLabel('MONEY')+settingsList([
       ['txns','Transactions'],['balances','Balances'],['accounts','Accounts']]);
     h += settingsSectionLabel('SETTINGS');
   }
@@ -2386,6 +2399,8 @@ document.addEventListener('click', function(ev){
         lines:[{envelopeId:'',fixed:'',percent:'',remainder:false}]};
       drawPlans(); break;
     case 'plan-tiller': planFromTiller(); break;
+    case 'plans-section':
+      state.plansOpen = !state.plansOpen; drawFund(); break;
     case 'plan-open':
       state.planOpen = state.planOpen || {};
       state.planOpen[arg] = !state.planOpen[arg];
