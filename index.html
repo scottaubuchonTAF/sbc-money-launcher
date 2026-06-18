@@ -208,6 +208,10 @@ aside.side{display:none}
 .plancard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
   padding:18px;margin-bottom:14px}
 .plancard .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.phead{cursor:pointer;user-select:none}
+.phead .chev{color:var(--ink-3);font-size:12px;margin-right:2px;align-self:center}
+.phead .nm{flex:1}
+.versblock .phead{margin-bottom:4px}
 .plancard .nm{font-weight:700;font-size:15.5px}
 .plancard .mode{font-size:11.5px;font-weight:700;color:var(--teal-700);background:var(--teal-50);
   border-radius:8px;padding:2px 8px;text-transform:uppercase;letter-spacing:.04em}
@@ -407,7 +411,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.13.1';
+var FE_VERSION = 'v3.13.2';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1203,31 +1207,75 @@ function renderPlans(){
     else if(state.view==='plans' && !$('.plancard') && !$('.empty')) drawPlans();
   }).catch(function(e){ if(!state.plans) fail(e); });
 }
+function isPlanVersion(p){ return String(p.planId||'').indexOf('fpv-')===0; }
+function planTotal(p){
+  var sum=0, hasFixed=false;
+  p.lines.forEach(function(l){ if(!l.remainder && l.fixed){ sum+=Number(l.fixed); hasFixed=true; } });
+  return hasFixed ? sum : null;
+}
+function planLinesHtml(p){
+  var h='<div class="planlines">';
+  p.lines.forEach(function(l){
+    var v = l.remainder ? 'remainder' : (l.fixed ? money(l.fixed) : (l.percent ? l.percent+'%' : '—'));
+    h += '<div class="pl"><span>'+esc(l.envelopeName)+'</span><span class="v">'+v+'</span></div>';
+  });
+  return h+'</div>';
+}
 function drawPlans(){
+  state.planOpen = state.planOpen || {};
   var h = '<div class="viewhead"><h2>Funding plans</h2>'+
     '<button class="btn sm ghost" data-act="plan-tiller">↓ From Tiller (this month)</button>'+
     '<button class="btn sm" data-act="plan-new">+ New plan</button></div>';
   if(state.planEdit){ h += planFormHtml(); }
-  if(!state.plans.length && !state.planEdit){
+  var current = state.plans.filter(function(p){ return !isPlanVersion(p); });
+  var versions = state.plans.filter(isPlanVersion);
+  if(!current.length && !state.planEdit){
     h += '<div class="empty">No plans yet. A plan is a saved recipe for splitting a paycheck across envelopes.</div>';
   }
-  state.plans.forEach(function(p){
+  current.forEach(function(p){
+    var open = !!state.planOpen[p.planId];
+    var tot = planTotal(p);
     h += '<div class="plancard'+(p.active?'':' inactive')+'">'+
-      '<div class="top"><span class="nm">'+esc(p.name)+(p.active?'':' (inactive)')+'</span>'+
-      '<span class="mode">'+esc(p.mode)+'</span></div>';
-    if(p.incomeMatch) h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">matches: '+esc(p.incomeMatch)+'</div>';
-    h += '<div class="planlines">';
-    p.lines.forEach(function(l){
-      var v = l.remainder ? 'remainder' : (l.fixed ? money(l.fixed) : (l.percent ? l.percent+'%' : '—'));
-      h += '<div class="pl"><span>'+esc(l.envelopeName)+'</span><span class="v">'+v+'</span></div>';
-    });
-    h += '</div><div class="reglinks">'+
-      '<button data-act="plan-edit" data-arg="'+esc(p.planId)+'">Edit</button>'+
-      (p.active
-        ? '<button class="warn" data-act="plan-off" data-arg="'+esc(p.planId)+'">Deactivate</button>'
-        : '<button data-act="plan-on" data-arg="'+esc(p.planId)+'">Reactivate</button>')+
-      '</div></div>';
+      '<div class="top phead" data-act="plan-open" data-arg="'+esc(p.planId)+'">'+
+      '<span class="chev">'+(open?'▾':'▸')+'</span>'+
+      '<span class="nm">'+esc(p.name)+(p.active?'':' (inactive)')+'</span>'+
+      '<span class="mode">'+(tot!=null?money(tot):esc(p.mode))+'</span></div>';
+    if(open){
+      if(p.incomeMatch) h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">matches: '+esc(p.incomeMatch)+'</div>';
+      h += planLinesHtml(p);
+      h += '<div class="reglinks">'+
+        '<button data-act="plan-edit" data-arg="'+esc(p.planId)+'">Edit</button>'+
+        '<button data-act="plan-dup" data-arg="'+esc(p.planId)+'">Duplicate</button>'+
+        (p.active
+          ? '<button class="warn" data-act="plan-off" data-arg="'+esc(p.planId)+'">Deactivate</button>'
+          : '<button data-act="plan-on" data-arg="'+esc(p.planId)+'">Reactivate</button>')+
+        '</div>';
+    }
+    h += '</div>';
   });
+  if(versions.length){
+    var vo = !!state.showVersions;
+    h += '<div class="versblock"><div class="top phead" data-act="plan-versions" style="margin-top:14px">'+
+      '<span class="chev">'+(vo?'▾':'▸')+'</span>'+
+      '<span class="nm" style="color:var(--ink-3)">Previous versions ('+versions.length+')</span></div>';
+    if(vo){
+      versions.slice().reverse().forEach(function(p){
+        var open = !!state.planOpen[p.planId];
+        var tot = planTotal(p);
+        h += '<div class="plancard inactive" style="margin-left:6px">'+
+          '<div class="top phead" data-act="plan-open" data-arg="'+esc(p.planId)+'">'+
+          '<span class="chev">'+(open?'▾':'▸')+'</span>'+
+          '<span class="nm" style="font-size:13px">'+esc(p.name)+'</span>'+
+          '<span class="mode">'+(tot!=null?money(tot):esc(p.mode))+'</span></div>';
+        if(open){
+          h += planLinesHtml(p);
+          h += '<div class="reglinks"><button data-act="plan-restore" data-arg="'+esc(p.planId)+'">Restore as new plan</button></div>';
+        }
+        h += '</div>';
+      });
+    }
+    h += '</div>';
+  }
   $('#shell').innerHTML = h;
 }
 function planFormHtml(){
@@ -1273,16 +1321,29 @@ function planSave(){
   if(!pe.name){ toast('Plan needs a name'); return; }
   var lines = pe.lines.filter(function(l){ return l.envelopeId; });
   if(!lines.length){ toast('Add at least one line'); return; }
+  // Immediate feedback — the save is a server round-trip and can take a few
+  // seconds; without this the button looks dead.
+  var btn = document.querySelector('[data-act="plan-save"]');
+  var cancel = document.querySelector('[data-act="plan-cancel"]');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  if(cancel){ cancel.disabled = true; }
+  var isEdit = !!pe.planId;
   run('apiSavePlan', { planId:pe.planId||'', name:pe.name, mode:pe.mode,
     incomeMatch:pe.incomeMatch, active:pe.active!==false,
     lines: lines.map(function(l){ return { envelopeId:l.envelopeId,
       fixed:l.remainder?0:Number(l.fixed||0), percent:l.remainder?0:Number(l.percent||0),
-      remainder:!!l.remainder }; }) })
+      remainder:!!l.remainder }; }) }, { version: isEdit })
   .then(function(){
-    toast('Plan saved ✓');
+    toast(isEdit ? 'Plan saved ✓ (previous version kept)' : 'Plan saved ✓');
+    if(pe.planId) state.planOpen[pe.planId] = true;
     state.planEdit = null;
+    state.plans = null;
     renderPlans();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.textContent = 'Save plan'; }
+    if(cancel){ cancel.disabled = false; }
+    toast('⚠ '+(e.message||e));
+  });
 }
 function planFromTiller(){
   confirmUi('Build a funding plan from this month’s Tiller category targets? '+
@@ -2325,10 +2386,30 @@ document.addEventListener('click', function(ev){
         lines:[{envelopeId:'',fixed:'',percent:'',remainder:false}]};
       drawPlans(); break;
     case 'plan-tiller': planFromTiller(); break;
+    case 'plan-open':
+      state.planOpen = state.planOpen || {};
+      state.planOpen[arg] = !state.planOpen[arg];
+      drawPlans(); break;
+    case 'plan-versions':
+      state.showVersions = !state.showVersions; drawPlans(); break;
     case 'plan-edit':
       var pl = state.plans.find(function(x){return x.planId===arg;});
       state.planEdit = JSON.parse(JSON.stringify(pl));
       drawPlans(); break;
+    case 'plan-dup':
+      var pd = state.plans.find(function(x){return x.planId===arg;});
+      if(pd){ state.planEdit = JSON.parse(JSON.stringify(pd));
+        state.planEdit.planId=''; state.planEdit.active=true;
+        state.planEdit.name = pd.name + ' (copy)';
+        drawPlans(); }
+      break;
+    case 'plan-restore':
+      var pv = state.plans.find(function(x){return x.planId===arg;});
+      if(pv){ state.planEdit = JSON.parse(JSON.stringify(pv));
+        state.planEdit.planId=''; state.planEdit.active=true;
+        state.planEdit.name = pv.name.replace(/\s+—\s+saved\s+.*$/, '');
+        drawPlans(); }
+      break;
     case 'plan-cancel': state.planEdit=null; drawPlans(); break;
     case 'plan-save': planSave(); break;
     case 'plan-add': planFormCapture();
