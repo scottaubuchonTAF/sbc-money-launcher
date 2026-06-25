@@ -417,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.14.1';
+var FE_VERSION = 'v3.14.2';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -840,7 +840,9 @@ function renderEnvDetail(){
   var h = '<button class="backlink" data-act="env-back">‹ Envelopes</button>'+
     '<div class="card detailhead"><div class="dh1"><div style="flex:1">'+
     (renaming
-      ? '<div class="dh-rename"><input type="text" id="renInput" value="'+esc(state.envRename.name)+'">'+
+      ? '<div class="dh-rename"><input type="text" id="renInput" value="'+esc(state.envRename.name)+'" placeholder="Name">'+
+        '<input type="text" id="renGroup" list="edGroupList" value="'+esc(state.envRename.group||'')+'" placeholder="Group">'+
+        '<datalist id="edGroupList">'+(state.boot.groups||[]).map(function(g){ return '<option value="'+esc(g.name)+'">'; }).join('')+'</datalist>'+
         '<button class="btn sm" data-act="env-rename-save">Save</button>'+
         '<button class="btn ghost sm" data-act="env-rename-cancel">Cancel</button></div>'
       : '<div class="dnm">'+esc(e.name)+'</div>')+
@@ -866,7 +868,7 @@ function renderEnvDetail(){
     h += '<div class="actions" style="margin-top:14px;padding:0 16px 16px;flex-wrap:wrap">'+
       (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move all to pool</button>' : '')+
       '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button>'+
-      (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Rename</button>')+
+      (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Edit name / group</button>')+
       (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="env-archive" data-arg="'+esc(e.id)+'">Archive</button>')+
       '</div>';
   }
@@ -929,11 +931,16 @@ function envNewSave(){
 function envRenameSave(){
   var r = state.envRename; if(!r) return;
   var name = (($('#renInput')||{}).value||'').trim();
+  var group = (($('#renGroup')||{}).value||'').trim();
   if(!name){ toast('Name required'); return; }
+  if(!group){ toast('Group required'); return; }
+  if(name===r.name && group===r.group){ state.envRename=null; renderEnvDetail(); return; }
   var btn = document.querySelector('[data-act="env-rename-save"]');
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
-  run('apiRenameEnvelope', { envelopeId:r.id, name:name })
-  .then(function(){ toast('Renamed ✓'); state.envRename=null; invalidateData();
+  var p = Promise.resolve();
+  if(name !== r.name) p = p.then(function(){ return run('apiRenameEnvelope', { envelopeId:r.id, name:name }); });
+  if(group !== r.group) p = p.then(function(){ return run('apiSetEnvelopeGroup', { envelopeId:r.id, group:group }); });
+  p.then(function(){ toast('Saved ✓'); state.envRename=null; invalidateData();
     if(state.envDetail) state.envDetail.txns=null; return refreshBoot(); })
   .then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
   .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
@@ -2571,7 +2578,7 @@ document.addEventListener('click', function(ev){
     case 'env-new-save': envNewSave(); break;
     case 'env-show-archived': state.showArchived=!state.showArchived; renderEnvelopes(); break;
     case 'env-unarchive': envUnarchive(arg); break;
-    case 'env-rename': (function(){ var e=findEnv(state.envDetail.id); if(e){ state.envRename={id:e.id, name:e.name}; renderEnvDetail(); } })(); break;
+    case 'env-rename': (function(){ var e=findEnv(state.envDetail.id); if(e){ state.envRename={id:e.id, name:e.name, group:e.group}; renderEnvDetail(); } })(); break;
     case 'env-rename-cancel': state.envRename=null; renderEnvDetail(); break;
     case 'env-rename-save': envRenameSave(); break;
     case 'env-archive': envArchive(arg); break;
