@@ -417,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.14.0';
+var FE_VERSION = 'v3.14.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1240,8 +1240,10 @@ function drawFund(){
   if(bal<=0){
     h += '</div><div class="empty">Nothing to fund yet. Approve deposits into the pool, then put the money to work below.</div>';
   } else {
-    h += '<div class="formrow" style="margin-top:12px"><label>Amount to fund</label>'+
-      '<input type="number" step="0.01" inputmode="decimal" id="fundAmt" value="'+esc(f?f.amount:bal)+'"></div>';
+    h += '<div class="formrow" style="margin-top:12px"><label>Amount to fund'+
+      '<span style="color:var(--ink-3);font-weight:500"> · pool has '+money(bal)+'</span></label>'+
+      '<input type="number" step="0.01" inputmode="decimal" id="fundAmt" value="'+esc(f?f.amount:bal)+'"'+
+      (f?' data-act="fund-amt" data-arg="pool"':'')+'></div>';
     h += '<div class="pills">';
     activePlans.forEach(function(p){
       h += '<button class="pill'+(f&&f.planId===p.planId?' sel':'')+
@@ -1270,9 +1272,16 @@ function fundStart(key, planId){
   if(!(amount>0)){ toast('Enter a positive amount'); return; }
   if(planId){
     run('apiPreviewPlan', planId, amount).then(function(p){
-      state.fund['pool'] = { amount: amount, planId: planId,
+      // Use the plan's own total as the amount so it's immediately consistent
+      // (a fixed plan asks for its fixed total regardless of what was typed).
+      var legSum = p.legs.reduce(function(s,l){ return s + Number(l.amount||0); }, 0);
+      var amt = legSum>0 ? legSum : amount;
+      state.fund['pool'] = { amount: amt, planId: planId,
         legs: p.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:l.amount}; }) };
-      if(p.leftover) toast('Plan leaves '+money(p.leftover)+' unassigned — adjust below');
+      if(legSum > poolBalance()+0.005){
+        toast('Plan totals '+money(legSum)+' but the pool has '+money(poolBalance())+
+          ' — lower the amount or trim envelopes below.');
+      }
       drawFund();
     }).catch(function(e){ toast('⚠ '+(e.message||e)); });
   } else {
@@ -1293,6 +1302,20 @@ function fundGo(){
     return refreshBoot();
   }).then(function(){ if(state.view==='fund') drawFund(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); drawFund(); });
+}
+/* Live-update the pool-fund "Remaining" + Fund button as the amount or legs
+   change, WITHOUT a full redraw (keeps the input focused). The pool fund's
+   target is the typed amount (state.fund.amount), not an Inbox transaction. */
+function fundRecompute(key){
+  var f = state.fund[key]; if(!f) return;
+  var sum=0; f.legs.forEach(function(l){ sum += cents(splitAmt(f.amount, l.amount)); });
+  var left = cents(f.amount) - sum;
+  var lf = document.querySelector('.splitfoot .left');
+  if(lf){ lf.textContent = left===0?'Fully assigned ✓':'Remaining: '+money(Math.abs(left)/100);
+    lf.classList.toggle('bad', left!==0); }
+  var btn = document.querySelector('[data-act="fund-go"]');
+  if(btn){ btn.disabled = !splitReady(f.amount, f.legs);
+    btn.textContent = 'Fund '+money(Number(f.amount)||0); }
 }
 
 /* ============================ plans ============================ */
@@ -2624,15 +2647,22 @@ document.addEventListener('input', function(ev){
   var el = ev.target.closest('[data-act]');
   if(!el) return;
   var p = (el.dataset.arg||'').split('|');
+  if(el.dataset.act==='fund-amt'){
+    var ff = state.fund[el.dataset.arg];
+    if(ff){ ff.amount = el.value; fundRecompute(el.dataset.arg); }
+    return;
+  }
   if(el.dataset.act==='split-amt'){
     var lines = splitLinesOf(p[0], p[1]);
     if(lines[Number(p[2])]){
       lines[Number(p[2])].amount = el.value;
+      // Pool funding: target is the typed amount, not an Inbox txn.
+      if(p[0]==='fund'){ fundRecompute(p[1]); return; }
       var foot = el.closest('.splitbox');
       if(foot){ // live-update remaining without full redraw (keeps focus)
         var key=p[1], kind=p[0];
         var total = 0;
-        if(kind==='inbox'||kind==='fund'){
+        if(kind==='inbox'){
           var t=(state.inbox||[]).find(function(x){return x.txnId===key;}); total=t?t.amount:0;
         } else {
           var r=(state.register.items||[]).find(function(x){return x.txnId===key;}); total=r?r.amount:0;
