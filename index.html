@@ -417,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.15.0';
+var FE_VERSION = 'v3.15.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -1767,15 +1767,22 @@ function balEditSave(account){
   var el=$('#balEditInput'); if(!el) return;
   var v=el.value; if(v===''||isNaN(Number(v))){ toast('Enter a number'); return; }
   var amt=Number(v);
-  var btn=document.querySelector('[data-act="bal-edit-save"]');
-  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  // v3.15.1: optimistic — patch the UI now, write to Tiller in the background
+  // (the Tiller write + workbook recalc is the slow part; don't block on it).
+  var prevRows=[];
+  (state.balances.groups||[]).forEach(function(g){ (g.rows||[]).forEach(function(rr){
+    if(rr.name===account){ prevRows.push({r:rr,balance:rr.balance,days:rr.days,updated:rr.updated});
+      rr.balance = g.liability?Math.abs(amt):amt; rr.days=0; rr.updated='today'; } }); });
+  state.balEdit=null; state.reconcile=null; invalidateData();
+  drawBalances();
+  toast('Saving '+account+' to Tiller…');
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
-    toast('Balance updated · Tiller ✓');
-    (state.balances.groups||[]).forEach(function(g){ (g.rows||[]).forEach(function(rr){
-      if(rr.name===account){ rr.balance = g.liability?Math.abs(amt):amt; rr.days=0; rr.updated='today'; } }); });
-    state.balEdit=null; state.reconcile=null; invalidateData();
-    drawBalances();
-  }).catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
+    toast('✓ '+account+' updated · Tiller');
+  }).catch(function(e){
+    prevRows.forEach(function(p){ p.r.balance=p.balance; p.r.days=p.days; p.r.updated=p.updated; });
+    state.reconcile=null; drawBalances();
+    toast('⚠ Save failed: '+(e.message||e));
+  });
 }
 function drawBalances(){
   var b = state.balances;
@@ -2290,17 +2297,21 @@ function reconSave(account){
   var amt=Number(v);
   var btn=document.querySelector('[data-act="recon-save"]');
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  // v3.15.1: update the UI immediately and write to Tiller in the BACKGROUND.
+  // The Tiller write is slow (opening the workbook + Google recalculating Net
+  // Worth / Cash Flow / Retirement tabs that reference Balance History), so we
+  // don't make the user wait on it. Patch locally, then confirm/revert by toast.
+  var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
+  var prev = a ? {balance:a.balance,days:a.days,updated:a.updated,dormant:a.dormant} : null;
+  if(a){ a.balance=amt; a.days=0; a.updated='today'; a.dormant=false; }
+  state.baledit=null; state.balances=null; invalidateData();
+  drawReconcile();
+  toast('Saving '+account+' to Tiller…');
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
-    toast('Balance updated · Tiller ✓');
-    // Optimistic update: patch this one account locally instead of re-scanning
-    // the 27k-row Balance History (that refetch was the slow part).
-    var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
-    if(a){ a.balance=amt; a.days=0; a.updated='today'; a.dormant=false; }
-    state.baledit=null; state.balances=null; invalidateData();
-    drawReconcile();
+    toast('✓ '+account+' updated · Tiller');
   }).catch(function(e){
-    if(btn){ btn.disabled=false; btn.textContent='Save'; }
-    toast('⚠ '+(e.message||e));
+    if(a&&prev){ a.balance=prev.balance; a.days=prev.days; a.updated=prev.updated; a.dormant=prev.dormant; state.balances=null; drawReconcile(); }
+    toast('⚠ Save failed: '+(e.message||e));
   });
 }
 function reconReviewed(account){
