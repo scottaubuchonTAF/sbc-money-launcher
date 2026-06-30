@@ -417,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.14.2';
+var FE_VERSION = 'v3.15.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -697,6 +697,14 @@ function renderDash(){
           '<span class="bal">'+money(H.residual)+'</span></div>'
       : '<div class="envrow"><span class="nm">⚠ Off by</span>'+
           '<span class="bal neg">'+money(H.residual)+'</span></div>';
+    // v3.15: label how much of any gap is just unsettled feed lag (a balance
+    // feed behind its transactions), not real drift. From the cached summary.
+    if(H.feedLag!=null && Math.abs(Number(H.feedLag))>=1){
+      h += '<div class="envrow click" data-act="goview" data-arg="reconcile">'+
+        '<span class="nm" style="color:#f59e0b">⚠ ~'+money(H.feedLag)+' is unsettled feed lag'+
+        ((H.feedLagAccounts&&H.feedLagAccounts.length)?' · '+esc(H.feedLagAccounts.join(', ')):'')+'</span>'+
+        '<span class="bal" style="opacity:.65">'+(H.residualExFeedLag!=null?money(H.residualExFeedLag)+' real':'')+'</span></div>';
+    }
     if(d.negatives && d.negatives.count){
       h += '<div class="envrow click" data-act="goview" data-arg="envelopes">'+
         '<span class="nm">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span>'+
@@ -2196,6 +2204,30 @@ function renderReconcile(){
     if(Object.keys(state.baledit||{}).length) return; // don't clobber an in-progress edit
     state.reconcile=r; if(state.view==='reconcile') drawReconcile();
   }).catch(function(e){ if(!state.reconcile) fail(e); });
+  // v3.15: feed-lag check (balance feed vs transactions). On-demand compute;
+  // also refreshes the cached summary the dashboard reads.
+  run('apiFeedLag').then(function(f){
+    state.feedlag=f; if(state.view==='reconcile' && !Object.keys(state.baledit||{}).length) drawReconcile();
+  }).catch(function(){});
+}
+function feedLagPanel(){
+  var f = state.feedlag; if(!f) return '';
+  if(!f.anyLag){
+    return settingsSectionLabel('📡 FEED CHECK')+'<div class="card"><div class="empty" style="padding:12px;text-align:left">'+
+      '✓ All balance feeds are in sync with their transactions (last '+(f.windowDays||35)+' days).</div></div>';
+  }
+  var h = settingsSectionLabel('📡 FEED CHECK — '+money(f.totalLag)+' UNSETTLED')+'<div class="card">'+
+    '<div class="empty" style="padding:2px 0 10px;text-align:left">These accounts’ <b>balance feed</b> is out of sync with their <b>transactions</b> — '+
+    'usually the bank hasn’t refreshed the balance yet. This is timing noise, not real drift; it clears when the feed catches up. '+
+    'Reconcile is blocked until then.</div>';
+  (f.accounts||[]).filter(function(a){return a.lagging;}).forEach(function(a){
+    h += '<div class="balrow" style="flex-wrap:wrap"><span class="nm">'+esc(a.account)+'</span>'+
+      '<span class="upd stale">feed '+esc(a.feedAsOf||'')+(a.feedDaysOld!=null?' · '+a.feedDaysOld+'d':'')+'</span>'+
+      '<span class="bal neg">'+money(a.divergence)+'</span>'+
+      '<span style="flex-basis:100%;font-size:11px;color:var(--ink-3);margin-top:4px">'+
+      'feed Δ '+money(a.feedDelta)+' vs '+a.txnCount+' txns '+money(a.txnSum)+'</span></div>';
+  });
+  return h+'</div>';
 }
 function reconRow(a, rev){
   var stale = a.days!=null && a.days>=30 && !a.dormant;
@@ -2227,6 +2259,7 @@ function drawReconcile(){
     '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
     'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
     'No feed for over 6 months → Closed / Dormant.</div>';
+  h += feedLagPanel();
   h += settingsSectionLabel('✋ MANUAL — UPDATE BY HAND')+'<div class="card">';
   if(manual.length) manual.forEach(function(a){ h += reconRow(a, rev); });
   else h += '<div class="empty" style="padding:12px;text-align:left">None yet — tap “Mark manual” on a fed account below to move it here.</div>';
