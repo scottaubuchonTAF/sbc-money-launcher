@@ -417,7 +417,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.15.1';
+var FE_VERSION = 'v3.16.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -480,17 +480,45 @@ function ensureAuth(){
 }
 /* Transport: POST {token, fn, args} as text/plain (no preflight) to the
    Apps Script JSON API. On auth failure: clear, re-sign-in, retry once. */
+// v3.16: mutating endpoints — a second one is blocked while one is in flight
+// (Tiller writes aren't idempotent, so a double-click could double-apply). Reads
+// are never blocked.
+var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, apiMove:1,
+  apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
+  apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
+  apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
+  apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
+  apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
+  apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
+  apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1 };
+var mutationInFlight = false;
 function run(fn){
   var args = Array.prototype.slice.call(arguments,1);
-  return ensureAuth().then(function(){ return apiCall_(fn, args, true); });
+  var mutating = !!MUTATING[fn];
+  if(mutating && mutationInFlight){
+    if(typeof toast==='function') toast('Hang on — finishing the last action…');
+    return Promise.reject(new Error('Another action is still saving — give it a moment.'));
+  }
+  if(mutating) mutationInFlight = true;
+  return ensureAuth().then(function(){ return apiCall_(fn, args, true); })
+    .then(function(r){ if(mutating) mutationInFlight=false; return r; },
+          function(e){ if(mutating) mutationInFlight=false; throw e; });
 }
 function apiCall_(fn, args, retry){
-  return fetch(EXEC_URL, { method:'POST', body: JSON.stringify({ token:auth.token, fn:fn, args:args }) })
+  // v3.16: abort + clear message if the server doesn't answer in time (a cold
+  // full-scan can run long; without this the UI spins forever).
+  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var timedOut = false;
+  var timer = setTimeout(function(){ timedOut=true; if(ctrl) ctrl.abort(); }, 30000);
+  return fetch(EXEC_URL, { method:'POST',
+      body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
+      signal: ctrl ? ctrl.signal : undefined })
   .then(function(r){
     if(!r.ok) throw new Error('Network error ('+r.status+')');
     return r.json();
   })
   .then(function(res){
+    clearTimeout(timer);
     if(res.ok) return res.result;
     if(res.auth){
       auth = { token:'', email:'', exp:0 }; persistAuth();
@@ -501,6 +529,10 @@ function apiCall_(fn, args, retry){
       if(retry) return ensureAuth().then(function(){ return apiCall_(fn, args, false); });
     }
     throw new Error(res.error || 'Server error');
+  }, function(err){
+    clearTimeout(timer);
+    if(timedOut) throw new Error('That took too long and was stopped — the server may still be finishing. Wait a moment, then reload.');
+    throw err;
   });
 }
 /* ============================ icons + nav ============================ */
@@ -566,35 +598,24 @@ function boot(){
     prewarm();
   }).catch(fail);
 }
-/* Warm every view's cache in the background after load (staggered so the
-   visible view's calls win). First click on any page is then instant. */
+/* Warm every view's cache in the background after load. v3.16: fired together,
+   not on staggered timers — Apps Script serializes calls per-user server-side,
+   so the old 300→4200ms stagger only added latency. The visible view's own load
+   was already kicked off by render(). Failures are logged, not swallowed. */
 function prewarm(){
-  setTimeout(function(){
-    if(!state.inbox) run('apiGetInbox').then(function(r){
-      state.inbox=r; updateBadges(r.length);
-      if(state.view==='inbox' && !userBusy()) drawInbox();
-    }).catch(function(){});
-  }, 300);
-  setTimeout(function(){
-    if(!state.dash) run('apiDashboard').then(function(d){
-      state.dash=d; if(state.view==='dash') renderDash();
-    }).catch(function(){});
-  }, 1000);
-  setTimeout(function(){
-    if(!state.plans) run('apiPlans').then(function(p){ state.plans=p; }).catch(function(){});
-  }, 1800);
-  setTimeout(function(){
-    if(!state.accounts) run('apiAccounts').then(function(a){ state.accounts=a; }).catch(function(){});
-  }, 2600);
-  setTimeout(function(){
-    var r=state.register;
-    if(!r.items) run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50}).then(function(it){
-      r.items=it; r.sig='|||0';
-    }).catch(function(){});
-  }, 3400);
-  setTimeout(function(){
-    if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; }).catch(function(){});
-  }, 4200);
+  var warn = function(fn){ return function(e){ console.warn('prewarm '+fn+':', e && e.message || e); }; };
+  if(!state.inbox) run('apiGetInbox').then(function(r){
+    state.inbox=r; updateBadges(r.length);
+    if(state.view==='inbox' && !userBusy()) drawInbox();
+  }).catch(warn('apiGetInbox'));
+  if(!state.dash) run('apiDashboard').then(function(d){
+    state.dash=d; if(state.view==='dash') renderDash();
+  }).catch(warn('apiDashboard'));
+  if(!state.plans) run('apiPlans').then(function(p){ state.plans=p; }).catch(warn('apiPlans'));
+  if(!state.accounts) run('apiAccounts').then(function(a){ state.accounts=a; }).catch(warn('apiAccounts'));
+  if(!state.register.items) run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
+    .then(function(it){ state.register.items=it; state.register.sig='|||0'; }).catch(warn('apiRegister'));
+  if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; }).catch(warn('apiAccountsFull'));
 }
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
