@@ -125,7 +125,7 @@ aside.side{display:none}
 .dwnote{display:none;background:var(--teal-50);color:var(--teal-700);border:1px dashed var(--teal-300);
   border-radius:12px;padding:10px 14px;font-size:12.5px;font-weight:600;margin-bottom:14px}
 .dash-editing .dwnote{display:block}
-.dwgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;grid-auto-rows:152px}
+.dwgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;grid-auto-rows:170px}
 .dtile{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
   position:relative;display:flex;flex-direction:column;padding:16px 18px}
 .dtile.s{grid-column:span 1;grid-row:span 1}
@@ -499,7 +499,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.18.0';
+var FE_VERSION = 'v3.18.1';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -753,9 +753,12 @@ function render(){
    state.boot) — no new backend scans. Layout (which widgets, order, size) is
    per-user: loaded in apiBoot as state.dashLayout, saved via apiSetDashLayout,
    mirrored to localStorage for instant paint. */
+// Fills a 4-col grid cleanly: row1 = avail(2)+funded(1)+spent(1); rows2-3 =
+// health(2x2) beside targets(2x2); row4 = inbox(1)+gauge(1)+negatives(2).
 var DASH_DEFAULT_LAYOUT = [
   {id:'avail',size:'m'},{id:'funded',size:'s'},{id:'spent',size:'s'},
-  {id:'inbox',size:'s'},{id:'health',size:'m'},{id:'targets',size:'l'}
+  {id:'health',size:'l'},{id:'targets',size:'l'},
+  {id:'inbox',size:'s'},{id:'fundgauge',size:'s'},{id:'negatives',size:'m'}
 ];
 function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:0); }
 var DASH_WIDGETS = {
@@ -813,7 +816,7 @@ var DASH_WIDGETS = {
     var kv='<div class="dkv"><span class="k">Envelopes · on-budget</span><span class="v">'+money(H.envelopes)+'</span></div>'+
       '<div class="dkv"><span class="k">Bank cash · chk+sav−cards</span><span class="v">'+money(H.bank)+'</span></div>'+
       '<div class="dkv"><span class="k">Difference</span><span class="v'+(H.ok?'':' neg')+'">'+money(H.residual)+'</span></div>';
-    if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div>'+kv;
+    if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div><div class="dscroll">'+kv+'</div>';
     var extra='';
     if(H.feedLag!=null && Math.abs(Number(H.feedLag))>=1)
       extra+='<div class="dkv"><span class="k" style="color:var(--amber)">~'+money(H.feedLag)+' unsettled feed lag</span><span class="v">'+(H.residualExFeedLag!=null?money(H.residualExFeedLag)+' real':'')+'</span></div>';
