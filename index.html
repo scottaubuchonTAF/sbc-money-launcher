@@ -116,6 +116,86 @@ aside.side{display:none}
 .fundrow .l1 .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fundrow .l1 .v{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 
+/* ================= v3.18 customizable dashboard ================= */
+.dwtop{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.dwtop .sp{flex:1}
+.dwbtn{border:1.5px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;
+  font-size:13px;padding:8px 15px;border-radius:10px;cursor:pointer}
+.dwbtn.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
+.dwnote{display:none;background:var(--teal-50);color:var(--teal-700);border:1px dashed var(--teal-300);
+  border-radius:12px;padding:10px 14px;font-size:12.5px;font-weight:600;margin-bottom:14px}
+.dash-editing .dwnote{display:block}
+.dwgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;grid-auto-rows:152px}
+.dtile{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
+  position:relative;display:flex;flex-direction:column;padding:16px 18px}
+.dtile.s{grid-column:span 1;grid-row:span 1}
+.dtile.m{grid-column:span 2;grid-row:span 1}
+.dtile.l{grid-column:span 2;grid-row:span 2}
+.dtile.hero{background:linear-gradient(140deg,var(--teal-800),var(--teal-600));color:#fff}
+.dtile.nav{cursor:pointer}
+.dash-editing .dtile{cursor:grab;outline:2px dashed transparent}
+.dash-editing .dtile:hover{outline-color:var(--teal-300)}
+.dtile.dragging{opacity:.4}
+.dtile .dlbl{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.dtile.hero .dlbl{color:rgba(255,255,255,.72)}
+.dtile .dnum{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.dtile .dnum.big{font-size:31px}
+.dtile.hero .dnum{font-size:30px}
+.dtile .dsub{font-size:12px;color:var(--ink-3);margin-top:4px}
+.dtile.hero .dsub{color:rgba(255,255,255,.85)}
+.dtile .dbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
+.dtile .dbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
+.dtile.hero .dbar{background:rgba(255,255,255,.25)} .dtile.hero .dbar i{background:#fff}
+.dtile .dhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.dtile .dscroll{overflow:auto;flex:1;min-height:0;margin:0 -18px;padding:0 18px}
+.dkv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)}
+.dkv:first-child{border-top:none}
+.dkv .k{color:var(--ink-2)} .dkv .v{font-weight:700;font-variant-numeric:tabular-nums}
+.dkv .v.neg{color:var(--red)}
+.dfrow{padding:7px 0;border-top:1px solid var(--line)}
+.dfrow:first-child{border-top:none}
+.dfrow .l1{display:flex;justify-content:space-between;font-size:12.5px}
+.dfrow .l1 .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dfrow .l1 .v{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dokpill{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;padding:5px 10px;
+  border-radius:99px;background:#ecfdf5;color:var(--green)}
+.dwarnpill{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;padding:5px 10px;
+  border-radius:99px;background:#fffbeb;color:var(--amber)}
+.dgauge{position:relative;flex:1;min-height:0;display:grid;place-items:center;margin-top:6px}
+.dgauge .ring{width:110px;height:110px;border-radius:50%;display:grid;place-items:center;position:relative}
+.dtile.s .dgauge .ring{width:84px;height:84px}
+.dgauge .ring::after{content:"";position:absolute;inset:12px;background:var(--card);border-radius:50%}
+.dgauge .ic{position:relative;z-index:1;text-align:center}
+.dgauge .ic b{font-size:20px;font-weight:800}
+.dgauge .ic span{display:block;font-size:10px;color:var(--ink-3);font-weight:700}
+.dmini{display:flex;gap:18px;margin-top:8px;justify-content:center}
+.dmini .k{font-size:9.5px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.dmini .v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.dctl{display:none;position:absolute;top:8px;right:8px;gap:6px;z-index:5}
+.dash-editing .dtile .dctl{display:flex}
+.dctl .szgrp{display:flex;background:rgba(255,255,255,.94);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.dctl .szgrp button{width:24px;height:26px;border:none;cursor:pointer;font-size:11px;font-weight:800;background:transparent;color:var(--ink-2)}
+.dctl .szgrp button.on{background:var(--teal-600);color:#fff}
+.dctl .rm{width:26px;height:26px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:800;
+  background:rgba(255,255,255,.94);color:var(--red);box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.dwlib{position:fixed;inset:0;background:rgba(15,23,42,.35);display:flex;align-items:flex-end;justify-content:center;z-index:60}
+.dwlib .sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:680px;padding:20px 22px 26px;max-height:80vh;overflow:auto}
+.dwlib h3{font-size:16px;margin-bottom:4px}
+.dwlib .desc{font-size:13px;color:var(--ink-3);margin-bottom:16px}
+.dwlibgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.dwlibitem{border:1.5px solid var(--line);border-radius:14px;padding:13px;display:flex;gap:11px;align-items:center}
+.dwlibitem .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:var(--teal-50);flex:none}
+.dwlibitem .t{font-weight:700;font-size:13.5px}
+.dwlibitem .d{font-size:11.5px;color:var(--ink-3)}
+.dwlibitem button{margin-left:auto;border:none;background:var(--teal-600);color:#fff;font-weight:700;font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer;flex:none}
+.dwlibitem.added button{background:var(--line);color:var(--ink-3)}
+@media(max-width:900px){
+  .dwgrid{grid-template-columns:repeat(2,1fr)}
+  .dtile.m,.dtile.l{grid-column:span 2}
+  .dtile.l{grid-row:span 2}
+  .dwlibgrid{grid-template-columns:1fr}
+}
+
 /* ================= inbox / txn cards ================= */
 .txncard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
   padding:18px;margin-bottom:14px}
@@ -409,15 +489,17 @@ var state = {
   sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
-  envTxnCache:{}, confirmRes:null, importing:false
+  envTxnCache:{}, confirmRes:null, importing:false,
+  dashLayout:null, dashEdit:false, dashAddOpen:false
 };
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
+try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array.isArray(_dl)) state.dashLayout=_dl; }catch(e){}
 function $(s){ return document.querySelector(s); }
 function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.17.1';
+var FE_VERSION = 'v3.18.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -490,7 +572,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
-  apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1 };
+  apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1 };
 var mutationInFlight = false;
 function run(fn){
   var args = Array.prototype.slice.call(arguments,1);
@@ -584,6 +666,7 @@ function go(view){
 function boot(){
   run('apiBoot').then(function(res){
     state.boot = res.boot; state.picker = res.picker;
+    if(res.dashLayout && Array.isArray(res.dashLayout.layout)) state.dashLayout = res.dashLayout.layout;
     updateBadges(state.boot.inboxCount);
     $('#sideFoot').innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
       '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
@@ -665,99 +748,185 @@ function render(){
 }
 
 /* ============================ dashboard ============================ */
-function renderDash(){
-  var b = state.boot;
-  var d = state.dash;
-  var pct = d && d.totals.target>0 ? Math.min(100, Math.round(d.totals.funded/d.totals.target*100)) : 0;
-  // v3.6: hero = Available to fund (income-envelope cash); Funded counts only
-  // real Fund-flow money; Spent comes from the Tiller sheet by date (includes
-  // txns still awaiting approval); inbox chip navigates to the Inbox.
-  var spentNum = d ? (d.spentActual!=null ? d.spentActual : d.totals.spent) : null;
-  var h = '<div class="stats">'+
-    '<div class="stat hero click" data-act="goview" data-arg="fund"><div class="lbl">Available to fund</div>'+
-      '<div class="num">'+(d?money(d.availableToFund):'…')+'</div>'+
-      '<div class="sub">in the income pool · put it to work →</div></div>'+
-    '<div class="stat"><div class="lbl">Funded · '+(d?esc(d.monthLabel):'this month')+'</div>'+
-      '<div class="num">'+(d?money(d.totals.funded):'…')+'</div>'+
-      (d?'<div class="bar"><i style="width:'+pct+'%"></i></div>'+
-        '<div class="sub">'+pct+'% of '+money(d.totals.target)+' budget</div>'
-       :'<div class="sub">loading…</div>')+'</div>'+
-    '<div class="stat"><div class="lbl">Spent this month</div>'+
-      '<div class="num">'+(spentNum!=null?money(spentNum):'…')+'</div>'+
-      '<div class="sub">'+(d&&d.spentActual!=null?'all transactions, incl. pending':'from approved transactions')+'</div></div>'+
-    '<div class="stat click" data-act="goview" data-arg="inbox">'+
-      '<div class="lbl">Waiting in inbox</div>'+
-      '<div class="num">'+b.inboxCount+'</div>'+
-      '<div class="sub">tap to review →</div></div>'+
-    '</div>';
+/* ---- v3.18 customizable dashboard: per-user widget grid ----
+   Widgets render from the SAME data the old dashboard used (state.dash +
+   state.boot) — no new backend scans. Layout (which widgets, order, size) is
+   per-user: loaded in apiBoot as state.dashLayout, saved via apiSetDashLayout,
+   mirrored to localStorage for instant paint. */
+var DASH_DEFAULT_LAYOUT = [
+  {id:'avail',size:'m'},{id:'funded',size:'s'},{id:'spent',size:'s'},
+  {id:'inbox',size:'s'},{id:'health',size:'m'},{id:'targets',size:'l'}
+];
+function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:0); }
+var DASH_WIDGETS = {
+  avail:{title:'Available to fund',icon:'💰',hero:true,nav:'fund',render:function(sz){
+    var d=state.dash, n=d?money(d.availableToFund):'…';
+    if(sz==='s') return '<div class="dlbl">Available to fund</div><div class="dnum big">'+n+'</div>';
+    if(sz==='m') return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
+      '<div class="dsub">in the income pool · put it to work →</div>';
+    return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
+      '<div class="dsub">in the income pool · put it to work →</div>'+
+      (d?'<div class="dscroll" style="margin-top:8px">'+
+        '<div class="dkv"><span class="k">Funded this month</span><span class="v">'+money(d.totals.funded)+'</span></div>'+
+        '<div class="dkv"><span class="k">Budget target</span><span class="v">'+money(d.totals.target)+'</span></div></div>':'');}},
 
-  h += '<div class="dashcols"><div>';
-  h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">Budget health'+
-    '<button class="btn ghost sm" data-act="goview" data-arg="healthset" title="Health settings">⚙</button></h3><div class="card">';
-  if(!d){ h += '<div class="empty">Loading…</div>'; }
-  else if(!d.health || d.health.error){
-    h += '<div class="empty">Couldn’t read account balances'+
-      (d&&d.health&&d.health.error?': '+esc(d.health.error):'')+'</div>';
-  } else {
-    var H = d.health;
-    h += '<div class="envrow"><span class="nm">Envelopes total · on-budget</span>'+
-      '<span class="bal">'+money(H.envelopes)+'</span></div>';
-    h += '<div class="envrow"><span class="nm">Bank cash · checking + savings − cards</span>'+
-      '<span class="bal">'+money(H.bank)+'</span></div>';
-    if(Number(H.offBudget)!==0){
-      h += '<div class="envrow"><span class="nm" style="opacity:.6">Off-budget envelopes (excluded)</span>'+
-        '<span class="bal" style="opacity:.6">'+money(H.offBudget)+'</span></div>';
+  funded:{title:'Funded vs budget',icon:'🎯',nav:'fund',render:function(sz){
+    var d=state.dash; if(!d) return '<div class="dlbl">Funded</div><div class="dnum">…</div>';
+    var p=dpct_(d.totals.funded,d.totals.target);
+    if(sz==='s') return '<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum big">'+p+'%</div><div class="dsub">of budget</div>';
+    var head='<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum">'+money(d.totals.funded)+'</div>'+
+      '<div class="dbar"><i style="width:'+p+'%"></i></div><div class="dsub">'+p+'% of '+money(d.totals.target)+' budget</div>';
+    if(sz==='m') return head;
+    var rows=(d.rows||[]).slice(0,5).map(function(r){var q=dpct_(r.funded,r.target);
+      return '<div class="dfrow"><div class="l1"><span class="nm">'+esc(r.name)+'</span><span class="v">'+money(r.funded)+' / '+money(r.target)+'</span></div><div class="dbar"><i style="width:'+q+'%"></i></div></div>';}).join('');
+    return head+'<div class="dscroll" style="margin-top:8px">'+rows+'</div>';}},
+
+  spent:{title:'Spent this month',icon:'💳',render:function(sz){
+    var d=state.dash, s=d?(d.spentActual!=null?d.spentActual:d.totals.spent):null;
+    var n=(s!=null)?money(s):'…';
+    var note=(d&&d.spentActual!=null)?'all transactions, incl. pending':'from approved transactions';
+    if(sz==='s') return '<div class="dlbl">Spent this month</div><div class="dnum big">'+n+'</div>';
+    if(sz==='m') return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub">'+note+'</div>';
+    return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub">'+note+'</div>'+
+      (d?'<div class="dscroll" style="margin-top:8px">'+
+        '<div class="dkv"><span class="k">Budget target</span><span class="v">'+money(d.totals.target)+'</span></div>'+
+        '<div class="dkv"><span class="k">Funded so far</span><span class="v">'+money(d.totals.funded)+'</span></div></div>':'');}},
+
+  inbox:{title:'Inbox',icon:'📥',nav:'inbox',render:function(sz){
+    var n=state.boot?state.boot.inboxCount:0;
+    if(sz==='s') return '<div class="dlbl">Waiting in inbox</div><div class="dnum big">'+n+'</div><div class="dsub">tap to review →</div>';
+    if(sz==='m') return '<div class="dlbl">Waiting in inbox</div><div class="dnum">'+n+'</div><div class="dsub">tap to review →</div>';
+    var list;
+    if(state.inbox && state.inbox.length){
+      list='<div class="dscroll" style="margin-top:8px">'+state.inbox.slice(0,6).map(function(t){
+        return '<div class="dkv"><span class="k">'+esc(t.description||t.name||'Transaction')+'</span><span class="v">'+money(t.amount)+'</span></div>';}).join('')+'</div>';
+    } else { list='<div class="dsub" style="margin-top:8px">Nothing waiting — you’re all caught up.</div>'; }
+    return '<div class="dlbl">Waiting in inbox · '+n+'</div>'+list;}},
+
+  health:{title:'Budget health',icon:'🩺',render:function(sz){
+    var d=state.dash, head='<div class="dhead"><div class="dlbl">Budget health</div></div>';
+    if(!d) return head+'<div class="dsub">Loading…</div>';
+    if(!d.health || d.health.error) return head+'<div class="dsub">Couldn’t read account balances'+(d.health&&d.health.error?': '+esc(d.health.error):'')+'</div>';
+    var H=d.health;
+    var pill=H.ok?'<span class="dokpill">✓ Envelopes match your accounts</span>':'<span class="dwarnpill">⚠ Off by '+money(H.residual)+'</span>';
+    if(sz==='s') return '<div class="dlbl">Budget health</div><div style="margin-top:8px">'+pill+'</div>';
+    var kv='<div class="dkv"><span class="k">Envelopes · on-budget</span><span class="v">'+money(H.envelopes)+'</span></div>'+
+      '<div class="dkv"><span class="k">Bank cash · chk+sav−cards</span><span class="v">'+money(H.bank)+'</span></div>'+
+      '<div class="dkv"><span class="k">Difference</span><span class="v'+(H.ok?'':' neg')+'">'+money(H.residual)+'</span></div>';
+    if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div>'+kv;
+    var extra='';
+    if(H.feedLag!=null && Math.abs(Number(H.feedLag))>=1)
+      extra+='<div class="dkv"><span class="k" style="color:var(--amber)">~'+money(H.feedLag)+' unsettled feed lag</span><span class="v">'+(H.residualExFeedLag!=null?money(H.residualExFeedLag)+' real':'')+'</span></div>';
+    if(d.negatives && d.negatives.count)
+      extra+='<div class="dkv"><span class="k">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span><span class="v neg">'+money(d.negatives.total)+'</span></div>';
+    if(H.stalest)
+      extra+='<div class="dkv"><span class="k">Oldest balance update</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
+    return head+'<div style="margin-bottom:6px">'+pill+'</div><div class="dscroll">'+kv+extra+'</div>';}},
+
+  targets:{title:'Target vs funded',icon:'📊',nav:'envelopes',render:function(sz){
+    var d=state.dash, head='<div class="dhead"><div class="dlbl">Target vs funded'+(d?' · '+esc(d.monthLabel):'')+'</div></div>';
+    if(!d) return head+'<div class="dsub">Loading…</div>';
+    if(!d.rows||!d.rows.length) return head+'<div class="dsub">No targets or funding activity yet this month.</div>';
+    if(sz==='s'){
+      var done=d.rows.filter(function(r){return r.target>0 && r.funded>=r.target;}).length;
+      return '<div class="dlbl">Targets funded</div><div class="dnum big">'+done+'/'+d.rows.length+'</div><div class="dsub">fully funded</div>';
     }
-    if(Number(H.pendingInbox)!==0){
-      h += '<div class="envrow click" data-act="goview" data-arg="inbox">'+
-        '<span class="nm">Pending approval (inbox)</span>'+
-        '<span class="bal">'+money(H.pendingInbox)+'</span></div>';
-    }
-    h += H.ok
-      ? '<div class="envrow"><span class="nm">✓ Envelopes match your accounts</span>'+
-          '<span class="bal">'+money(H.residual)+'</span></div>'
-      : '<div class="envrow"><span class="nm">⚠ Off by</span>'+
-          '<span class="bal neg">'+money(H.residual)+'</span></div>';
-    // v3.15: label how much of any gap is just unsettled feed lag (a balance
-    // feed behind its transactions), not real drift. From the cached summary.
-    if(H.feedLag!=null && Math.abs(Number(H.feedLag))>=1){
-      h += '<div class="envrow click" data-act="goview" data-arg="reconcile">'+
-        '<span class="nm" style="color:#f59e0b">⚠ ~'+money(H.feedLag)+' is unsettled feed lag'+
-        ((H.feedLagAccounts&&H.feedLagAccounts.length)?' · '+esc(H.feedLagAccounts.join(', ')):'')+'</span>'+
-        '<span class="bal" style="opacity:.65">'+(H.residualExFeedLag!=null?money(H.residualExFeedLag)+' real':'')+'</span></div>';
-    }
-    if(d.negatives && d.negatives.count){
-      h += '<div class="envrow click" data-act="goview" data-arg="envelopes">'+
-        '<span class="nm">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span>'+
-        '<span class="bal neg">'+money(d.negatives.total)+'</span></div>';
-    }
-    if(H.stalest){
-      h += '<div class="envrow"><span class="nm" style="opacity:.6">Oldest balance update</span>'+
-        '<span class="bal" style="opacity:.6">'+esc(H.stalest)+'</span></div>';
-    }
-  }
-  h += '</div><div style="margin-top:8px;text-align:right">'+
-    '<button class="btn ghost sm" data-act="goview" data-arg="envelopes">All envelopes →</button></div></div>';
-  h += '</div><div>';
-  h += '<div class="grp"><h3>Target vs funded · '+(d?esc(d.monthLabel):'')+'</h3><div class="card">';
-  if(!d){ h += '<div class="empty">Loading…</div>'; }
-  else if(!d.rows.length){ h += '<div class="empty">No targets or funding activity yet this month.</div>'; }
-  else {
-    d.rows.slice(0,14).forEach(function(r){
-      var p = r.target>0 ? Math.min(100, Math.round(r.funded/r.target*100)) : (r.funded>0?100:0);
-      h += '<div class="fundrow"><div class="l1"><span class="nm">'+esc(r.name)+'</span>'+
-        '<span class="v">'+money(r.funded)+' / '+money(r.target)+'</span></div>'+
-        '<div class="bar"><i style="width:'+p+'%"></i></div></div>';
+    var n=(sz==='m')?4:14;
+    var rows=d.rows.slice(0,n).map(function(r){var p=dpct_(r.funded,r.target);
+      return '<div class="dfrow"><div class="l1"><span class="nm">'+esc(r.name)+'</span><span class="v">'+money(r.funded)+' / '+money(r.target)+'</span></div><div class="dbar"><i style="width:'+p+'%"></i></div></div>';}).join('');
+    return head+'<div class="dscroll">'+rows+'</div>';}},
+
+  negatives:{title:'Negative envelopes',icon:'⚠️',nav:'envelopes',render:function(sz){
+    var d=state.dash, g=(d&&d.negatives)?d.negatives:{count:0,total:0};
+    if(sz==='s') return '<div class="dlbl">Negatives</div><div class="dnum big" style="color:var(--red)">'+g.count+'</div><div class="dsub">'+money(g.total)+'</div>';
+    if(sz==='m') return '<div class="dlbl">Negative envelopes</div><div class="dnum" style="color:var(--red)">'+g.count+' · '+money(g.total)+'</div><div class="dsub">tap to review →</div>';
+    return '<div class="dhead"><div class="dlbl">Negative envelopes</div></div>'+
+      '<div class="dnum" style="color:var(--red)">'+g.count+'</div><div class="dsub">'+money(g.total)+' total</div>'+
+      '<div class="dsub" style="margin-top:8px">Envelopes carrying a negative balance (informal loans roll forward). Tap to see them.</div>';}},
+
+  fundgauge:{title:'Funding progress',icon:'🟢',nav:'fund',render:function(sz){
+    var d=state.dash; if(!d) return '<div class="dlbl">Funding progress</div><div class="dsub">Loading…</div>';
+    var p=dpct_(d.totals.funded,d.totals.target);
+    var ring='<div class="dgauge"><div class="ring" style="background:conic-gradient(var(--teal-500) '+p+'%,var(--line) 0)">'+
+      '<div class="ic"><b>'+p+'%</b><span>funded</span></div></div></div>';
+    if(sz==='s') return '<div class="dlbl">Funding progress</div>'+ring;
+    var head='<div class="dhead"><div class="dlbl">Funding progress · '+esc(d.monthLabel)+'</div></div>';
+    if(sz==='m') return head+ring;
+    var togo=Math.max(0,(d.totals.target||0)-(d.totals.funded||0));
+    return head+ring+'<div class="dmini"><div><div class="k">Funded</div><div class="v">'+money(d.totals.funded)+'</div></div>'+
+      '<div><div class="k">Target</div><div class="v">'+money(d.totals.target)+'</div></div>'+
+      '<div><div class="k">To go</div><div class="v">'+money(togo)+'</div></div></div>';}}
+};
+var DASH_SIZES=['s','m','l'], DASH_SIZE_LABEL={s:'S',m:'M',l:'L'};
+var dashDragId=null;
+
+function dashLayout(){
+  return Array.isArray(state.dashLayout) ? state.dashLayout : DASH_DEFAULT_LAYOUT.slice();
+}
+function dashSave(){
+  state.dashLayout = dashLayout();
+  try{ localStorage.setItem('sbcDashLayout', JSON.stringify(state.dashLayout)); }catch(e){}
+  clearTimeout(dashSave._t);
+  dashSave._t = setTimeout(function(){
+    run('apiSetDashLayout',{layout:state.dashLayout}).catch(function(e){ console.warn('save dash layout:', e&&e.message||e); });
+  }, 600);
+}
+function renderDash(){
+  var lay=dashLayout(), editing=!!state.dashEdit;
+  var h='<div class="dwtop">'+
+    '<button class="dwbtn" data-act="dash-add-open">+ Add widget</button><span class="sp"></span>'+
+    '<button class="dwbtn'+(editing?' on':'')+'" data-act="dash-edit">'+(editing?'Done':'Customize')+'</button></div>'+
+    '<div class="dwnote">✏️ Editing — tap <b>S / M / L</b> to resize (each shows more) · drag to reorder · × removes · then hit <b>Done</b>.</div>'+
+    '<div class="dwgrid" id="dwgrid">';
+  lay.forEach(function(item){
+    var w=DASH_WIDGETS[item.id]; if(!w) return;
+    var sz=(DASH_SIZES.indexOf(item.size)===-1)?'s':item.size;
+    var ctl = editing ? '<div class="dctl"><div class="szgrp">'+DASH_SIZES.map(function(s){
+        return '<button data-act="dash-size" data-arg="'+item.id+'|'+s+'" class="'+(sz===s?'on':'')+'">'+DASH_SIZE_LABEL[s]+'</button>';}).join('')+
+        '</div><button class="rm" data-act="dash-remove" data-arg="'+item.id+'" title="Remove">✕</button></div>' : '';
+    var navAttr=(!editing && w.nav)?' data-act="goview" data-arg="'+w.nav+'"':'';
+    h += '<div class="dtile '+sz+(w.hero?' hero':'')+((!editing&&w.nav)?' nav':'')+'" data-id="'+item.id+'"'+navAttr+'>'+ctl+w.render(sz)+'</div>';
+  });
+  if(!lay.length) h += '<div class="dtile m" style="align-items:center;justify-content:center;color:var(--ink-3)">No widgets — tap “+ Add widget”.</div>';
+  h += '</div>';
+  if(state.dashAddOpen) h += dashLibHtml();
+  $('#shell').innerHTML = h;
+  document.body.classList.toggle('dash-editing', editing);
+  if(editing){
+    $all('#dwgrid .dtile').forEach(function(tile){
+      if(!tile.dataset.id) return;
+      tile.draggable=true;
+      tile.addEventListener('dragstart',function(){ dashDragId=tile.dataset.id; tile.classList.add('dragging'); });
+      tile.addEventListener('dragend',function(){ tile.classList.remove('dragging'); });
+      tile.addEventListener('dragover',function(e){ e.preventDefault(); });
+      tile.addEventListener('drop',function(e){ e.preventDefault(); dashDrop(tile.dataset.id); });
     });
   }
-  h += '</div></div></div></div>';
-  $('#shell').innerHTML = h;
   if(!state.dash){
-    run('apiDashboard').then(function(d){
-      state.dash = d;
-      if(state.view==='dash') renderDash();
-    }).catch(function(){ /* dashboard is best-effort */ });
+    run('apiDashboard').then(function(d){ state.dash=d; if(state.view==='dash') renderDash(); })
+      .catch(function(){ /* dashboard is best-effort */ });
   }
+}
+function dashLibHtml(){
+  var lay=dashLayout();
+  var items=Object.keys(DASH_WIDGETS).map(function(id){
+    var w=DASH_WIDGETS[id], on=lay.some(function(l){return l.id===id;});
+    return '<div class="dwlibitem'+(on?' added':'')+'"><div class="ic">'+w.icon+'</div>'+
+      '<div><div class="t">'+esc(w.title)+'</div><div class="d">Card · S/M/L</div></div>'+
+      (on?'<button disabled>Added</button>':'<button data-act="dash-add" data-arg="'+id+'">+ Add</button>')+'</div>';
+  }).join('');
+  return '<div class="dwlib" data-act="dash-add-close"><div class="sheet">'+
+    '<h3>Widget library</h3><div class="desc">Add widgets as you grow into the app. Each drops in small — resize with S / M / L.</div>'+
+    '<div class="dwlibgrid">'+items+'</div></div></div>';
+}
+function dashDrop(targetId){
+  if(!dashDragId || dashDragId===targetId) return;
+  var lay=dashLayout();
+  var from=-1, to=-1;
+  lay.forEach(function(l,i){ if(l.id===dashDragId) from=i; if(l.id===targetId) to=i; });
+  if(from<0||to<0) return;
+  var it=lay.splice(from,1)[0]; lay.splice(to,0,it);
+  state.dashLayout=lay; dashSave(); renderDash();
 }
 
 /* ============================ envelopes ============================ */
@@ -2556,6 +2725,15 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    case 'dash-edit': state.dashEdit=!state.dashEdit; if(!state.dashEdit) state.dashAddOpen=false; renderDash(); break;
+    case 'dash-add-open': state.dashAddOpen=true; renderDash(); break;
+    case 'dash-add-close': if(ev.target===el){ state.dashAddOpen=false; renderDash(); } break;
+    case 'dash-add': (function(){ var lay=dashLayout();
+        if(!lay.some(function(l){return l.id===arg;})){ lay.push({id:arg,size:'s'}); state.dashLayout=lay; dashSave(); }
+        state.dashAddOpen=false; renderDash(); })(); break;
+    case 'dash-size': (function(){ var lay=dashLayout(); var it=lay.find(function(l){return l.id===p[0];});
+        if(it){ it.size=p[1]; state.dashLayout=lay; dashSave(); renderDash(); } })(); break;
+    case 'dash-remove': state.dashLayout=dashLayout().filter(function(l){return l.id!==arg;}); dashSave(); renderDash(); break;
     case 'approve': approve(arg); break;
     case 'approve-all': approveAll(); break;
     case 'approve-split': approveSplit(arg); break;
