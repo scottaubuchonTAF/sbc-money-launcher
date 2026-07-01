@@ -498,7 +498,7 @@ var state = {
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false,
   dashLayout:null, dashEdit:false, dashAddOpen:false,
-  dashSeries:null, dashSeriesLoading:false
+  dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false
 };
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array.isArray(_dl)) state.dashLayout=_dl; }catch(e){}
@@ -507,7 +507,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.19.0';
+var FE_VERSION = 'v3.20.0';
 function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
@@ -920,7 +920,57 @@ var DASH_WIDGETS = {
       return new Chart(cv,{type:'bar',data:{labels:data.map(function(x){return x.label;}),
         datasets:[{label:'Income',data:data.map(function(x){return x.income;}),backgroundColor:'#0d9488',borderRadius:5,categoryPercentage:.6,barPercentage:.85},
           {label:'Spending',data:data.map(function(x){return x.spend;}),backgroundColor:'#5eead4',borderRadius:5,categoryPercentage:.6,barPercentage:.85}]},
-        options:dAxisOpts(true)});}}
+        options:dAxisOpts(true)});}},
+
+  accounts:{title:'Accounts',icon:'🏦',nav:'balances',render:function(sz){
+    var b=state.balances;
+    if(!b) return '<div class="dlbl">Accounts</div><div class="dwmiss">Loading…</div>';
+    var nw=(b.netWorth!=null)?money(b.netWorth):'…', groups=b.groups||[];
+    if(sz==='s') return '<div class="dlbl">Net worth</div><div class="dnum big">'+nw+'</div><div class="dsub">assets − liabilities</div>';
+    if(sz==='m'){
+      var gh=groups.map(function(g){ return '<div class="dkv"><span class="k">'+esc(g.name)+'</span><span class="v'+(g.liability?' neg':'')+'">'+money(g.total)+'</span></div>'; }).join('');
+      return '<div class="dhead"><div class="dlbl">Accounts</div></div><div class="dscroll">'+gh+'</div>'+
+        '<div class="dmini"><div><div class="k">Net worth</div><div class="v">'+nw+'</div></div></div>';
+    }
+    var rowsH=groups.map(function(g){
+      return '<div class="dfrow"><div class="l1"><span class="nm">'+esc(g.name)+'</span><span class="v'+(g.liability?' neg':'')+'">'+money(g.total)+'</span></div></div>'+
+        (g.rows||[]).map(function(r){ return '<div class="dkv"><span class="k" style="padding-left:10px">'+esc(r.name)+'</span><span class="v">'+money(r.balance)+'</span></div>'; }).join('');
+    }).join('');
+    return '<div class="dhead"><div class="dlbl">Accounts</div></div><div class="dscroll">'+rowsH+'</div>'+
+      '<div class="dmini"><div><div class="k">Assets</div><div class="v">'+money(b.assets)+'</div></div>'+
+      '<div><div class="k">Liabilities</div><div class="v">'+money(b.liabilities)+'</div></div>'+
+      '<div><div class="k">Net worth</div><div class="v">'+nw+'</div></div></div>';}},
+
+  recent:{title:'Recent activity',icon:'🧾',nav:'txns',render:function(sz){
+    var items=state.register.items;
+    if(!items) return '<div class="dlbl">Recent activity</div><div class="dwmiss">Loading…</div>';
+    if(!items.length) return '<div class="dhead"><div class="dlbl">Recent activity</div></div><div class="dwmiss">No transactions yet.</div>';
+    var fmt=function(t){ var envn=(t.legs&&t.legs.length>1)?'Split':((t.legs&&t.legs[0])?t.legs[0].envelopeName:'');
+      return {desc:t.description||envn||'Transaction', amt:t.amount, date:t.date, pos:t.amount>0}; };
+    if(sz==='s'){ var t0=fmt(items[0]);
+      return '<div class="dlbl">Latest</div><div class="dnum"'+(t0.pos?' style="color:var(--green)"':'')+'>'+money(t0.amt)+'</div><div class="dsub">'+esc(t0.desc)+' · '+esc(t0.date)+'</div>'; }
+    var n=(sz==='m')?4:10;
+    var rowsH=items.slice(0,n).map(function(t){ var f=fmt(t);
+      return '<div class="dkv"><span class="k">'+esc(f.desc)+' <span style="color:var(--ink-3)">· '+esc(f.date)+'</span></span><span class="v"'+(f.pos?' style="color:var(--green)"':'')+'>'+money(f.amt)+'</span></div>'; }).join('');
+    return '<div class="dhead"><div class="dlbl">Recent activity</div></div><div class="dscroll">'+rowsH+'</div>';}},
+
+  buffer:{title:'Age of money',icon:'🛡️',render:function(sz){
+    var d=state.dash, ser=state.dashSeries;
+    if(!d || !ser) return '<div class="dlbl">Money buffer</div><div class="dwmiss">Loading…</div>';
+    var cash=(d.health && !d.health.error) ? d.health.bank : null;
+    var complete=ser.slice(0,-1), last6=complete.slice(-6);   // exclude current partial month
+    var avg=last6.length ? last6.reduce(function(a,m){return a+m.spend;},0)/last6.length : 0;
+    if(cash==null || avg<=0) return '<div class="dlbl">Money buffer</div><div class="dwmiss">Not enough data yet.</div>';
+    var months=cash/avg, days=Math.round(months*30), goalPct=Math.min(100, Math.round(months*100));
+    if(sz==='s') return '<div class="dlbl">Money buffer</div><div class="dnum big">'+days+'</div><div class="dsub">days of spending</div>';
+    if(sz==='m') return '<div class="dlbl">Age of money · buffer</div><div class="dnum">'+days+' days</div>'+
+      '<div class="dbar"><i style="width:'+goalPct+'%"></i></div><div class="dsub">'+(months>=1?'Past the one-month goal ✓':'Goal: one month (30 days)')+'</div>';
+    return '<div class="dhead"><div class="dlbl">Age of money · buffer</div></div>'+
+      '<div class="dnum">'+days+' days</div><div class="dbar"><i style="width:'+goalPct+'%"></i></div>'+
+      '<div class="dmini"><div><div class="k">On-budget cash</div><div class="v">'+money(cash)+'</div></div>'+
+      '<div><div class="k">Avg spend/mo</div><div class="v">'+money(avg)+'</div></div>'+
+      '<div><div class="k">Covers</div><div class="v">'+(Math.round(months*10)/10)+' mo</div></div></div>'+
+      '<div class="dsub" style="margin-top:8px">Your on-budget cash covers ~'+days+' days of average spending. One month of buffer means you\'re living on last month\'s income.</div>';}}
 };
 function dAxisOpts(legend){ return {maintainAspectRatio:false,animation:false,
   plugins:{legend:legend?{position:'top',labels:{boxWidth:10,font:{size:11},color:'#94a3b8'}}:{display:false}},
@@ -942,6 +992,21 @@ function dashFetchSeries(){
     state.dashSeriesLoading = false;
     if(state.view==='dash') renderDash();
   }).catch(function(e){ state.dashSeriesLoading=false; console.warn('dash series:', e&&e.message||e); });
+}
+/* v2b-1: lazy loads for the Accounts + Recent-activity widgets (reuse existing
+   endpoints; only fired when those widgets are on the board). */
+function dashFetchBalances(){
+  if(state.balances || state.balancesLoading) return;
+  state.balancesLoading = true;
+  run('apiBalances').then(function(b){ state.balances=b; state.balancesLoading=false; if(state.view==='dash') renderDash(); })
+    .catch(function(e){ state.balancesLoading=false; console.warn('dash balances:', e&&e.message||e); });
+}
+function dashFetchRecent(){
+  if(state.register.items || state.registerLoading) return;
+  state.registerLoading = true;
+  run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:20}).then(function(it){
+    state.register.items=it; state.register.sig='|||0'; state.registerLoading=false; if(state.view==='dash') renderDash();
+  }).catch(function(e){ state.registerLoading=false; console.warn('dash recent:', e&&e.message||e); });
 }
 
 function dashLayout(){
@@ -997,8 +1062,10 @@ function renderDash(){
         try{ dashCharts[item.id]=w.init(cv,sz); }catch(e){ console.warn('chart '+item.id+':', e&&e.message||e); } }
     });
   }
-  // Lazy-load the 12-month series if any chart widget that needs it is present.
-  if(lay.some(function(l){return l.id==='trend'||l.id==='inout';})) dashFetchSeries();
+  // Lazy-load extra data only when a widget that needs it is on the board.
+  if(lay.some(function(l){return l.id==='trend'||l.id==='inout'||l.id==='buffer';})) dashFetchSeries();
+  if(lay.some(function(l){return l.id==='accounts';})) dashFetchBalances();
+  if(lay.some(function(l){return l.id==='recent';})) dashFetchRecent();
   if(!state.dash){
     run('apiDashboard').then(function(d){ state.dash=d; if(state.view==='dash') renderDash(); })
       .catch(function(){ /* dashboard is best-effort */ });
