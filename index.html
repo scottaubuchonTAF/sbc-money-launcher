@@ -912,20 +912,40 @@ var DASH_WIDGETS = {
     if(!d) return head+'<div class="dsub">Loading…</div>';
     if(!d.health || d.health.error) return head+'<div class="dsub">Couldn’t read account balances'+(d.health&&d.health.error?': '+esc(d.health.error):'')+'</div>';
     var H=d.health;
-    var pill=H.ok?'<span class="dokpill">✓ Envelopes match your accounts</span>':'<span class="dwarnpill">⚠ Off by '+money(H.residual)+'</span>';
+    // v3.23: the residual is DECOMPOSED — feed timing (balance feed behind the
+    // transaction feed) is explained noise shown as calm context; ONLY the
+    // unexplained remainder alarms. Falls back to the old fields pre-deploy.
+    var un=(H.unexplained!=null)?Number(H.unexplained):(Number(H.residual)||0);
+    var unOk=(H.unexplainedOk!=null)?!!H.unexplainedOk:!!H.ok;
+    var lag=(H.feedLag!=null)?Number(H.feedLag):0;
+    var resid=Number(H.residual)||0;
+    var lagAccts=(H.feedLagAccounts&&H.feedLagAccounts.length)?H.feedLagAccounts.join(', '):'';
+    var pill=unOk?'<span class="dokpill">✓ Envelopes match your accounts</span>'
+      :'<span class="dwarnpill">⚠ '+money(un)+' unexplained</span>';
+    var note='';
+    if(unOk && Math.abs(resid)>=0.005){
+      note='<div class="dsub" style="margin-top:6px">'+money(resid)+' difference — all timing'+
+        (Math.abs(lag)>=0.005?(': balance feed catching up'+(lagAccts?' on '+esc(lagAccts):'')):'')+
+        '. Clears on its own; no action needed.</div>';
+    } else if(!unOk && Math.abs(lag)>=0.005){
+      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' of the gap is feed timing'+
+        (lagAccts?' ('+esc(lagAccts)+')':'')+'; '+money(un)+' is NOT explained — worth a look on the Reconcile page.</div>';
+    }
     if(sz==='s') return '<div class="dlbl">Budget health</div><div style="margin-top:8px">'+pill+'</div>';
     var kv='<div class="dkv"><span class="k">Envelopes · on-budget</span><span class="v">'+money(H.envelopes)+'</span></div>'+
-      '<div class="dkv"><span class="k">Bank cash · chk+sav−cards</span><span class="v">'+money(H.bank)+'</span></div>'+
-      '<div class="dkv"><span class="k">Difference</span><span class="v'+(H.ok?'':' neg')+'">'+money(H.residual)+'</span></div>';
-    if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div><div class="dscroll">'+kv+'</div>';
+      '<div class="dkv"><span class="k">Bank cash · chk+sav−cards</span><span class="v">'+money(H.bank)+'</span></div>';
+    if(Math.abs(Number(H.pendingInbox)||0)>=0.005)
+      kv+='<div class="dkv"><span class="k">Awaiting approval (already counted)</span><span class="v">'+money(H.pendingInbox)+'</span></div>';
+    if(Math.abs(lag)>=0.005)
+      kv+='<div class="dkv"><span class="k" style="color:var(--amber)">Feed timing'+(lagAccts?' · '+esc(lagAccts):'')+'</span><span class="v">'+money(lag)+'</span></div>';
+    kv+='<div class="dkv"><span class="k">Unexplained</span><span class="v'+(unOk?'':' neg')+'">'+money(un)+'</span></div>';
+    if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+'</div>';
     var extra='';
-    if(H.feedLag!=null && Math.abs(Number(H.feedLag))>=1)
-      extra+='<div class="dkv"><span class="k" style="color:var(--amber)">~'+money(H.feedLag)+' unsettled feed lag</span><span class="v">'+(H.residualExFeedLag!=null?money(H.residualExFeedLag)+' real':'')+'</span></div>';
     if(d.negatives && d.negatives.count)
       extra+='<div class="dkv"><span class="k">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span><span class="v neg">'+money(d.negatives.total)+'</span></div>';
     if(H.stalest)
       extra+='<div class="dkv"><span class="k">Oldest balance update</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
-    return head+'<div style="margin-bottom:6px">'+pill+'</div><div class="dscroll">'+kv+extra+'</div>';}},
+    return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+extra+'</div>';}},
 
   targets:{title:'Target vs funded',icon:'📊',nav:'envelopes',render:function(sz){
     var d=state.dash, head='<div class="dhead"><div class="dlbl">Target vs funded'+(d?' · '+esc(d.monthLabel):'')+'</div></div>';
