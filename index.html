@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SBC Money">
 <meta name="theme-color" content="#0f766e">
-<script src="https://accounts.google.com/gsi/client" onload="gsiReady()" async defer></script>
+<script src="https://accounts.google.com/gsi/client" onload="gsiReady()" onerror="gsiFailed()" async defer></script>
 <!-- v2a: Chart.js for dashboard chart widgets. If it fails to load (offline/CDN),
      chart widgets show a graceful "chart unavailable" message; the rest of the app
      is unaffected (typeof Chart is guarded everywhere it's used). -->
@@ -557,8 +557,12 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.21.0';
-function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s); return d.innerHTML; }
+var FE_VERSION = 'v3.22.0';
+/* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
+   attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
+   envelope name broke out of the attribute (sheet-data injection + broken UI). */
+function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s);
+  return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
   return (n<0?'-$':'$')+v;
@@ -593,6 +597,13 @@ var authWaiters = [];
 var gsiUp = false;
 function authValid(){ return !!auth.token && (Date.now()/1000) < (auth.exp - 90); }
 function persistAuth(){ try{ localStorage.setItem('sbcAuth', JSON.stringify(auth)); }catch(e){} }
+/* v3.22: surface a GSI load failure — previously the sign-in screen showed no
+   button and no error, and ensureAuth() returned a promise that never resolved. */
+function gsiFailed(){
+  var el = $('#signinErr');
+  if(el) el.textContent = 'Could not load Google sign-in (network/ad-blocker?). Check your connection and reload.';
+  var si = $('#signin'); if(si) si.style.display = 'flex';
+}
 function gsiReady(){
   gsiUp = true;
   google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true });
@@ -639,17 +650,31 @@ function run(fn){
     if(typeof toast==='function') toast('Hang on — finishing the last action…');
     return Promise.reject(new Error('Another action is still saving — give it a moment.'));
   }
-  if(mutating) mutationInFlight = true;
-  return ensureAuth().then(function(){ return apiCall_(fn, args, true); })
+  // v3.22: acquire the mutation lock only AFTER auth resolves — it was taken
+  // before ensureAuth(), so an abandoned sign-in held the lock forever and
+  // every later action toasted "Hang on…" until a full reload.
+  return ensureAuth().then(function(){
+    if(mutating){
+      if(mutationInFlight){
+        toast('Hang on — finishing the last action…');
+        throw new Error('Another action is still saving — give it a moment.');
+      }
+      mutationInFlight = true;
+    }
+    return apiCall_(fn, args, true, mutating);
+  })
     .then(function(r){ if(mutating) mutationInFlight=false; return r; },
           function(e){ if(mutating) mutationInFlight=false; throw e; });
 }
-function apiCall_(fn, args, retry){
+function apiCall_(fn, args, retry, mutating){
   // v3.16: abort + clear message if the server doesn't answer in time (a cold
   // full-scan can run long; without this the UI spins forever).
-  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  // v3.22: NO client-side abort for MUTATING calls — the server keeps running
+  // after an abort, so "timed out" + a user retry could double-apply a
+  // non-idempotent Tiller write. Mutations wait; only reads time out at 30s.
+  var ctrl = (!mutating && typeof AbortController!=='undefined') ? new AbortController() : null;
   var timedOut = false;
-  var timer = setTimeout(function(){ timedOut=true; if(ctrl) ctrl.abort(); }, 30000);
+  var timer = mutating ? null : setTimeout(function(){ timedOut=true; if(ctrl) ctrl.abort(); }, 30000);
   return fetch(EXEC_URL, { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
       signal: ctrl ? ctrl.signal : undefined })
@@ -666,7 +691,7 @@ function apiCall_(fn, args, retry){
         var el = $('#signinErr'); if(el) el.textContent = res.error;
         throw new Error(res.error);
       }
-      if(retry) return ensureAuth().then(function(){ return apiCall_(fn, args, false); });
+      if(retry) return ensureAuth().then(function(){ return apiCall_(fn, args, false, mutating); });
     }
     throw new Error(res.error || 'Server error');
   }, function(err){
@@ -751,13 +776,17 @@ function prewarm(){
     state.inbox=r; updateBadges(r.length);
     if(state.view==='inbox' && !userBusy()) drawInbox();
   }).catch(warn('apiGetInbox'));
-  if(!state.dash) run('apiDashboard').then(function(d){
-    state.dash=d; if(state.view==='dash') renderDash();
-  }).catch(warn('apiDashboard'));
+  dashFetchDash(); // v3.22: shared loader — renderDash() fired the same call in
+                   // parallel on every cold load (apiDashboard ran TWICE).
   if(!state.plans) run('apiPlans').then(function(p){ state.plans=p; }).catch(warn('apiPlans'));
   if(!state.accounts) run('apiAccounts').then(function(a){ state.accounts=a; }).catch(warn('apiAccounts'));
-  if(!state.register.items) run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
-    .then(function(it){ state.register.items=it; state.register.sig='|||0'; }).catch(warn('apiRegister'));
+  if(!state.register.items && !state.registerLoading){ // v3.22: shared flag with dashFetchRecent
+    state.registerLoading = true;
+    run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
+      .then(function(it){ state.register.items=it; state.register.sig='|||0'; state.registerLoading=false;
+        if(state.view==='dash') renderDash(); })
+      .catch(function(e){ state.registerLoading=false; warn('apiRegister')(e); });
+  }
   if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; }).catch(warn('apiAccountsFull'));
 }
 function refreshBoot(){
@@ -787,6 +816,13 @@ function userBusy(){
 /* ============================ render dispatch ============================ */
 function render(){
   if(!state.boot){ return; }
+  // v3.22: destroy charts bound to canvases we're about to detach — leaving
+  // Dashboard/Reports previously left live Chart.js instances on detached
+  // canvases (slow leak over a long session).
+  if(state.view!=='dash') dashDestroyCharts();
+  if(state.view!=='reports' && typeof rptChart!=='undefined' && rptChart){
+    try{ rptChart.destroy(); }catch(e){} rptChart=null;
+  }
   var shell = $('#shell');
   shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
@@ -1054,6 +1090,15 @@ function dashFetchBalances(){
   run('apiBalances').then(function(b){ state.balances=b; state.balancesLoading=false; if(state.view==='dash') renderDash(); })
     .catch(function(e){ state.balancesLoading=false; console.warn('dash balances:', e&&e.message||e); });
 }
+/* v3.22: shared apiDashboard loader (used by prewarm AND renderDash) — the two
+   previously fired the same call in parallel on every cold load. */
+function dashFetchDash(){
+  if(state.dash || state.dashLoading) return;
+  state.dashLoading = true;
+  run('apiDashboard').then(function(d){
+    state.dash=d; state.dashLoading=false; if(state.view==='dash') renderDash();
+  }).catch(function(e){ state.dashLoading=false; console.warn('apiDashboard:', e&&e.message||e); });
+}
 function dashFetchRecent(){
   if(state.register.items || state.registerLoading) return;
   state.registerLoading = true;
@@ -1123,10 +1168,7 @@ function renderDash(){
   if(lay.some(function(l){return l.id==='trend'||l.id==='inout'||l.id==='buffer';})) dashFetchSeries();
   if(lay.some(function(l){return l.id==='accounts';})) dashFetchBalances();
   if(lay.some(function(l){return l.id==='recent';})) dashFetchRecent();
-  if(!state.dash){
-    run('apiDashboard').then(function(d){ state.dash=d; if(state.view==='dash') renderDash(); })
-      .catch(function(){ /* dashboard is best-effort */ });
-  }
+  dashFetchDash(); // v3.22: shared loader (no duplicate apiDashboard with prewarm)
 }
 function dashLibHtml(){
   var lay=dashLayout();
@@ -1511,7 +1553,7 @@ function inboxCardHtml(t){
 }
 function approveAll(){
   var items = state.inbox.filter(approveAllEligible).map(function(t){
-    return { txnId: t.txnId, envelopeId: state.sel[t.txnId] || t.suggestedId };
+    return { txnId: t.txnId, key: t.key, envelopeId: state.sel[t.txnId] || t.suggestedId };
   });
   if(!items.length){ toast('Nothing ready to approve'); return; }
   confirmUi('Approve '+items.length+' transaction'+(items.length===1?'':'s')+
@@ -1595,7 +1637,7 @@ function approve(txnId){
   var ruleEl = $('#rule-'+cssId(txnId));
   var createRule = ruleEl && ruleEl.checked ? t.description : null;
   busyButtons(true);
-  run('apiApprove', { txnId:txnId, envelopeId:envId, createRule:createRule })
+  run('apiApprove', { txnId:txnId, key:t.key, envelopeId:envId, createRule:createRule })
     .then(afterApprove(txnId)).catch(approveErr);
 }
 function approveSplit(txnId){
@@ -1603,7 +1645,7 @@ function approveSplit(txnId){
   var t = state.inbox.find(function(x){ return x.txnId===txnId; });
   if(!sp || !t || !splitReady(t.amount, sp.lines)) return;
   busyButtons(true);
-  run('apiApprove', { txnId:txnId,
+  run('apiApprove', { txnId:txnId, key:t.key,
     splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
     .then(afterApprove(txnId)).catch(approveErr);
 }
@@ -1621,11 +1663,14 @@ function afterApprove(txnId){
 function approveErr(e){ toast('⚠ '+(e.message||e)); drawInbox(); }
 function busyButtons(b){ $all('.txncard .btn').forEach(function(x){ x.disabled=b; }); }
 
-/* Enter approves the first card with a selection/suggestion */
+/* Enter approves the first card with a selection/suggestion.
+   v3.22: pick the first card AS RENDERED — drawInbox lists "Auto-categorized"
+   before "Needs a category", so state.inbox[0] could be a different card than
+   the one at the top of the screen. */
 document.addEventListener('keydown', function(ev){
   if(ev.key!=='Enter' || state.view!=='inbox' || !state.inbox || !state.inbox.length) return;
   if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-  var t = state.inbox[0];
+  var t = state.inbox.find(function(x){ return state.sel[x.txnId] || x.suggestedId; }) || state.inbox[0];
   if(state.split[t.txnId] && state.split[t.txnId].on) approveSplit(t.txnId);
   else if(state.sel[t.txnId] || t.suggestedId) approve(t.txnId);
 });
@@ -1941,6 +1986,11 @@ function renderTxns(){
       includeHidden:r.includeHidden, limit:50 }),
     state.accounts ? Promise.resolve(state.accounts) : run('apiAccounts')
   ]).then(function(res){
+    // v3.22: discard OUT-OF-ORDER responses — two quick filter changes could
+    // resolve in reverse order, and the older result then overwrote the newer
+    // one while its sig marked it "current" for the wrong filters.
+    var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
+    if(curSig !== sig){ state.accounts = res[1]; return; }
     var changed = JSON.stringify(res[0]) !== JSON.stringify(r.items);
     r.items = res[0]; r.sig = sig;
     state.accounts = res[1];
@@ -2002,7 +2052,8 @@ function resplitGo(txnId){
   var lines = state.resplit[txnId];
   var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
   var total = t ? t.amount : 0; // 0 → splitAmt keeps positive (won't flip sign)
-  run('apiResplit', { txnId:txnId,
+  // v3.22: send the stable Txn Key — reused Tiller IDs previously re-split BOTH txns
+  run('apiResplit', { txnId:txnId, key:(t&&t.key)||'',
     splits: lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(total, l.amount)}; }) })
   .then(function(){
     toast('Split saved ✓');
@@ -2016,7 +2067,10 @@ function unapprove(txnId){
   confirmUi('Send this transaction back to the Inbox? Its envelope balance(s) will be restored.', 'Un-approve')
   .then(function(ok){
     if(!ok) return;
-    run('apiUnapprove', txnId).then(function(){
+    // v3.22: send the stable Txn Key — reused Tiller IDs previously collapsed
+    // two unrelated transactions into one Inbox row
+    var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
+    run('apiUnapprove', txnId, (t&&t.key)||'').then(function(){
       toast('Back to Inbox ✓');
       state.inbox = null;
       invalidateData();
@@ -2508,9 +2562,13 @@ function rptFetch(){
     filters:{ envelopeIds:r.envelopeIds, groups:r.groups, accounts:r.accounts } };
   state.reportLoading=true; state.reportErr=null;
   run('apiReport', opts).then(function(res){
-    res._sig=sig; state.reportData=res; state.reportLoading=false;
+    res._sig=sig; state.reportData=res; state.reportLoading=false; state.reportErrSig=null;
     if(state.view==='reports') renderReports();
   }).catch(function(e){ state.reportLoading=false; state.reportErr=(e&&e.message)||String(e);
+    // v3.22: remember WHICH request failed — without this, renderReports saw
+    // needFetch=true (sig only stored on success) and refetched immediately,
+    // an INFINITE retry loop hammering the backend on every report error.
+    state.reportErrSig=sig;
     if(state.view==='reports') renderReports(); });
 }
 
@@ -2541,7 +2599,10 @@ function rptFiltersHtml(){ var d=state.reportData, r=state.report; if(!d||!d.met
 function renderReports(){
   rptEnsureRange();
   var r=state.report, meta=RPT_META[r.id]||(r.id='spend',RPT_META.spend);
-  var needFetch = !state.reportData || state.reportData._sig!==rptSig();
+  // v3.22: a failed request must NOT auto-refetch the same sig (infinite loop);
+  // changing any control changes the sig and fetches fresh, or use Retry.
+  var sameErr = state.reportErr && state.reportErrSig===rptSig();
+  var needFetch = (!state.reportData || state.reportData._sig!==rptSig()) && !sameErr;
   if(needFetch && !state.reportLoading) rptFetch();
   var side='<div class="rptside"><h3>Reports</h3><div class="rptlist">'+
     Object.keys(RPT_META).map(function(id){ var m=RPT_META[id];
@@ -2559,12 +2620,16 @@ function renderReports(){
     (meta.compare!==false?('<label class="rpttoggle"><input type="checkbox" id="rptCompare"'+(r.compare?' checked':'')+'> Compare to previous period</label>'):'')+
     '</div>';
   var body;
-  if(state.reportErr) body='<div class="empty">⚠ '+esc(state.reportErr)+'</div>';
+  if(state.reportErr) body='<div class="empty">⚠ '+esc(state.reportErr)+
+    '<div style="margin-top:10px"><button class="btn sm" data-act="rpt-retry">Try again</button></div></div>';
   else if(needFetch || !state.reportData) body='<div class="spin"></div>';
   else body='<div class="rptchartbox"><canvas id="rptCanvas"></canvas></div><div class="rptstats" id="rptStats"></div>';
   $('#shell').innerHTML='<div class="rptlayout">'+side+'<div class="rptpanel">'+head+bar+rptControlsHtml(meta)+rptFiltersHtml()+body+'</div></div>';
-  var fEl=$('#rptFrom'); if(fEl) fEl.addEventListener('change',function(){ state.report.from=this.value; if(rptParse(state.report.from)>rptParse(state.report.to)) state.report.to=state.report.from; rptSave(); renderReports(); });
-  var tEl=$('#rptTo'); if(tEl) tEl.addEventListener('change',function(){ state.report.to=this.value; if(rptParse(state.report.to)<rptParse(state.report.from)) state.report.from=state.report.to; rptSave(); renderReports(); });
+  // v3.22: manual date edits re-derive granularity when the current one is no
+  // longer valid for the range (a persisted gran:'day' over 5 years previously
+  // stayed active and produced huge/slow apiReport requests).
+  var fEl=$('#rptFrom'); if(fEl) fEl.addEventListener('change',function(){ state.report.from=this.value; if(rptParse(state.report.from)>rptParse(state.report.to)) state.report.to=state.report.from; if(rptGranDisabled(state.report.gran)) rptAutoGran(); rptSave(); renderReports(); });
+  var tEl=$('#rptTo'); if(tEl) tEl.addEventListener('change',function(){ state.report.to=this.value; if(rptParse(state.report.to)<rptParse(state.report.from)) state.report.from=state.report.to; if(rptGranDisabled(state.report.gran)) rptAutoGran(); rptSave(); renderReports(); });
   var cEl=$('#rptCompare'); if(cEl) cEl.addEventListener('change',function(){ state.report.compare=this.checked; rptSave(); renderReports(); });
   var nEl=$('#rptNet'); if(nEl) nEl.onchange=function(){ state.report.showNet=nEl.checked; rptSave(); drawReportChart(); };
   var tn=$('#rptTopN'); if(tn) tn.oninput=function(){ state.report.topN=Number(tn.value); var l=$('#rptTopNval'); if(l) l.textContent=state.report.topN; rptSave(); drawReportChart(); };
@@ -2718,13 +2783,24 @@ function adminRemove(em){
   });
 }
 
-/* Explicit sign-out: drop the cached token + GIS auto-select, show sign-in. */
+/* Explicit sign-out: drop the cached token + GIS auto-select, show sign-in.
+   v3.22: ALL cached data resets too — previously only state.boot cleared, so
+   the next person to sign in saw the prior user's dashboard/register/plans
+   (render saw them as fresh and never refetched). */
 function signOut(){
   confirmUi('Log out of SBC Money?', 'Log out').then(function(ok){
     if(!ok) return;
     auth = { token:'', email:'', exp:0 }; persistAuth();
     try{ google.accounts.id.disableAutoSelect(); }catch(e){}
     state.boot = null;
+    state.dash = null; state.dashSeries = null; state.dashLayout = null;
+    state.inbox = null; state.plans = null; state.accounts = null;
+    state.accountsFull = null; state.balances = null; state.sync = null;
+    state.reconcile = null; state.access = null; state.archived = null;
+    state.reportData = null; state.removeResults = null;
+    state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false };
+    state.envTxnCache = {}; state.sel = {}; state.split = {}; state.resplit = {}; state.fund = {};
+    try{ localStorage.removeItem('sbcDashLayout'); }catch(e3){}
     var si = $('#signin'); if(si) si.style.display = 'flex';
     if(gsiUp) try{ google.accounts.id.prompt(); }catch(e2){}
     toast('Logged out');
@@ -2773,7 +2849,7 @@ function removeTxnGo(txnId){
   var label = t ? (t.description+' · '+money(t.amount)) : txnId;
   confirmUi('Remove this transaction?\n\n"'+label+'"\n\nThis can be undone from History.', 'Remove').then(function(ok){
     if(!ok) return;
-    run('apiRemoveTxn',{txnId:txnId}).then(function(){
+    run('apiRemoveTxn',{txnId:txnId, key:(t&&t.key)||''}).then(function(){
       toast('Removed ✓');
       state.removeResults = (state.removeResults||[]).filter(function(x){ return x.txnId!==txnId; });
       invalidateData(); refreshBoot();
@@ -3045,6 +3121,9 @@ function doUndo(opId){
 /* ============================ confirm dialog ============================ */
 function confirmUi(msg, label){
   return new Promise(function(res){
+    // v3.22: a second dialog opening over a pending one silently orphaned the
+    // first promise (its .then never ran). Resolve it as "cancelled" first.
+    if(state.confirmRes){ var prev=state.confirmRes; state.confirmRes=null; try{ prev(false); }catch(e){} }
     state.confirmRes = res;
     $('#ovl').innerHTML = '<div class="ovl" data-act="confirm-no"><div class="panel confirm">'+
       '<div class="cmsg">'+esc(msg)+'</div>'+
@@ -3124,6 +3203,7 @@ document.addEventListener('click', function(ev){
     case 'rpt-facct': (function(){ var i=state.report.accounts.indexOf(arg); if(i===-1) state.report.accounts.push(arg); else state.report.accounts.splice(i,1); rptSave(); renderReports(); })(); break;
     case 'rpt-fclear': state.report.groups=[]; state.report.accounts=[]; state.report.envelopeIds=[]; rptSave(); renderReports(); break;
     case 'rpt-export': rptExport(); break;
+    case 'rpt-retry': state.reportErr=null; state.reportErrSig=null; renderReports(); break; // v3.22
     case 'dash-edit': state.dashEdit=!state.dashEdit; if(!state.dashEdit) state.dashAddOpen=false; renderDash(); break;
     case 'dash-add-open': state.dashAddOpen=true; renderDash(); break;
     case 'dash-add-close': if(ev.target===el){ state.dashAddOpen=false; renderDash(); } break;
@@ -3316,10 +3396,14 @@ document.addEventListener('input', function(ev){
         } else {
           var r=(state.register.items||[]).find(function(x){return x.txnId===key;}); total=r?r.amount:0;
         }
-        var sum=0; lines.forEach(function(l){ sum+=cents(l.amount); });
+        // v3.22: sign-normalize each leg (splitAmt) like the render path and
+        // splitReady do — raw cents(l.amount) made every SPEND transaction
+        // show a wrong red "Remaining" (e.g. −$50 split 25/25 → "−$100.00")
+        // while the Approve button was correctly enabled.
+        var sum=0; lines.forEach(function(l){ sum+=cents(splitAmt(total, l.amount)); });
         var left=cents(total)-sum;
         var lf=foot.querySelector('.splitfoot .left');
-        if(lf){ lf.textContent = left===0?'Fully assigned ✓':'Remaining: '+money(left/100);
+        if(lf){ lf.textContent = left===0?'Fully assigned ✓':'Remaining: '+money(Math.abs(left)/100);
           lf.classList.toggle('bad', left!==0); }
         // refresh action buttons enabled state
         var card = el.closest('.txncard, .regrow');
