@@ -557,7 +557,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.22.0';
+var FE_VERSION = 'v3.23.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -581,6 +581,7 @@ function fail(e){
 function tillerNote(base, r){
   var w = r && r.tillerWrite;
   if(w && w.error) return base + ' — Tiller category not written (daily sweep will retry)';
+  if(w && w.queued) return base + ' · syncing to Tiller in background'; // v3.23
   if(w && w.written) return base + ' · Tiller ✓';
   return base;
 }
@@ -1573,7 +1574,8 @@ function approveAll(){
       var failed = r.results.length - r.approved;
       var msg = 'Approved '+r.approved+' ✓';
       if(failed) msg += ' · '+failed+' failed (still in inbox)';
-      if(r.tillerWrite && r.tillerWrite.written) msg += ' · Tiller ✓';
+      if(r.tillerWrite && r.tillerWrite.queued) msg += ' · syncing '+r.tillerWrite.queued+' to Tiller in background'; // v3.23
+      else if(r.tillerWrite && r.tillerWrite.written) msg += ' · Tiller ✓';
       toast(msg);
     }).catch(function(e){ toast('⚠ '+(e.message||e)); drawInbox(); });
   });
