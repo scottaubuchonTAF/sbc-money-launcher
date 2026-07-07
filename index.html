@@ -536,8 +536,8 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
         Emails must be lowercase. Anyone not in this map falls back to
         EXEC_URL (where the allowlist will reject non-family accounts). ⬇️ */
 var BACKENDS = {
-  'scott@theaubuchonfamily.com': EXEC_URL
-  /* 'corey@theaubuchonfamily.com': 'PASTE_COREY_EXEC_URL', */
+  'scott@theaubuchonfamily.com': EXEC_URL,
+  'corey@theaubuchonfamily.com': 'https://script.google.com/macros/s/AKfycbz8RA0qilWIIpkoy_CWUp0g1ClwDvFKTjTjL8pIpkGjOcZ71omwfmnPZCyCOmgaz1L6lQ/exec'
   /* 'brady@theaubuchonfamily.com': 'PASTE_BRADY_EXEC_URL', */
 };
 function backendUrl(){
@@ -571,7 +571,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.24.0';
+var FE_VERSION = 'v3.24.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
