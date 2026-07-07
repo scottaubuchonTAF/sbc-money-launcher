@@ -530,6 +530,20 @@ var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyzvzQEx27XIohQybzhTj8jQ
 /* ⬇️ 2. OAuth Web client ID from Google Cloud console (must match
         CFG.OAUTH_CLIENT_ID in Config.gs) ⬇️ */
 var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleusercontent.com';
+/* ⬇️ 3. v3.24 multi-user: ONE frontend serves the whole family — API calls
+        route to the signed-in user's OWN Apps Script backend by email.
+        To onboard someone: deploy their web app, paste the /exec URL here.
+        Emails must be lowercase. Anyone not in this map falls back to
+        EXEC_URL (where the allowlist will reject non-family accounts). ⬇️ */
+var BACKENDS = {
+  'scott@theaubuchonfamily.com': EXEC_URL
+  /* 'corey@theaubuchonfamily.com': 'PASTE_COREY_EXEC_URL', */
+  /* 'brady@theaubuchonfamily.com': 'PASTE_BRADY_EXEC_URL', */
+};
+function backendUrl(){
+  var u = BACKENDS[String(auth.email||'').trim().toLowerCase()];
+  return (u && /^https:\/\//.test(u)) ? u : EXEC_URL;
+}
 /* ⬆️ ------------------------------------------------------------------ ⬆️ */
 
 /* ============================ helpers ============================ */
@@ -557,7 +571,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.23.0';
+var FE_VERSION = 'v3.24.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -676,7 +690,7 @@ function apiCall_(fn, args, retry, mutating){
   var ctrl = (!mutating && typeof AbortController!=='undefined') ? new AbortController() : null;
   var timedOut = false;
   var timer = mutating ? null : setTimeout(function(){ timedOut=true; if(ctrl) ctrl.abort(); }, 30000);
-  return fetch(EXEC_URL, { method:'POST',
+  return fetch(backendUrl(), { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
       signal: ctrl ? ctrl.signal : undefined })
   .then(function(r){
@@ -723,7 +737,7 @@ var ICONS = {
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
   plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   reports:'Reports', sync:'Sync', history:'History', more:'More', settings:'Settings',
-  admin:'Access', about:'About'};
+  admin:'Access', about:'About', howto:'How to use'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -743,7 +757,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto'].indexOf(view)!==-1));
   });
   render();
 }
@@ -825,7 +839,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -843,6 +857,7 @@ function render(){
   else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='about') renderAbout();
+  else if(state.view==='howto') renderHowTo();
   else renderHistory();
 }
 
@@ -2738,7 +2753,7 @@ function renderSettings(){
       ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports']]);
     h += settingsSectionLabel('SETTINGS');
   }
-  h += settingsList([['sync','Tiller sync'],['reconcile','Reconcile accounts'],
+  h += settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
     ['healthset','Health settings'],['history','History & undo'],
     ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],['about','About']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
@@ -3100,8 +3115,78 @@ function renderAbout(){
     '<div class="abver">Server '+esc(b.version||'')+' · UI '+esc(FE_VERSION)+' · '+esc(b.versionDate||'')+'</div>'+
     (b.version!==FE_VERSION?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
     '<div class="absub">Signed in as '+esc(b.user)+'</div>'+
-    '<div class="absoon">Instructions and helpful stuff coming soon.</div>'+
+    '<div class="absoon"><span data-act="goview" data-arg="howto" style="cursor:pointer;text-decoration:underline">📖 How to use SBC Money</span></div>'+
     '</div>';
+  $('#shell').innerHTML = h;
+}
+
+/* ============================ how to use (v3.24) ============================ */
+function renderHowTo(){
+  var S = function(emoji, title, body, open){
+    return '<details class="card" style="padding:13px 16px;margin-bottom:10px"'+(open?' open':'')+'>'+
+      '<summary style="cursor:pointer;font-weight:700;font-size:15px;list-style:none">'+
+      emoji+'&nbsp; '+title+'</summary>'+
+      '<div style="margin-top:10px;font-size:13.5px;line-height:1.7;opacity:.92">'+body+'</div></details>';
+  };
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">How to use SBC Money</h2>'+
+    '<div class="empty" style="padding:2px 2px 14px;text-align:left">Five minutes here and the whole app makes sense. Start with the big idea, then learn the payday routine — everything else is detail.</div>';
+
+  h += S('💡','The big idea (read this first)',
+    '<p style="margin:0 0 8px">SBC Money is <b>envelope budgeting</b>. Picture cash envelopes with names on them: Rent, Groceries, Eating Out. Every dollar you have sits in exactly one envelope — that’s the dollar’s <b>job</b>.</p>'+
+    '<p style="margin:0 0 8px">Two rules make the whole system work:</p>'+
+    '<p style="margin:0 0 8px"><b>1. Only budget money you actually have.</b> Not next week’s paycheck, not what you hope to earn — just what’s in your accounts right now.</p>'+
+    '<p style="margin:0 0 8px"><b>2. Before you spend, look at the envelope — not the bank account.</b> Your bank balance lies to you: it includes rent money that isn’t spent yet. The envelope tells the truth about what’s really free to spend.</p>'+
+    '<p style="margin:0">Do that consistently and something great happens over time: you stop living paycheck-to-paycheck, because each envelope fills up <i>before</i> its bill arrives. The long-term goal is to be a full month ahead.</p>', true);
+
+  h += S('📚','Words you’ll see everywhere',
+    '<p style="margin:0 0 6px"><b>Envelope</b> — a named job for money (Groceries, Rent). Its balance = what’s truly available for that job.</p>'+
+    '<p style="margin:0 0 6px"><b>Group</b> — a folder of envelopes (Bills, Everyday, Savings).</p>'+
+    '<p style="margin:0 0 6px"><b>Income Cash Pool</b> — the loading dock. New income lands here first, then you deal it out to envelopes. Money in the pool has no job yet.</p>'+
+    '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
+    '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
+    '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
+    '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
+    '<p style="margin:0"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>');
+
+  h += S('💵','Payday — the routine that matters most',
+    '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
+    '<p style="margin:0 0 6px"><b>1. Approve the paycheck.</b> Open <b>Inbox</b> — your deposit is waiting there. Approve it into your income envelope (Regular Pay 💵).</p>'+
+    '<p style="margin:0 0 6px"><b>2. Move it to the pool.</b> Open the Regular Pay envelope and tap <b>"→ Move all to pool"</b>. Now the money is on the loading dock, ready for jobs.</p>'+
+    '<p style="margin:0 0 8px"><b>3. Fund your envelopes.</b> Go to <b>Fund</b>. The pool balance is at the top. Apply your funding plan (or split it by hand), review, confirm.</p>'+
+    '<p style="margin:0">That’s it — every dollar of the paycheck now has a job. If money is left over, park it in a savings envelope; never leave dollars jobless in the pool for long.</p>');
+
+  h += S('🧾','During the week — approve your spending',
+    '<p style="margin:0 0 8px">As you spend, transactions flow into the <b>Inbox</b> automatically (it syncs from your bank every hour). A few times a week, clear it:</p>'+
+    '<p style="margin:0 0 6px">• Most items arrive with a <b>suggestion pill</b> — one tap to approve if it’s right.</p>'+
+    '<p style="margin:0 0 6px">• Tick <b>"Always suggest this"</b> when approving and that store will be suggested automatically forever.</p>'+
+    '<p style="margin:0 0 6px">• <b>"✓ Approve all"</b> takes care of everything that already has a suggestion.</p>'+
+    '<p style="margin:0 0 8px">• One purchase, two jobs? Use <b>Split</b> to spread it across envelopes (the Walmart run that was half groceries, half a game).</p>'+
+    '<p style="margin:0">Approving isn’t busywork — it’s the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.</p>');
+
+  h += S('🚨','When an envelope runs dry',
+    '<p style="margin:0 0 8px">Eating Out is empty and it’s only the 20th? That’s the system <i>working</i> — it caught the overspend while you can still do something about it.</p>'+
+    '<p style="margin:0 0 6px">• <b>Cover it:</b> open an envelope with slack and use <b>Move money</b>. You’re choosing the trade-off ("less clothes money this month") instead of discovering it later.</p>'+
+    '<p style="margin:0 0 8px">• <b>Or let it ride negative:</b> negative envelopes are allowed — they stay red and roll forward until you cover them at the next funding. Nothing hides.</p>'+
+    '<p style="margin:0">Moving money between envelopes is normal and healthy. The budget is a plan, not a punishment.</p>');
+
+  h += S('📊','Checking on yourself',
+    '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Customize the widgets with the ✏️.</p>'+
+    '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history.</p>'+
+    '<p style="margin:0 0 6px">• <b>Reports</b> — where the money actually goes, by month, envelope, or account.</p>'+
+    '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
+    '<p style="margin:0"><b>• Budget health</b> — the honesty check: do all envelope balances add up to actual money in the bank? Green means your budget isn’t fiction.</p>');
+
+  h += S('↩️','Made a mistake? Nothing is permanent',
+    '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
+    '<p style="margin:0">You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can’t break your money.</p>');
+
+  h += S('📅','Your routines, on one card',
+    '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
+    '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
+    '<p style="margin:0 0 8px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes.</p>'+
+    '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
+
   $('#shell').innerHTML = h;
 }
 
