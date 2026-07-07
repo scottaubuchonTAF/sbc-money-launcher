@@ -571,7 +571,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.24.1';
+var FE_VERSION = 'v3.25.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -737,7 +737,7 @@ var ICONS = {
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
   plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   reports:'Reports', sync:'Sync', history:'History', more:'More', settings:'Settings',
-  admin:'Access', about:'About', howto:'How to use'};
+  admin:'Access', about:'About', howto:'How to use', activity:'Sign-ins & activity'};
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -757,7 +757,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity'].indexOf(view)!==-1));
   });
   render();
 }
@@ -839,7 +839,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -858,6 +858,7 @@ function render(){
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
+  else if(state.view==='activity') renderActivity();
   else renderHistory();
 }
 
@@ -2755,7 +2756,8 @@ function renderSettings(){
   }
   h += settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
     ['healthset','Health settings'],['history','History & undo'],
-    ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],['about','About']]);
+    ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],
+    ['activity','Sign-ins & activity'],['about','About']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
     '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // Log out: on phones it lives here; on desktop it's in the sidebar footer.
@@ -3188,6 +3190,43 @@ function renderHowTo(){
     '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
 
   $('#shell').innerHTML = h;
+}
+
+/* ============================ sign-ins & activity (v3.25) ============================ */
+function renderActivity(){
+  $('#shell').innerHTML = '<h2 class="viewtitle">Sign-ins & activity</h2><div class="spin"></div>';
+  Promise.all([ run('apiAccessLog',{limit:100}), run('apiHistory', 25) ]).then(function(rs){
+    var log = rs[0], ops = rs[1]||[];
+    var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+      '<h2 class="viewtitle">Sign-ins & activity</h2>'+
+      '<div class="empty" style="padding:2px 2px 12px;text-align:left">Every sign-in to YOUR budget is listed here — including anyone you’ve given access to. Every change also records who made it: see below, or the full History.</div>';
+
+    h += '<div class="grp"><h3>Sign-ins</h3><div class="card">';
+    if(!log.rows.length){
+      h += '<div class="empty">No sign-ins recorded yet — the log starts with the first app open after this update.</div>';
+    } else {
+      log.rows.forEach(function(r){
+        h += '<div class="envrow"><span class="nm">'+esc(r.email)+'</span>'+
+          '<span class="bal" style="opacity:.7">'+esc(r.timestamp)+'</span></div>';
+      });
+    }
+    h += '</div></div>';
+
+    h += '<div class="grp"><h3>Recent changes — who did what</h3><div class="card">';
+    if(!ops.length){
+      h += '<div class="empty">No changes yet.</div>';
+    } else {
+      ops.forEach(function(op){
+        h += '<div class="oprow"><div class="what">'+
+          '<div class="note">'+esc(op.note || op.action)+'</div>'+
+          '<div class="sub">'+esc(op.user)+' · '+esc(op.timestamp)+
+          (op.undoneBy?' · undone':'')+'</div></div></div>';
+      });
+    }
+    h += '</div></div>';
+    h += '<div class="actions" style="margin-top:12px"><button class="btn ghost" data-act="goview" data-arg="history">Full history & undo →</button></div>';
+    $('#shell').innerHTML = h;
+  }).catch(fail);
 }
 
 /* ============================ history ============================ */
