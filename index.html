@@ -76,6 +76,8 @@ aside.side{display:none}
   aside.side button.nav:hover{color:#fff}
   aside.side .badge{margin-left:auto;background:var(--teal-500);color:#fff;
     font-size:11px;font-weight:700;border-radius:99px;padding:1px 7px}
+  aside.side .beta{margin-left:auto;background:rgba(255,255,255,.13);color:#a9cdc7;
+    font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:2px 6px}
   aside.side .foot{margin-top:auto;color:#6e958f;font-size:11px;padding:0 12px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main{flex:1;min-width:0}
@@ -571,7 +573,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.25.1';
+var FE_VERSION = 'v3.26.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -743,7 +745,8 @@ function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]
 $all('aside.side button.nav').forEach(function(b){
   var v=b.dataset.v;
   b.innerHTML = icon(v)+'<span>'+NAV_LABELS[v]+'</span>'+
-    (v==='inbox'?'<span class="badge" id="sideBadge" style="display:none"></span>':'');
+    (v==='inbox'?'<span class="badge" id="sideBadge" style="display:none"></span>':'')+
+    (v==='reports'?'<span class="beta">BETA</span>':''); // v3.26: Reports is being revamped
   b.addEventListener('click', function(){ go(v); });
 });
 $all('nav.tabs button').forEach(function(b){
@@ -763,8 +766,26 @@ function go(view){
 }
 
 /* ============================ boot ============================ */
+/* v3.26: ONE round trip for boot + the dashboard's first-paint data (the old
+   path was apiBoot, THEN 6 parallel prewarm calls — ~10s cold, measured 7/7/26).
+   Falls back to the old two-step path if the backend doesn't know apiColdStart
+   yet — the shared frontend can be newer than a family member's backend. */
 function boot(){
-  run('apiBoot').then(function(res){
+  run('apiColdStart').then(function(res){
+    if(res.dash) state.dash = res.dash;
+    if(res.series) state.dashSeries = (res.series && res.series.monthly) || [];
+    if(res.balances) state.balances = res.balances;
+    if(res.register){ state.register.items = res.register; state.register.sig = '|||0'; }
+    bootApply_(res.boot);
+  }).catch(function(e){
+    // Any failure (older backend = "Unknown function", or the combined call hit
+    // the 30s read timeout on a fully-cold server) → old two-step path, which
+    // splits the work into calls that each fit under the timeout.
+    console.warn('apiColdStart failed, falling back to apiBoot:', e && e.message || e);
+    run('apiBoot').then(bootApply_).catch(fail);
+  });
+}
+function bootApply_(res){
     state.boot = res.boot; state.picker = res.picker;
     if(res.dashLayout && Array.isArray(res.dashLayout.layout)) state.dashLayout = res.dashLayout.layout;
     updateBadges(state.boot.inboxCount);
@@ -779,7 +800,6 @@ function boot(){
       {weekday:'long', month:'long', day:'numeric'});
     render();
     prewarm();
-  }).catch(fail);
 }
 /* Warm every view's cache in the background after load. v3.16: fired together,
    not on staggered timers — Apps Script serializes calls per-user server-side,
