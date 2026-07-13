@@ -573,7 +573,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.26.1';
+var FE_VERSION = 'v3.26.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -766,24 +766,15 @@ function go(view){
 }
 
 /* ============================ boot ============================ */
-/* v3.26: ONE round trip for boot + the dashboard's first-paint data (the old
-   path was apiBoot, THEN 6 parallel prewarm calls — ~10s cold, measured 7/7/26).
-   Falls back to the old two-step path if the backend doesn't know apiColdStart
-   yet — the shared frontend can be newer than a family member's backend. */
+/* v3.26.2: back to the TWO-STEP path (apiBoot, then parallel prewarm calls).
+   The v3.26.0 combined apiColdStart was measured live 7/13/26 and LOST:
+   Apps Script runs its sections sequentially in one execution (~20s+ total,
+   26-28s observed), while the old path overlaps the same calls for ~10s cold.
+   Worse, before the v3.26.1 budget it blew the 30s read timeout every load
+   (30s stall + fallback ≈ 40s). apiColdStart stays on the server (harmless,
+   budget-capped) but the frontend no longer calls it. */
 function boot(){
-  run('apiColdStart').then(function(res){
-    if(res.dash) state.dash = res.dash;
-    if(res.series) state.dashSeries = (res.series && res.series.monthly) || [];
-    if(res.balances) state.balances = res.balances;
-    if(res.register){ state.register.items = res.register; state.register.sig = '|||0'; }
-    bootApply_(res.boot);
-  }).catch(function(e){
-    // Any failure (older backend = "Unknown function", or the combined call hit
-    // the 30s read timeout on a fully-cold server) → old two-step path, which
-    // splits the work into calls that each fit under the timeout.
-    console.warn('apiColdStart failed, falling back to apiBoot:', e && e.message || e);
-    run('apiBoot').then(bootApply_).catch(fail);
-  });
+  run('apiBoot').then(bootApply_).catch(fail);
 }
 function bootApply_(res){
     state.boot = res.boot; state.picker = res.picker;
