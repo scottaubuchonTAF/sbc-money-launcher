@@ -573,7 +573,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.26.2';
+var FE_VERSION = 'v3.27.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -799,7 +799,7 @@ function bootApply_(res){
 function prewarm(){
   var warn = function(fn){ return function(e){ console.warn('prewarm '+fn+':', e && e.message || e); }; };
   if(!state.inbox) run('apiGetInbox').then(function(r){
-    state.inbox=r; updateBadges(r.length);
+    state.inbox=r; updateBadges(r.length); markFetched('inbox'); // v3.27
     if(state.view==='inbox' && !userBusy()) drawInbox();
   }).catch(warn('apiGetInbox'));
   dashFetchDash(); // v3.22: shared loader — renderDash() fired the same call in
@@ -810,10 +810,11 @@ function prewarm(){
     state.registerLoading = true;
     run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
       .then(function(it){ state.register.items=it; state.register.sig='|||0'; state.registerLoading=false;
+        markFetched('register'); // v3.27 (same limit/filters as the Transactions view)
         if(state.view==='dash') renderDash(); })
       .catch(function(e){ state.registerLoading=false; warn('apiRegister')(e); });
   }
-  if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; }).catch(warn('apiAccountsFull'));
+  if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; markFetched('accountsFull'); }).catch(warn('apiAccountsFull'));
 }
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
@@ -825,13 +826,36 @@ function updateBadges(n){
     var el=$(s); if(el){ el.textContent=n; el.style.display = n>0?'':'none'; }
   });
 }
-/* After any mutation: drop derived caches so views refetch fresh data. */
+/* After any mutation: drop derived caches so views refetch fresh data.
+   v3.27: the register keeps its items+sig — views now draw the (possibly
+   stale) cache instantly and revalidate in the background instead of tearing
+   down to a spinner. Freshness stamps are cleared so every warm view
+   revalidates on its next visit. */
 function invalidateData(){
   state.dash = null;
   state.dashSeries = null;   // v2a: chart series refetches after any mutation
   state.envTxnCache = {};
-  state.register.sig = null;
   state.sync = null;
+  state._fetchedAt = {};     // v3.27: mark all warm views stale
+}
+/* v3.27 SWR helpers: a view whose data was fetched in the last TTL (and not
+   invalidated by a mutation) skips the background refetch entirely — the
+   2.4s+ round trip on every visit was most of why navigation felt slow. */
+function markFetched(k){ (state._fetchedAt = state._fetchedAt || {})[k] = Date.now(); }
+function freshEnough(k, ttl){
+  var ts = state._fetchedAt && state._fetchedAt[k];
+  return !!ts && (Date.now() - ts) < (ttl || 60000);
+}
+/* v3.27: disable+relabel every button for a data-act while a mutation is in
+   flight (restore with actBusy(act,false)). Complements busyButtons(). */
+function actBusy(act, on, label){
+  $all('[data-act="'+act+'"]').forEach(function(b){
+    b.disabled = on;
+    if(label){
+      if(on){ if(!b.dataset.lbl) b.dataset.lbl = b.textContent; b.textContent = label; }
+      else if(b.dataset.lbl){ b.textContent = b.dataset.lbl; delete b.dataset.lbl; }
+    }
+  });
 }
 /* Skip background re-draws while the user is typing or mid-edit. */
 function userBusy(){
@@ -1135,7 +1159,7 @@ function dashFetchSeries(){
 function dashFetchBalances(){
   if(state.balances || state.balancesLoading) return;
   state.balancesLoading = true;
-  run('apiBalances').then(function(b){ state.balances=b; state.balancesLoading=false; if(state.view==='dash') renderDash(); })
+  run('apiBalances').then(function(b){ state.balances=b; state.balancesLoading=false; markFetched('balances'); if(state.view==='dash') renderDash(); })
     .catch(function(e){ state.balancesLoading=false; console.warn('dash balances:', e&&e.message||e); });
 }
 /* v3.22: shared apiDashboard loader (used by prewarm AND renderDash) — the two
@@ -1476,6 +1500,8 @@ function moveGo(){
   if(!m.toId){ toast('Pick a destination envelope'); return; }
   var amt = Number(m.amount);
   if(!(amt>0)){ toast('Enter a positive amount'); return; }
+  actBusy('env-move-go', true, 'Moving…'); // v3.27: instant feedback
+  toast('Moving '+money(amt)+'…');
   run('apiMove', { fromId:d.id, toId:m.toId, amount:amt })
   .then(function(){
     toast('Moved '+money(amt)+' ✓');
@@ -1484,7 +1510,7 @@ function moveGo(){
     if(state.envDetail) state.envDetail.txns = null;
     return refreshBoot();
   }).then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
-  .catch(function(e){ toast('⚠ '+(e.message||e)); });
+  .catch(function(e){ actBusy('env-move-go', false); toast('⚠ '+(e.message||e)); });
 }
 function sweepToPool(){
   var d = state.envDetail; if(!d) return;
@@ -1511,9 +1537,10 @@ function sweepToPool(){
 
 /* ============================ inbox + splits ============================ */
 function renderInbox(){
-  if(state.inbox){ drawInbox(); } // instant from cache…
+  if(state.inbox){ drawInbox(); if(freshEnough('inbox')) return; } // v3.27: warm+fresh → no network
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Inbox</h2><div class="spin"></div>'; }
   run('apiGetInbox').then(function(rows){ // …refresh in background
+    markFetched('inbox');
     var changed = JSON.stringify(rows) !== JSON.stringify(state.inbox);
     state.inbox = rows;
     updateBadges(rows.length);
@@ -2016,11 +2043,20 @@ function planFromTiller(){
 function planToggle(planId, on){
   var p = state.plans.find(function(x){return x.planId===planId;});
   if(!p) return;
+  // v3.27 OPTIMISTIC: flip locally and redraw now; revert on failure. (The old
+  // flow also nulled state.plans and refetched — a second pointless round trip.)
+  var was = p.active;
+  p.active = on;
+  if(state.view==='fund'||state.view==='plans') drawFund();
+  toast(on?'Plan reactivated':'Plan deactivated');
   run('apiSavePlan', { planId:p.planId, name:p.name, mode:p.mode, incomeMatch:p.incomeMatch,
     active:on, lines:p.lines.map(function(l){ return {envelopeId:l.envelopeId, fixed:l.fixed,
       percent:l.percent, remainder:l.remainder}; }) })
-  .then(function(){ toast(on?'Plan reactivated':'Plan deactivated'); state.plans=null; refreshPlansView(); })
-  .catch(function(e){ toast('⚠ '+(e.message||e)); });
+  .catch(function(e){
+    p.active = was;
+    if(state.view==='fund'||state.view==='plans') drawFund();
+    toast('⚠ '+(e.message||e));
+  });
 }
 
 /* ============================ transactions ============================ */
@@ -2028,7 +2064,7 @@ function renderTxns(){
   var r = state.register;
   var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
   var cached = r.items && r.sig===sig;
-  if(cached){ drawTxns(); }
+  if(cached){ drawTxns(); if(freshEnough('register')) return; } // v3.27: warm+fresh → no network
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Transactions</h2><div class="spin"></div>'; }
   Promise.all([
     run('apiRegister', { q:r.q, account:r.account, envelope:r.envelope,
@@ -2040,6 +2076,7 @@ function renderTxns(){
     // one while its sig marked it "current" for the wrong filters.
     var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
     if(curSig !== sig){ state.accounts = res[1]; return; }
+    markFetched('register');
     var changed = JSON.stringify(res[0]) !== JSON.stringify(r.items);
     r.items = res[0]; r.sig = sig;
     state.accounts = res[1];
@@ -2101,16 +2138,30 @@ function resplitGo(txnId){
   var lines = state.resplit[txnId];
   var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
   var total = t ? t.amount : 0; // 0 → splitAmt keeps positive (won't flip sign)
+  var splits = lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(total, l.amount)}; });
+  // v3.27 OPTIMISTIC: patch the row's legs and close the editor NOW; the save
+  // runs in the background (rollback + reopen the editor on failure). The old
+  // flow gave no feedback for ~4s, then invalidateData()+renderTxns() tore the
+  // list down to a spinner and refetched for ~4s more — Scott's 7/13 complaint.
+  var prevLegs = t ? t.legs : null;
+  if(t) t.legs = splits.map(function(s){
+    return { envelopeId:s.envelopeId, envelopeName:envName(s.envelopeId), amount:s.amount };
+  });
+  delete state.resplit[txnId];
+  if(state.view==='txns') drawTxns();
+  toast('Saving split…');
   // v3.22: send the stable Txn Key — reused Tiller IDs previously re-split BOTH txns
-  run('apiResplit', { txnId:txnId, key:(t&&t.key)||'',
-    splits: lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(total, l.amount)}; }) })
+  run('apiResplit', { txnId:txnId, key:(t&&t.key)||'', splits:splits })
   .then(function(){
     toast('Split saved ✓');
-    delete state.resplit[txnId];
     invalidateData();
     refreshBoot();
-    renderTxns();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  }).catch(function(e){
+    if(t && prevLegs) t.legs = prevLegs;
+    state.resplit[txnId] = lines;
+    if(state.view==='txns') drawTxns();
+    toast('⚠ Split failed: '+(e.message||e));
+  });
 }
 function unapprove(txnId){
   confirmUi('Send this transaction back to the Inbox? Its envelope balance(s) will be restored.', 'Un-approve')
@@ -2119,21 +2170,30 @@ function unapprove(txnId){
     // v3.22: send the stable Txn Key — reused Tiller IDs previously collapsed
     // two unrelated transactions into one Inbox row
     var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
+    // v3.27 OPTIMISTIC: drop the row and redraw now; restore it on failure.
+    var idx = t ? state.register.items.indexOf(t) : -1;
+    if(idx > -1) state.register.items.splice(idx, 1);
+    if(state.view==='txns') drawTxns();
+    toast('Sending back to Inbox…');
     run('apiUnapprove', txnId, (t&&t.key)||'').then(function(){
       toast('Back to Inbox ✓');
       state.inbox = null;
       invalidateData();
       refreshBoot();
-      renderTxns();
-    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    }).catch(function(e){
+      if(t && idx > -1) state.register.items.splice(idx, 0, t);
+      if(state.view==='txns') drawTxns();
+      toast('⚠ Un-approve failed: '+(e.message||e));
+    });
   });
 }
 
 /* ============================ accounts (v3.2) ============================ */
 function renderAccounts(){
-  if(state.accountsFull){ drawAccounts(); }
+  if(state.accountsFull){ drawAccounts(); if(freshEnough('accountsFull')) return; } // v3.27
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Accounts</h2><div class="spin"></div>'; }
   run('apiAccountsFull').then(function(res){
+    markFetched('accountsFull');
     var changed = JSON.stringify(res) !== JSON.stringify(state.accountsFull);
     state.accountsFull = res;
     if(state.view==='accounts' && changed) drawAccounts();
@@ -2191,9 +2251,10 @@ function acctToggle(name){
 
 /* ============================ balances (v3.2) ============================ */
 function renderBalances(){
-  if(state.balances){ drawBalances(); }
+  if(state.balances){ drawBalances(); if(freshEnough('balances')) return; } // v3.27
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Balances</h2><div class="spin"></div>'; }
   run('apiBalances').then(function(b){
+    markFetched('balances');
     if(state.balReorder || state.balEdit) return; // don't clobber an in-progress reorder/edit
     var changed = JSON.stringify(b) !== JSON.stringify(state.balances);
     state.balances = b;
@@ -2269,6 +2330,7 @@ function balSaveOrder(){
   var names = state.balances.groups.map(function(g){ return g.name; });
   var accts = [];
   state.balances.groups.forEach(function(g){ (g.rows||[]).forEach(function(r){ accts.push(r.name); }); });
+  toast('Saving order…'); // v3.27: instant feedback (two chained mutations ≈ 5s)
   run('apiSetBalanceGroupOrder', names)
     .then(function(){ return run('apiSetBalanceAccountOrder', accts); })
     .then(function(){ toast('Order saved ✓'); })
@@ -2531,6 +2593,7 @@ function acceptTiller(txnId){
   confirmUi('Update SBC to match Tiller?\n\n'+what+'\n\nEnvelope assignment is kept; undoable from History.', 'Accept')
   .then(function(ok){
     if(!ok) return;
+    actBusy('accept-tiller', true, 'Updating…'); // v3.27: instant feedback
     run('apiAcceptTillerTxn', txnId).then(function(){
       toast('SBC updated to match Tiller ✓');
       invalidateData();
@@ -2538,7 +2601,7 @@ function acceptTiller(txnId){
       refreshBoot();
       state.sync = null;
       if(state.view==='sync') renderSync();
-    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    }).catch(function(e){ actBusy('accept-tiller', false); toast('⚠ '+(e.message||e)); });
   });
 }
 
@@ -2899,12 +2962,19 @@ function removeTxnGo(txnId){
   var label = t ? (t.description+' · '+money(t.amount)) : txnId;
   confirmUi('Remove this transaction?\n\n"'+label+'"\n\nThis can be undone from History.', 'Remove').then(function(ok){
     if(!ok) return;
+    // v3.27 OPTIMISTIC: drop the result row and redraw now; restore on failure.
+    var prev = state.removeResults||[];
+    state.removeResults = prev.filter(function(x){ return x.txnId!==txnId; });
+    if(state.view==='removetxn') renderRemoveTxn();
+    toast('Removing…');
     run('apiRemoveTxn',{txnId:txnId, key:(t&&t.key)||''}).then(function(){
       toast('Removed ✓');
-      state.removeResults = (state.removeResults||[]).filter(function(x){ return x.txnId!==txnId; });
       invalidateData(); refreshBoot();
+    }).catch(function(e){
+      state.removeResults = prev;
       if(state.view==='removetxn') renderRemoveTxn();
-    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+      toast('⚠ Remove failed: '+(e.message||e));
+    });
   });
 }
 
@@ -3040,12 +3110,17 @@ function snapshotToTiller(){
 function reconToggleManual(account){
   var a=(state.reconcile&&state.reconcile.accounts||[]).find(function(x){return x.name===account;});
   var on = !(a&&a.manual);
-  run('apiSetManualAccount', { account:account, manual:on }).then(function(){
-    if(a) a.manual=on;
-    if(!on && state.baledit && state.baledit.account===account) state.baledit=null;
-    toast(on?'Marked manual ✓':'Set to auto');
+  // v3.27 OPTIMISTIC: flip + redraw now; revert on failure.
+  if(a) a.manual=on;
+  if(!on && state.baledit && state.baledit.account===account) state.baledit=null;
+  toast(on?'Marked manual ✓':'Set to auto');
+  drawReconcile();
+  run('apiSetManualAccount', { account:account, manual:on })
+  .catch(function(e){
+    if(a) a.manual=!on;
     drawReconcile();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    toast('⚠ '+(e.message||e));
+  });
 }
 
 /* ============================ health settings (v3.6) ============================ */
@@ -3265,13 +3340,14 @@ function doUndo(opId){
   confirmUi('Undo this?\n\n"'+((op&&op.note)||opId)+'"', 'Undo')
   .then(function(ok){
     if(!ok) return;
+    actBusy('undo', true, 'Undoing…'); // v3.27: instant feedback
     run('apiUndo', opId).then(function(){
       toast('Undone ✓');
       state.inbox=null;
       invalidateData();
       refreshBoot();
       renderHistory();
-    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    }).catch(function(e){ actBusy('undo', false); toast('⚠ '+(e.message||e)); });
   });
 }
 
