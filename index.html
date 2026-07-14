@@ -467,9 +467,60 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .rptstats .s .v.pos{color:var(--green)} .rptstats .s .v.neg{color:var(--red)}
 @media(max-width:820px){ .rptlayout{grid-template-columns:1fr} .rptside{position:static}
   .rptlist{display:flex;gap:8px;overflow:auto;padding-bottom:4px} .rptlist button{white-space:nowrap;width:auto} }
+
+/* ================= display density (v3.28) — Settings-selectable ================= */
+/* Everything ABOVE is the "comfortable" preset (the original layout). The blocks
+   below TIGHTEN spacing for the "mid" (default) and "compact" presets. They only
+   ADD overrides — comfortable = no data-d overrides, so it's byte-for-byte the
+   original. Preset is set on <body data-d>, seeded from the user's saved setting.
+   Overriding --radius on <body> cascades to every card/tile/stat automatically. */
+.densgrp{display:flex;gap:6px}
+.densbtn{flex:1;border:1.5px solid var(--line);background:var(--card);color:var(--ink-2);
+  font-weight:700;font-size:13px;padding:9px 8px;border-radius:9px;cursor:pointer}
+.densbtn.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
+
+/* ---- Midpoint (default) ---- */
+body[data-d="mid"]{ --radius:12px; font-size:14px; }
+body[data-d="mid"] .stat{padding:11px 13px}
+body[data-d="mid"] .stat .num{font-size:22px}
+body[data-d="mid"] .dtile{padding:11px 14px}
+body[data-d="mid"] .envrow{padding:8px 14px}
+body[data-d="mid"] .fundrow{padding:7px 14px}
+body[data-d="mid"] .txncard{padding:12px 14px;margin-bottom:10px}
+body[data-d="mid"] .grp{margin-bottom:12px}
+body[data-d="mid"] h2.viewtitle{font-size:19px;margin-bottom:12px}
+@media(max-width:899px){
+  body[data-d="mid"] .shell{padding:12px 14px 20px}
+  body[data-d="mid"] .stats{gap:9px;margin-bottom:12px}
+}
+@media(min-width:900px){
+  body[data-d="mid"] .shell{padding:20px 30px 48px}
+  body[data-d="mid"] .topbar{padding:16px 30px 0}
+  body[data-d="mid"] .stats{gap:10px;margin-bottom:14px}
+}
+
+/* ---- Compact (Tiller-like) ---- */
+body[data-d="compact"]{ --radius:8px; font-size:13px; }
+body[data-d="compact"] .stat{padding:8px 10px}
+body[data-d="compact"] .stat .num{font-size:19px}
+body[data-d="compact"] .dtile{padding:8px 10px}
+body[data-d="compact"] .envrow{padding:5px 10px}
+body[data-d="compact"] .fundrow{padding:5px 10px}
+body[data-d="compact"] .txncard{padding:9px 11px;margin-bottom:7px}
+body[data-d="compact"] .grp{margin-bottom:8px}
+body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
+@media(max-width:899px){
+  body[data-d="compact"] .shell{padding:9px 12px 16px}
+  body[data-d="compact"] .stats{gap:6px;margin-bottom:9px}
+}
+@media(min-width:900px){
+  body[data-d="compact"] .shell{padding:12px 20px 40px}
+  body[data-d="compact"] .topbar{padding:10px 20px 0}
+  body[data-d="compact"] .stats{gap:7px;margin-bottom:10px}
+}
 </style>
 </head>
-<body>
+<body data-d="mid">
 <div class="signin" id="signin" style="display:none">
   <img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="SBC Money">
   <div class="sname">SBC <span>Money</span></div>
@@ -555,7 +606,7 @@ var state = {
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false,
-  dashLayout:null, dashEdit:false, dashAddOpen:false,
+  dashLayout:null, dashEdit:false, dashAddOpen:false, density:'mid',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null
 };
@@ -568,12 +619,16 @@ state.report = Object.assign({}, RPT_DEFAULTS, (_rp&&typeof _rp==='object')?_rp:
 state.report.envelopeIds = state.report.envelopeIds||[]; state.report.groups = state.report.groups||[]; state.report.accounts = state.report.accounts||[];
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array.isArray(_dl)) state.dashLayout=_dl; }catch(e){}
+/* v3.28: paint at the user's saved density before first render (server value from
+   apiBoot confirms/overrides it a moment later). Falls back to the 'mid' default
+   already on <body data-d="mid">. */
+try{ var _dn=localStorage.getItem('sbcDensity'); if(['comfortable','mid','compact'].indexOf(_dn)>-1){ state.density=_dn; document.body.setAttribute('data-d',_dn); } }catch(e){}
 function $(s){ return document.querySelector(s); }
 function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.27.0';
+var FE_VERSION = 'v3.28.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -779,6 +834,7 @@ function boot(){
 function bootApply_(res){
     state.boot = res.boot; state.picker = res.picker;
     if(res.dashLayout && Array.isArray(res.dashLayout.layout)) state.dashLayout = res.dashLayout.layout;
+    if(res.density && res.density.value) applyDensity(res.density.value, false); // v3.28: per-user density
     updateBadges(state.boot.inboxCount);
     $('#sideFoot').innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
       '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
@@ -2818,9 +2874,38 @@ function settingsList(rows){
   });
   return h+'</div>';
 }
+/* ============================ display density (v3.28) ============================
+   Per-user UI density, synced via apiGet/SetDensity (Settings key "Density <email>",
+   mirrors the Dashboard Layout pattern). localStorage 'sbcDensity' for instant paint.
+   applyDensity sets <body data-d>; the CSS override blocks do the rest. */
+var DENSITY_OPTS = [['comfortable','Comfortable'],['mid','Midpoint'],['compact','Compact']];
+function densityLabel(v){ for(var i=0;i<DENSITY_OPTS.length;i++){ if(DENSITY_OPTS[i][0]===v) return DENSITY_OPTS[i][1]; } return 'Midpoint'; }
+function applyDensity(v, save){
+  if(['comfortable','mid','compact'].indexOf(v)===-1) v='mid';
+  state.density = v;
+  document.body.setAttribute('data-d', v);
+  try{ localStorage.setItem('sbcDensity', v); }catch(e){}
+  if(save){
+    toast('Density: '+densityLabel(v));
+    run('apiSetDensity',{value:v}).catch(function(e){ console.warn('save density:', e&&e.message||e); });
+    if(state.view==='settings' || state.view==='more') renderSettings();
+  }
+}
+function densityControl(){
+  var cur = state.density || 'mid';
+  var btns = DENSITY_OPTS.map(function(o){
+    return '<button class="densbtn'+(cur===o[0]?' on':'')+'" data-act="density" data-arg="'+o[0]+'">'+o[1]+'</button>';
+  }).join('');
+  return settingsSectionLabel('DISPLAY DENSITY')+
+    '<div class="card" style="padding:12px">'+
+    '<div class="densgrp">'+btns+'</div>'+
+    '<div class="empty" style="padding:8px 2px 0;font-size:11.5px;text-align:left">How tightly information is packed on screen. Midpoint is the default; Compact fits the most at once. Saved to your account.</div>'+
+    '</div>';
+}
 function renderSettings(){
   var desktop = window.innerWidth >= 900;
   var h = '<h2 class="viewtitle">Settings</h2>';
+  h += densityControl();
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
@@ -3427,6 +3512,7 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    case 'density': applyDensity(arg, true); break;
     case 'goreport': state.report.id=arg; rptSave(); go('reports'); break;
     case 'rpt-select': state.report.id=arg; rptSave(); renderReports(); break;
     case 'rpt-preset': rptApplyPreset(arg==='ytd'?'ytd':Number(arg)); rptSave(); renderReports(); break;
