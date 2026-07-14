@@ -303,13 +303,18 @@ aside.side{display:none}
 /* v3.28.1: single-line register (desktop, mid/compact density). Everything on one
    row: date · description · account · envelope(s) · ⋮ menu · amount. Comfortable and
    phone keep the stacked .regrow cards above. */
+/* v3.28.1 fix: the base .card is overflow:hidden and .rc cells clip text — both
+   were clipping the ⋮ dropdown to nothing. Let the table + menu cell overflow so
+   the popover shows; keep the header's top corners rounded to match the card. */
+.card.regtable{overflow:visible}
 .regtable .rrow{display:grid;
   grid-template-columns:78px minmax(120px,1.4fr) 148px minmax(120px,1.3fr) 30px 100px;
   gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line)}
 .regtable .rrow:last-child{border-bottom:none}
 .regtable .rhead{font-size:11px;text-transform:uppercase;letter-spacing:.04em;
-  color:var(--ink-3);font-weight:800;background:#fbfdfd}
+  color:var(--ink-3);font-weight:800;background:#fbfdfd;border-radius:var(--radius) var(--radius) 0 0}
 .regtable .rc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.regtable .rc-menu{overflow:visible}
 .regtable .rc-date{color:var(--ink-3);font-variant-numeric:tabular-nums}
 .regtable .rc-desc{font-weight:600}
 .regtable .rc-env{display:flex;gap:4px;overflow:hidden}
@@ -334,6 +339,10 @@ aside.side{display:none}
 /* Compact = tighter rows + smaller type than Midpoint */
 body[data-d="compact"] .regtable .rrow{padding:4px 12px;gap:10px;font-size:12.5px}
 body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px}
+/* v3.28.1: "Show more" / "Show all" footer (both card + single-line layouts) */
+.regmore{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:16px}
+.regmore-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.regmore .regcount{color:var(--ink-3);font-size:12px}
 
 /* ================= plans ================= */
 .plancard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
@@ -645,7 +654,7 @@ function backendUrl(){
 /* ============================ helpers ============================ */
 var state = {
   view:'dash', boot:null, dash:null, inbox:null, picker:null, history:null,
-  sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null}, resplit:{},
+  sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null, limit:50}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false,
@@ -950,8 +959,8 @@ function prewarm(){
   if(!state.register.items && !state.registerLoading){ // v3.22: shared flag with dashFetchRecent
     state.registerLoading = true;
     run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
-      .then(function(it){ state.register.items=it; state.register.sig='|||0'; state.registerLoading=false;
-        markFetched('register'); // v3.27 (same limit/filters as the Transactions view)
+      .then(function(it){ state.register.items=it; state.register.sig='|||0|50'; state.registerLoading=false;
+        markFetched('register'); // v3.27 (same limit/filters as the Transactions view); v3.28.1 sig incl. limit
         if(state.view==='dash') renderDash(); })
       .catch(function(e){ state.registerLoading=false; warn('apiRegister')(e); });
   }
@@ -1318,7 +1327,7 @@ function dashFetchRecent(){
   if(state.register.items || state.registerLoading) return;
   state.registerLoading = true;
   run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:20}).then(function(it){
-    state.register.items=it; state.register.sig='|||0'; state.registerLoading=false; if(state.view==='dash') renderDash();
+    state.register.items=it; state.register.sig='|||0|20'; state.registerLoading=false; if(state.view==='dash') renderDash();
   }).catch(function(e){ state.registerLoading=false; console.warn('dash recent:', e&&e.message||e); });
 }
 
@@ -2203,21 +2212,24 @@ function planToggle(planId, on){
 }
 
 /* ============================ transactions ============================ */
-function renderTxns(){
+function renderTxns(keepList){
   var r = state.register;
-  var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
+  if(!r.limit) r.limit = 50;
+  // v3.28.1: limit is part of the sig so "Show more" (a bigger page) is a cache miss.
+  var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+r.limit;
   var cached = r.items && r.sig===sig;
   if(cached){ drawTxns(); if(freshEnough('register')) return; } // v3.27: warm+fresh → no network
+  else if(keepList && r.items){ drawTxns(); } // v3.28.1: keep current rows visible while a bigger page loads
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Transactions</h2><div class="spin"></div>'; }
   Promise.all([
     run('apiRegister', { q:r.q, account:r.account, envelope:r.envelope,
-      includeHidden:r.includeHidden, limit:50 }),
+      includeHidden:r.includeHidden, limit:r.limit }),
     state.accounts ? Promise.resolve(state.accounts) : run('apiAccounts')
   ]).then(function(res){
     // v3.22: discard OUT-OF-ORDER responses — two quick filter changes could
     // resolve in reverse order, and the older result then overwrote the newer
     // one while its sig marked it "current" for the wrong filters.
-    var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0');
+    var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+r.limit;
     if(curSig !== sig){ state.accounts = res[1]; return; }
     markFetched('register');
     var changed = JSON.stringify(res[0]) !== JSON.stringify(r.items);
@@ -2310,6 +2322,21 @@ function drawTxns(){
       }
       h += '</div>';
     });
+    h += '</div>';
+  }
+  // v3.28.1: paging. The backend returns the newest `limit` txns; if we got a full
+  // page there are probably more, so offer "Show more" / "Show all". No hard cap —
+  // this is Scott's primary app, so all history must be reachable.
+  if(items.length){
+    var more = items.length >= (r.limit||50);
+    h += '<div class="regmore">';
+    if(more){
+      h += '<div class="regmore-btns">'+
+        '<button class="btn ghost" data-act="reg-more">Show 100 more</button>'+
+        '<button class="btn ghost" data-act="reg-all">Show all</button></div>';
+    }
+    h += '<div class="regcount">'+(more?('Showing '+items.length):('Showing all '+items.length))+
+      ' transaction'+(items.length===1?'':'s')+'</div>';
     h += '</div>';
   }
   $('#shell').innerHTML = h;
@@ -3125,7 +3152,7 @@ function signOut(){
     state.accountsFull = null; state.balances = null; state.sync = null;
     state.reconcile = null; state.access = null; state.archived = null;
     state.reportData = null; state.removeResults = null;
-    state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false };
+    state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false, limit:50 };
     state.envTxnCache = {}; state.sel = {}; state.split = {}; state.resplit = {}; state.fund = {};
     try{ localStorage.removeItem('sbcDashLayout'); }catch(e3){}
     var si = $('#signin'); if(si) si.style.display = 'flex';
@@ -3732,11 +3759,13 @@ document.addEventListener('click', function(ev){
       drawPlans(); break;
     case 'plan-off': planToggle(arg, false); break;
     case 'plan-on': planToggle(arg, true); break;
-    case 'reg-search': state.register.q = $('#regQ').value; renderTxns(); break;
-    case 'reg-env-clear': state.register.envelope=''; renderTxns(); break;
-    case 'reg-hidden': state.register.includeHidden = !state.register.includeHidden; renderTxns(); break;
+    case 'reg-search': state.register.q = $('#regQ').value; state.register.limit=50; renderTxns(); break;
+    case 'reg-more': state.register.limit = (state.register.limit||50)+100; renderTxns(true); break;
+    case 'reg-all': state.register.limit = 1000000; toast('Loading all transactions…'); renderTxns(true); break;
+    case 'reg-env-clear': state.register.envelope=''; state.register.limit=50; renderTxns(); break;
+    case 'reg-hidden': state.register.includeHidden = !state.register.includeHidden; state.register.limit=50; renderTxns(); break;
     case 'reg-clear': state.register.q=''; state.register.account=''; state.register.envelope='';
-      state.register.includeHidden=false; renderTxns(); break;
+      state.register.includeHidden=false; state.register.limit=50; renderTxns(); break;
     case 'grp-toggle':
       state.envOpen[arg] = state.envOpen[arg]===false ? true : false;
       try{ localStorage.setItem('sbcEnvOpen', JSON.stringify(state.envOpen)); }catch(e2){}
@@ -3880,7 +3909,7 @@ document.addEventListener('change', function(ev){
     var f = state.fund[el.dataset.arg];
     if(f){ f.incomeEnvelopeId = el.value; drawFund(); }
   } else if(el.dataset.act==='reg-acct'){
-    state.register.account = el.value; renderTxns();
+    state.register.account = el.value; state.register.limit=50; renderTxns();
   }
 });
 
