@@ -32,6 +32,13 @@ body{
   background:var(--bg); color:var(--ink);
   padding-bottom:calc(64px + env(safe-area-inset-bottom));
 }
+/* v3.28: slim top progress bar shown while the app revalidates in the background
+   (after an instant paint from cache). Works on phone (no topbar) and desktop. */
+#refbar{position:fixed;top:0;left:0;height:3px;width:100%;z-index:60;
+  background:var(--teal-500);transform-origin:left;transform:scaleX(0);opacity:0;
+  pointer-events:none;transition:opacity .2s}
+body.refreshing #refbar{opacity:1;animation:refslide 1.1s ease-in-out infinite}
+@keyframes refslide{0%{transform:scaleX(.05)}50%{transform:scaleX(.75)}100%{transform:scaleX(.05)}}
 button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input,select{font:inherit}
 
@@ -293,6 +300,41 @@ aside.side{display:none}
 .reglinks button{color:var(--teal-700);font-weight:700;font-size:12.5px}
 .reglinks button.warn{color:var(--red)}
 
+/* v3.28.1: single-line register (desktop, mid/compact density). Everything on one
+   row: date · description · account · envelope(s) · ⋮ menu · amount. Comfortable and
+   phone keep the stacked .regrow cards above. */
+.regtable .rrow{display:grid;
+  grid-template-columns:78px minmax(120px,1.4fr) 148px minmax(120px,1.3fr) 30px 100px;
+  gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line)}
+.regtable .rrow:last-child{border-bottom:none}
+.regtable .rhead{font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--ink-3);font-weight:800;background:#fbfdfd}
+.regtable .rc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.regtable .rc-date{color:var(--ink-3);font-variant-numeric:tabular-nums}
+.regtable .rc-desc{font-weight:600}
+.regtable .rc-env{display:flex;gap:4px;overflow:hidden}
+.regtable .rc-env .legchip{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.regtable .rc-amt,.regtable .ramt{text-align:right;font-weight:700;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.regtable .rc-amt.pos{color:var(--green)}
+.regtable .rexpand{padding:2px 14px 14px;border-bottom:1px solid var(--line)}
+.regtable .rmenu{position:relative;justify-self:center}
+.regtable .rmenu>summary{list-style:none;cursor:pointer;width:26px;height:26px;border-radius:7px;
+  display:grid;place-items:center;color:var(--ink-2);font-weight:800;font-size:16px;line-height:1}
+.regtable .rmenu>summary::-webkit-details-marker{display:none}
+.regtable .rmenu>summary:hover{background:var(--line)}
+.regtable .rmenu[open]>summary{background:var(--teal-50);color:var(--teal-700)}
+.regtable .rmenu-p{position:absolute;right:0;top:30px;z-index:20;background:var(--card);
+  border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;
+  display:flex;flex-direction:column;gap:2px;min-width:158px}
+.regtable .rmenu-p button{text-align:left;padding:8px 10px;border-radius:7px;font-size:13px;
+  font-weight:600;color:var(--ink)}
+.regtable .rmenu-p button:hover{background:var(--bg)}
+.regtable .rmenu-p button.warn{color:var(--red)}
+/* Compact = tighter rows + smaller type than Midpoint */
+body[data-d="compact"] .regtable .rrow{padding:4px 12px;gap:10px;font-size:12.5px}
+body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px}
+
 /* ================= plans ================= */
 .plancard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
   padding:18px;margin-bottom:14px}
@@ -521,6 +563,7 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
 </style>
 </head>
 <body data-d="mid">
+<div id="refbar"></div>
 <div class="signin" id="signin" style="display:none">
   <img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="SBC Money">
   <div class="sname">SBC <span>Money</span></div>
@@ -628,7 +671,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.28.0';
+var FE_VERSION = 'v3.28.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -693,7 +736,7 @@ function onCredential(resp){
   $('#signin').style.display = 'none';
   $('#signinErr').textContent = '';
   authWaiters.splice(0).forEach(function(r){ r(); });
-  if(!state.boot) boot();
+  if(!state._booted) boot(); // v3.28: _booted (not state.boot) — a hydrated cache sets state.boot
 }
 function ensureAuth(){
   if(authValid()) return Promise.resolve();
@@ -829,24 +872,65 @@ function go(view){
    (30s stall + fallback ≈ 40s). apiColdStart stays on the server (harmless,
    budget-capped) but the frontend no longer calls it. */
 function boot(){
-  run('apiBoot').then(bootApply_).catch(fail);
+  if(state._booting) return;              // v3.28: avoid a double apiBoot (start + GSI credential)
+  state._booting = true;
+  setRefreshing_(true);
+  run('apiBoot').then(function(res){ state._booting=false; bootApply_(res); })
+    .catch(function(e){
+      state._booting = false; setRefreshing_(false);
+      // v3.28: if we already painted a cached view, keep it up and just log; only
+      // hard-fail (blank error) when there was nothing on screen to begin with.
+      if(!state._booted && !state.boot) fail(e);
+      else console.warn('boot revalidate failed (showing cached):', e && e.message || e);
+    });
 }
 function bootApply_(res){
     state.boot = res.boot; state.picker = res.picker;
     if(res.dashLayout && Array.isArray(res.dashLayout.layout)) state.dashLayout = res.dashLayout.layout;
     if(res.density && res.density.value) applyDensity(res.density.value, false); // v3.28: per-user density
-    updateBadges(state.boot.inboxCount);
-    $('#sideFoot').innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
-      '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
-      'background:rgba(255,255,255,.08);color:#d7efe9;border:1px solid rgba(255,255,255,.16);font-size:12.5px">Log out</button>';
-    var h = new Date().getHours();
-    var nm = String(auth.email || state.boot.user || '').split('@')[0];
-    nm = nm ? nm.charAt(0).toUpperCase()+nm.slice(1) : '';
-    $('#greet').textContent = (h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(nm?', '+nm:'');
-    $('#todayLbl').textContent = new Date().toLocaleDateString(undefined,
-      {weekday:'long', month:'long', day:'numeric'});
+    state._booted = true;                  // v3.28: real (server) data is now loaded
+    setGreeting_();
+    saveSnapshot_();                       // v3.28: persist for the next instant open
     render();
+    if(state.view!=='dash') setRefreshing_(false); // dash clears when its data lands (dashFetchDash)
     prewarm();
+}
+/* v3.28: instant-open helpers. We cache the last successful boot + dashboard so the
+   next open paints immediately instead of waiting on the cold apiBoot round trip. */
+function setRefreshing_(on){ try{ document.body.classList.toggle('refreshing', !!on); }catch(e){} }
+function saveSnapshot_(){
+  try{
+    if(!state.boot) return;
+    localStorage.setItem('sbcSnapshot', JSON.stringify({
+      v:1, at:Date.now(), boot:state.boot, picker:state.picker||null,
+      dash:state.dash||null, dashSeries:state.dashSeries||null
+    }));
+  }catch(e){ /* quota or serialize error — non-fatal, just skip caching */ }
+}
+function hydrateSnapshot_(){
+  try{
+    var s = JSON.parse(localStorage.getItem('sbcSnapshot')||'null');
+    if(s && s.boot){
+      state.boot = s.boot; state.picker = s.picker || state.picker;
+      state.dash = s.dash || null; state.dashSeries = s.dashSeries || null;
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function setGreeting_(){
+  if(!state.boot) return;
+  updateBadges(state.boot.inboxCount||0);
+  var sf = $('#sideFoot');
+  if(sf) sf.innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
+    '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
+    'background:rgba(255,255,255,.08);color:#d7efe9;border:1px solid rgba(255,255,255,.16);font-size:12.5px">Log out</button>';
+  var h = new Date().getHours();
+  var nm = String(auth.email || state.boot.user || '').split('@')[0];
+  nm = nm ? nm.charAt(0).toUpperCase()+nm.slice(1) : '';
+  var g=$('#greet'); if(g) g.textContent = (h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(nm?', '+nm:'');
+  var t=$('#todayLbl'); if(t) t.textContent = new Date().toLocaleDateString(undefined,
+    {weekday:'long', month:'long', day:'numeric'});
 }
 /* Warm every view's cache in the background after load. v3.16: fired together,
    not on staggered timers — Apps Script serializes calls per-user server-side,
@@ -858,8 +942,9 @@ function prewarm(){
     state.inbox=r; updateBadges(r.length); markFetched('inbox'); // v3.27
     if(state.view==='inbox' && !userBusy()) drawInbox();
   }).catch(warn('apiGetInbox'));
-  dashFetchDash(); // v3.22: shared loader — renderDash() fired the same call in
+  dashFetchDash(true); // v3.22: shared loader — renderDash() fired the same call in
                    // parallel on every cold load (apiDashboard ran TWICE).
+                   // v3.28: force=true so a hydrated (cached) dashboard still revalidates.
   if(!state.plans) run('apiPlans').then(function(p){ state.plans=p; }).catch(warn('apiPlans'));
   if(!state.accounts) run('apiAccounts').then(function(a){ state.accounts=a; }).catch(warn('apiAccounts'));
   if(!state.register.items && !state.registerLoading){ // v3.22: shared flag with dashFetchRecent
@@ -1220,12 +1305,14 @@ function dashFetchBalances(){
 }
 /* v3.22: shared apiDashboard loader (used by prewarm AND renderDash) — the two
    previously fired the same call in parallel on every cold load. */
-function dashFetchDash(){
-  if(state.dash || state.dashLoading) return;
+function dashFetchDash(force){
+  if(state.dashLoading) return;
+  if(state.dash && !force) return;       // v3.28: force=true revalidates cached (hydrated) data
   state.dashLoading = true;
   run('apiDashboard').then(function(d){
-    state.dash=d; state.dashLoading=false; if(state.view==='dash') renderDash();
-  }).catch(function(e){ state.dashLoading=false; console.warn('apiDashboard:', e&&e.message||e); });
+    state.dash=d; state.dashLoading=false; saveSnapshot_(); setRefreshing_(false); // v3.28
+    if(state.view==='dash') renderDash();
+  }).catch(function(e){ state.dashLoading=false; setRefreshing_(false); console.warn('apiDashboard:', e&&e.message||e); });
 }
 function dashFetchRecent(){
   if(state.register.items || state.registerLoading) return;
@@ -2139,6 +2226,37 @@ function renderTxns(){
     if(state.view==='txns' && (!cached || (changed && !userBusy()))) drawTxns();
   }).catch(function(e){ if(!cached) fail(e); });
 }
+/* v3.28.1: one transaction as a single-line register row (desktop mid/compact).
+   Uses the same data-act buttons as the card layout, so approve/split/unapprove
+   behave identically; actions live in a native <details> ⋮ menu. When a row is in
+   split-edit mode the editor expands full-width below it. */
+function txnRowOneLine(t){
+  var envs = t.legs.map(function(l){
+    return '<span class="legchip">'+esc(l.envelopeName)+(t.legs.length>1?' '+money(l.amount):'')+'</span>';
+  }).join('');
+  var h = '<div class="rrow">'+
+    '<span class="rc rc-date">'+esc(t.date)+'</span>'+
+    '<span class="rc rc-desc" title="'+esc(t.description)+'">'+esc(t.description)+'</span>'+
+    '<span class="rc rc-acct"><span class="acctchip">'+esc(t.account)+'</span></span>'+
+    '<span class="rc rc-env">'+envs+'</span>'+
+    '<span class="rc rc-menu"><details class="rmenu"><summary aria-label="Actions">⋮</summary>'+
+      '<div class="rmenu-p">'+
+        '<button data-act="resplit-on" data-arg="'+esc(t.txnId)+'">'+(t.legs.length>1?'Edit split':'Split / move')+'</button>'+
+        '<button class="warn" data-act="unapprove" data-arg="'+esc(t.txnId)+'">Un-approve</button>'+
+      '</div></details></span>'+
+    '<span class="rc rc-amt amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span>'+
+  '</div>';
+  if(state.resplit[t.txnId]){
+    h += '<div class="rexpand">'+
+      splitEditorHtml(t.txnId, t.amount, state.resplit[t.txnId], 'resplit')+
+      '<div class="actions" style="margin-top:10px">'+
+      '<button class="btn sm" '+(splitReady(t.amount, state.resplit[t.txnId])?'':'disabled')+
+      ' data-act="resplit-go" data-arg="'+esc(t.txnId)+'">Save split</button>'+
+      '<button class="btn ghost sm" data-act="resplit-cancel" data-arg="'+esc(t.txnId)+'">Cancel</button></div>'+
+    '</div>';
+  }
+  return h;
+}
 function drawTxns(){
   var r = state.register;
   var h = '<h2 class="viewtitle">Transactions</h2>'+
@@ -2157,8 +2275,18 @@ function drawTxns(){
     ((r.q||r.account||r.envelope)?'<button class="pill" data-act="reg-clear">Clear all</button>':'')+
     '</div>';
   var items = r.items || [];
+  // v3.28.1: on desktop, the Midpoint/Compact density presets show the register as
+  // single-line rows (date · desc · account · envelope · ⋮ · amount). Comfortable
+  // and phone keep the roomy stacked cards.
+  var oneLine = (state.density==='mid' || state.density==='compact') && window.innerWidth>=900;
   if(!items.length){
     h += '<div class="empty">'+((r.q||r.account||r.envelope)?'No matches.':'No approved transactions yet.')+'</div>';
+  } else if(oneLine){
+    h += '<div class="card regtable">'+
+      '<div class="rrow rhead"><span>Date</span><span>Description</span><span>Account</span>'+
+      '<span>Envelope</span><span></span><span class="ramt">Amount</span></div>';
+    items.forEach(function(t){ h += txnRowOneLine(t); });
+    h += '</div>';
   } else {
     h += '<div class="card">';
     items.forEach(function(t,i){
@@ -2990,7 +3118,8 @@ function signOut(){
     if(!ok) return;
     auth = { token:'', email:'', exp:0 }; persistAuth();
     try{ google.accounts.id.disableAutoSelect(); }catch(e){}
-    state.boot = null;
+    state.boot = null; state._booted = false; setRefreshing_(false); // v3.28
+    try{ localStorage.removeItem('sbcSnapshot'); }catch(e4){}         // v3.28: drop cached view
     state.dash = null; state.dashSeries = null; state.dashLayout = null;
     state.inbox = null; state.plans = null; state.accounts = null;
     state.accountsFull = null; state.balances = null; state.sync = null;
@@ -3756,8 +3885,27 @@ document.addEventListener('change', function(ev){
 });
 
 /* ============================ start ============================ */
-if(authValid()){ boot(); }
-else { $('#signin').style.display='flex'; $('#shell').innerHTML=''; }
+/* v3.28 instant open: paint the last-known dashboard from cache immediately so the
+   app never sits blank during the cold apiBoot round trip, then revalidate.
+   - token still valid → boot() now (don't wait for Google's auto-select)
+   - token expired but we have a cached view → keep it on screen with the refresh
+     bar; GSI auto-select (gsiReady → onCredential) refreshes the token and boots
+   - nothing cached and no valid token → the sign-in screen, as before */
+(function start(){
+  var hydrated = hydrateSnapshot_();
+  if(hydrated){
+    setGreeting_();
+    try{ render(); }
+    catch(e){ console.warn('hydrate render failed:', e && e.message || e); state.boot=null; hydrated=false; }
+  }
+  if(authValid()){
+    boot();
+  } else if(hydrated){
+    setRefreshing_(true); // cached view stays up; GSI will refresh the token and boot()
+  } else {
+    $('#signin').style.display='flex'; $('#shell').innerHTML='';
+  }
+})();
 </script>
 </body>
 </html>
