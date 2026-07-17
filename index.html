@@ -649,6 +649,35 @@ function backendUrl(){
   var u = BACKENDS[String(auth.email||'').trim().toLowerCase()];
   return (u && /^https:\/\//.test(u)) ? u : EXEC_URL;
 }
+/* ⬇️ 4. v3.29 Phase 1 read cutover — Register + Reports are answered by the
+        Supabase mirror's `api` Edge Function (same {token, fn, args} protocol,
+        same response shapes, ~ms instead of Sheets scans). ANY mirror failure
+        falls back to Apps Script automatically, and 3 consecutive failures
+        disable the mirror for the rest of the session. Kill switch:
+        localStorage.setItem('sbcSupa','off')  — or blank out SUPA_API here. ⬇️ */
+var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
+var SUPA_READS = { apiRegister:1, apiReport:1 };
+var supaFails_ = 0;
+function supaOn_(){
+  if(!SUPA_API || supaFails_ >= 3) return false;
+  try{ if(localStorage.getItem('sbcSupa')==='off') return false; }catch(e){}
+  return true;
+}
+function supaCall_(fn, args){
+  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, 8000); // mirror should answer in ms
+  return fetch(SUPA_API, { method:'POST',
+      body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
+      signal: ctrl ? ctrl.signal : undefined })
+  .then(function(r){ clearTimeout(timer);
+    if(!r.ok) throw new Error('mirror HTTP '+r.status);
+    return r.json();
+  }, function(err){ clearTimeout(timer); throw err; })
+  .then(function(res){
+    if(res && res.ok){ supaFails_ = 0; return res.result; }
+    throw new Error((res && res.error) || 'mirror error');
+  });
+}
 /* ⬆️ ------------------------------------------------------------------ ⬆️ */
 
 /* ============================ helpers ============================ */
@@ -680,7 +709,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.28.1';
+var FE_VERSION = 'v3.29.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -791,6 +820,19 @@ function run(fn){
           function(e){ if(mutating) mutationInFlight=false; throw e; });
 }
 function apiCall_(fn, args, retry, mutating){
+  // v3.29 Phase 1: reads the Supabase mirror serves go there first; any
+  // failure (network, auth, unsupported, empty mirror) silently falls back
+  // to the Apps Script backend below. Mutations NEVER touch the mirror.
+  if(!mutating && SUPA_READS[fn] && supaOn_()){
+    return supaCall_(fn, args).catch(function(err){
+      supaFails_++;
+      try{ console.info('SBC mirror fallback for '+fn+': '+(err && err.message || err)); }catch(e){}
+      return legacyCall_(fn, args, retry, mutating);
+    });
+  }
+  return legacyCall_(fn, args, retry, mutating);
+}
+function legacyCall_(fn, args, retry, mutating){
   // v3.16: abort + clear message if the server doesn't answer in time (a cold
   // full-scan can run long; without this the UI spins forever).
   // v3.22: NO client-side abort for MUTATING calls — the server keeps running
@@ -815,7 +857,7 @@ function apiCall_(fn, args, retry, mutating){
         var el = $('#signinErr'); if(el) el.textContent = res.error;
         throw new Error(res.error);
       }
-      if(retry) return ensureAuth().then(function(){ return apiCall_(fn, args, false, mutating); });
+      if(retry) return ensureAuth().then(function(){ return legacyCall_(fn, args, false, mutating); });
     }
     throw new Error(res.error || 'Server error');
   }, function(err){
