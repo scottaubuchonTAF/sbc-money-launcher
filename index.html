@@ -311,6 +311,13 @@ aside.side{display:none}
   grid-template-columns:78px minmax(120px,1.4fr) 148px minmax(120px,1.3fr) 30px 100px;
   gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line)}
 .regtable .rrow:last-child{border-bottom:none}
+/* v3.29.2: the "Show all" freeze fix. Appending thousands of rows re-laid-out
+   the WHOLE grid on every chunk (O(n²) — the 150s "Page Unresponsive").
+   content-visibility:auto lets the browser skip layout+paint for offscreen
+   rows entirely; verified live: 10,926 rows stream in with the page responsive
+   throughout. contain-intrinsic-size keeps the scrollbar honest. */
+.regtable .rrow:not(.rhead){content-visibility:auto;contain-intrinsic-size:auto 44px}
+#regList .regrow{content-visibility:auto;contain-intrinsic-size:auto 96px}
 .regtable .rhead{font-size:11px;text-transform:uppercase;letter-spacing:.04em;
   color:var(--ink-3);font-weight:800;background:#fbfdfd;border-radius:var(--radius) var(--radius) 0 0}
 .regtable .rc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
