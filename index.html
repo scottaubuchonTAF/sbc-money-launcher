@@ -675,7 +675,7 @@ function backendUrl(){
         disable the mirror for the rest of the session. Kill switch:
         localStorage.setItem('sbcSupa','off')  — or blank out SUPA_API here. ⬇️ */
 var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
-var SUPA_READS = { apiRegister:1, apiReport:1 };
+var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1 };
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -731,7 +731,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.30.2';
+var FE_VERSION = 'v3.31.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1431,7 +1431,28 @@ function dashFetchDash(force){
   run('apiDashboard').then(function(d){
     state.dash=d; state.dashLoading=false; saveSnapshot_(); setRefreshing_(false); // v3.28
     if(state.view==='dash') renderDash();
+    dashRevalHealth_(); // v3.31: mirror lacks feed lag — re-check health on a real gap
   }).catch(function(e){ state.dashLoading=false; setRefreshing_(false); console.warn('apiDashboard:', e&&e.message||e); });
+}
+/* v3.31: the Supabase mirror serves the dashboard instantly but can't compute
+   budgetHealth_'s feed-lag decomposition (Apps Script runtime cache only). When
+   the mirror-served health shows a REAL gap (unexplainedOk===false), quietly
+   re-fetch health from Apps Script (which has the feed-lag "clears on its own"
+   split) and swap just that card. Reconciled = trust the mirror (no extra call).
+   No-op when the dashboard was already served by Apps Script (no .mirror flag). */
+function dashRevalHealth_(){
+  var d=state.dash; if(!d || !d.health || !d.health.mirror) return;
+  if(d.health.unexplainedOk!==false) return;          // reconciled → nothing to explain
+  if(state._healthReval) return; state._healthReval=true;
+  ensureAuth().then(function(){ return legacyCall_('apiDashboard',[null],true,false); })
+    .then(function(fresh){ state._healthReval=false;
+      if(fresh && fresh.health){
+        state.dash.health=fresh.health;
+        if(fresh.negatives) state.dash.negatives=fresh.negatives;
+        saveSnapshot_(); if(state.view==='dash') renderDash();
+      }
+    })
+    .catch(function(e){ state._healthReval=false; console.warn('health reval:', e&&e.message||e); });
 }
 function dashFetchRecent(){
   if(state.register.items || state.registerLoading) return;
