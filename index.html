@@ -355,6 +355,13 @@ aside.side{display:none}
   font-weight:600;color:var(--ink)}
 .regtable .rmenu-p button:hover{background:var(--bg)}
 .regtable .rmenu-p button.warn{color:var(--red)}
+/* v3.33.1 FIX: content-visibility:auto (added v3.29.2 for Show-all streaming perf)
+   applies paint containment to each .rrow, which CLIPPED the absolutely-positioned
+   ⋮ dropdown to the 44px row — so the Un-approve button was invisible/unreachable in
+   mid/compact density (comfortable uses inline buttons, so it worked). Lift the
+   containment ONLY on the row whose menu is open (:has), preserving the streaming
+   perf win for every other row. */
+.regtable .rrow:has(.rmenu[open]){content-visibility:visible;overflow:visible;position:relative;z-index:30}
 /* Compact = tighter rows + smaller type than Midpoint */
 body[data-d="compact"] .regtable .rrow{padding:4px 12px;gap:10px;font-size:12.5px}
 body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px}
@@ -768,7 +775,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.33.0';
+var FE_VERSION = 'v3.33.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1117,10 +1124,26 @@ function invalidateData(){
    truth wins and the transaction reappears honestly (outbox row says why). */
 var PENDING_APPROVED_TTL = 10*60*1000;
 state.pendingApproved = {};
+state.pendingUnapproved = {}; // v3.33.1: reverse overlay (see markPendingUnapproved/filterInbox)
 function pendingKeyOf(t){ return String((t && (t.key || t.txnId)) || ''); }
 function markPendingApproved(keys){
   var now = Date.now();
-  (keys||[]).forEach(function(k){ if(k) state.pendingApproved[k] = now; });
+  (keys||[]).forEach(function(k){ if(k){ state.pendingApproved[k] = now; delete state.pendingUnapproved[k]; } });
+}
+/* v3.33.1: a mirror-first Un-approve removes the txn from the (mirror-served)
+   register instantly, but the Inbox is Apps-Script-served, so the row only shows
+   there once the background write-back lands (seconds). Without a bridge the user
+   sees it leave Transactions but not yet arrive in the Inbox. Remember what we just
+   un-approved and INJECT it into the Inbox view until a real fetch carries it (then
+   drop it — or after the same 10-min TTL, which would mean the write-back failed
+   and sheet-truth is honestly authoritative). */
+function markPendingUnapproved(t){
+  if(!t) return;
+  var k = pendingKeyOf(t); if(!k) return;
+  delete state.pendingApproved[k];
+  state.pendingUnapproved[k] = { ts: Date.now(), row: {
+    txnId: t.txnId, key: t.key || '', date: t.date, description: t.description,
+    amount: t.amount, account: t.account } };
 }
 function filterInbox(rows){
   rows = rows || [];
@@ -1130,7 +1153,15 @@ function filterInbox(rows){
     var fresh = (now - state.pendingApproved[k]) < PENDING_APPROVED_TTL;
     if(!present[k] || !fresh) delete state.pendingApproved[k]; // landed, or expired → show it
   });
-  return rows.filter(function(t){ return !(pendingKeyOf(t) in state.pendingApproved); });
+  var out = rows.filter(function(t){ return !(pendingKeyOf(t) in state.pendingApproved); });
+  // inject un-approved rows the fetch doesn't carry yet; drop once it does (or TTL)
+  var have = {}; out.forEach(function(t){ have[pendingKeyOf(t)] = 1; });
+  Object.keys(state.pendingUnapproved).forEach(function(k){
+    var e = state.pendingUnapproved[k];
+    if(have[k] || (now - e.ts) >= PENDING_APPROVED_TTL){ delete state.pendingUnapproved[k]; return; }
+    out.unshift(e.row);
+  });
+  return out;
 }
 /* v3.27 SWR helpers: a view whose data was fetched in the last TTL (and not
    invalidated by a mutation) skips the background refetch entirely — the
@@ -2668,6 +2699,7 @@ function unapprove(txnId){
     toast('Sending back to Inbox…');
     run('apiUnapprove', txnId, (t&&t.key)||'').then(function(){
       toast('Back to Inbox ✓');
+      markPendingUnapproved(t); // v3.33.1: show it in the Inbox until the write-back lands
       state.inbox = null;
       invalidateData();
       refreshBoot();
