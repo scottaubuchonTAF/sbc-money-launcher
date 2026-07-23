@@ -681,7 +681,13 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1 }
    user's Apps Script backend in the background (we send backendUrl() along as
    `exec`), which does the real locked, audited sheet write incl. the v3.23
    Tiller queue. Same kill switches as reads (sbcSupa='off', 3-strikes). */
-var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1 };
+/* v3.33 Phase 2 slice 2: recategorize / resplit / unapprove / remove all mirror
+   first (instant) + forward the same call to Apps Script. apiUndo also routes
+   here, but reverses mirror-side ONLY for txn ops the mirror already holds; a
+   same-session or non-txn undo comes back {notServed:true} and runs on Apps
+   Script with NO mirror penalty (see supaWriteCall_ + apiCall_). */
+var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
+  apiResplit:1, apiUnapprove:1, apiRemoveTxn:1, apiUndo:1 };
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -725,6 +731,9 @@ function supaWriteCall_(fn, args){
     var e = new Error((res && res.error) || 'mirror error');
     e.definitive = true;             // mirror answered: nothing was applied
     if(res && res.auth) e.definitive = true;
+    // v3.33: apiUndo of a not-yet-mirrored / non-txn op — a routine fall-through
+    // to Apps Script, NOT a mirror failure (don't count it toward 3-strikes).
+    if(res && res.notServed) e.notServed = true;
     throw e;
   });
 }
@@ -759,7 +768,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.32.0';
+var FE_VERSION = 'v3.33.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -885,8 +894,8 @@ function apiCall_(fn, args, retry, mutating){
   // ambiguity must never be retried (double-approve risk — v3.22 lesson).
   if(mutating && SUPA_WRITES[fn] && supaOn_()){
     return supaWriteCall_(fn, args).catch(function(err){
-      supaFails_++;
-      if(err && err.definitive){
+      if(!(err && err.notServed)) supaFails_++;  // v3.33: notServed = routine, no penalty
+      if(err && (err.definitive || err.notServed)){
         try{ console.info('SBC mirror write fallback for '+fn+': '+(err.message||err)); }catch(e){}
         return legacyCall_(fn, args, retry, mutating);
       }
