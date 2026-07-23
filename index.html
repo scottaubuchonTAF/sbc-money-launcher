@@ -140,10 +140,12 @@ aside.side{display:none}
 .dwbtn.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
 .hstats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
 .hstats .dtile{min-height:108px}
-.hcols{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
-.hcols .col{display:flex;flex-direction:column;gap:14px;min-width:0}
-.hcols .dtile .dscroll{max-height:320px}
-.hcols .dwchart{height:170px;flex:none}
+/* Body cards flow into two height-balanced columns (browser balances). Cards
+   never split across a column. Order = the user's saved order (top→bottom). */
+.hbody{column-count:2;column-gap:14px}
+.hbody > .dtile{break-inside:avoid;-webkit-column-break-inside:avoid;margin:0 0 14px;display:flex}
+.hbody .dtile .dscroll{max-height:320px}
+.hbody .dwchart{height:170px;flex:none}
 .dtile{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
   position:relative;display:flex;flex-direction:column;padding:16px 18px}
 .dtile.hero{background:linear-gradient(140deg,var(--teal-800),var(--teal-600));color:#fff}
@@ -182,7 +184,7 @@ aside.side{display:none}
   border-radius:99px;background:#fffbeb;color:var(--amber)}
 .dgauge{position:relative;flex:1;min-height:0;display:grid;place-items:center;margin-top:6px}
 .dgauge .ring{width:110px;height:110px;border-radius:50%;display:grid;place-items:center;position:relative}
-.hcols .dgauge{flex:none;padding:8px 0}
+.hbody .dgauge{flex:none;padding:8px 0}
 .dgauge .ring::after{content:"";position:absolute;inset:12px;background:var(--card);border-radius:50%}
 .dgauge .ic{position:relative;z-index:1;text-align:center}
 .dgauge .ic b{font-size:20px;font-weight:800}
@@ -195,21 +197,30 @@ aside.side{display:none}
 .dwlib .sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:680px;padding:20px 22px 26px;max-height:80vh;overflow:auto}
 .dwlib h3{font-size:16px;margin-bottom:4px}
 .dwlib .desc{font-size:13px;color:var(--ink-3);margin-bottom:16px}
-.dwlibgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.dwlibitem{border:1.5px solid var(--line);border-radius:14px;padding:13px;display:flex;gap:11px;align-items:center;cursor:pointer}
+.custlbl{font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px}
+.custlbl:first-child{margin-top:0}
+.dwlibgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.custlist{display:flex;flex-direction:column;gap:8px}
+.dwlibitem{border:1.5px solid var(--line);border-radius:14px;padding:11px 13px;display:flex;gap:11px;align-items:center}
 .dwlibitem.off{opacity:.55}
-.dwlibitem .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:var(--teal-50);flex:none}
+.dwlibitem .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;background:var(--teal-50);flex:none}
+.dwlibitem .lbl{min-width:0}
 .dwlibitem .t{font-weight:700;font-size:13.5px}
 .dwlibitem .d{font-size:11.5px;color:var(--ink-3)}
-.dwlibitem .tog{margin-left:auto;border:none;font-weight:700;font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer;flex:none;
+.dwlibitem .mv{margin-left:auto;display:flex;gap:4px;flex:none}
+.dwlibitem .mv button{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--line);background:var(--card);
+  color:var(--ink-2);font-size:14px;font-weight:800;cursor:pointer;line-height:1}
+.dwlibitem .mv button:hover{border-color:var(--teal-400,#2dd4bf);color:var(--teal-700)}
+.dwlibitem .tog{border:none;font-weight:700;font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer;flex:none;
   background:var(--teal-600);color:#fff}
+.dwlibgrid .dwlibitem .tog{margin-left:auto}
 .dwlibitem.off .tog{background:var(--line);color:var(--ink-2)}
 .dwchart{position:relative;flex:1;min-height:0;margin-top:6px}
 .dwchart.spark{flex:none;height:46px;margin-top:8px}
 .dtile .dwmiss{flex:1;display:grid;place-items:center;color:var(--ink-3);font-size:12.5px;text-align:center;padding:14px 0}
 @media(max-width:900px){
   .hstats{grid-template-columns:repeat(2,1fr);gap:10px}
-  .hcols{grid-template-columns:1fr}
+  .hbody{column-count:1}
   .dwlibgrid{grid-template-columns:1fr}
 }
 
@@ -720,7 +731,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.30.0';
+var FE_VERSION = 'v3.30.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1112,24 +1123,32 @@ function render(){
    keeps exactly that shape — so old saved grids migrate naturally (their
    cards stay visible, everything else starts hidden). The 'attention' card
    (negative envelopes, straight from boot data) persists under 'negatives',
-   the closest server-known id. Cards render at one FIXED size each. */
+   the closest server-known id. Cards render at one FIXED size each.
+
+   v3.30.1: cards are REORDERABLE. Two slots: 'stats' = the fixed 4-across KPI
+   strip at top (order fixed, toggle only); 'body' = the card area below, which
+   the user orders (↑/↓ in Customize) and which the browser BALANCES across two
+   columns by height (CSS multi-column) so it never goes lopsided. The saved
+   layout array carries body order (array order = display order). */
 var HOME_CARDS = [
-  {id:'avail',    slot:'stats', size:'m'},
-  {id:'funded',   slot:'stats', size:'m'},
-  {id:'spent',    slot:'stats', size:'m'},
-  {id:'inbox',    slot:'stats', size:'m'},
-  {id:'health',   slot:'left',  size:'l'},
-  {id:'trend',    slot:'left',  size:'m'},
-  {id:'targets',  slot:'left',  size:'l'},
-  {id:'areas',    slot:'left',  size:'m'},
-  {id:'inout',    slot:'left',  size:'m'},
-  {id:'attention',slot:'right', size:'l'},
-  {id:'recent',   slot:'right', size:'l'},
-  {id:'fundgauge',slot:'right', size:'m'},
-  {id:'accounts', slot:'right', size:'m'},
-  {id:'buffer',   slot:'right', size:'m'}
+  {id:'avail',    slot:'stats'},
+  {id:'funded',   slot:'stats'},
+  {id:'spent',    slot:'stats'},
+  {id:'inbox',    slot:'stats'},
+  {id:'health',   slot:'body', size:'l'},
+  {id:'trend',    slot:'body', size:'m'},
+  {id:'attention',slot:'body', size:'l'},
+  {id:'recent',   slot:'body', size:'l'},
+  {id:'targets',  slot:'body', size:'l'},
+  {id:'areas',    slot:'body', size:'m'},
+  {id:'inout',    slot:'body', size:'m'},
+  {id:'fundgauge',slot:'body', size:'m'},
+  {id:'accounts', slot:'body', size:'m'},
+  {id:'buffer',   slot:'body', size:'m'}
 ];
-// Default view = mockup A: the 4 stats + Health/Trend | Attention/Recent.
+var CARD_BY_ID = {}; HOME_CARDS.forEach(function(c){ CARD_BY_ID[c.id]=c; });
+var BODY_IDS = HOME_CARDS.filter(function(c){return c.slot==='body';}).map(function(c){return c.id;});
+// Default view = mockup A: the 4 stats + Health/Trend/Attention/Recent shown.
 var HOME_DEFAULT_HIDDEN = {targets:1, areas:1, inout:1, fundgauge:1, accounts:1, buffer:1};
 // server id ↔ card id (attention rides on the old 'negatives' slot)
 function homePersistId_(id){ return id==='attention' ? 'negatives' : id; }
@@ -1417,78 +1436,101 @@ function dashFetchRecent(){
   }).catch(function(e){ state.registerLoading=false; console.warn('dash recent:', e&&e.message||e); });
 }
 
-/* Which cards are hidden right now. state.dashLayout (from apiBoot /
-   localStorage) is the saved list of VISIBLE ids [{id,size}] — old grid saves
-   included, so a customized v3.18-29 layout keeps its cards visible here.
-   No saved layout (or server isDefault) → the Layout-A default set. */
-function homeHidden(){
+/* Derive {visible:{id:1}, order:[body ids in display order]} from the saved
+   layout (apiBoot / localStorage). The saved array holds VISIBLE ids in order;
+   array order carries body order. Old grid saves migrate: their cards stay
+   visible, in their saved order. No saved layout → the Layout-A defaults. */
+function homeState(){
   var lay = state.dashLayout;
+  var visible={}, order=[];
   if(!Array.isArray(lay)){
-    var d={}; Object.keys(HOME_DEFAULT_HIDDEN).forEach(function(k){ d[k]=1; });
-    return d;
+    HOME_CARDS.forEach(function(c){ if(!HOME_DEFAULT_HIDDEN[c.id]) visible[c.id]=1; });
+    order = BODY_IDS.slice();
+  } else {
+    var seen={};
+    lay.forEach(function(w){
+      if(!w || !w.id) return;
+      var id=homeCardId_(w.id);
+      if(!CARD_BY_ID[id] || seen[id]) return;
+      seen[id]=1; visible[id]=1;
+      if(CARD_BY_ID[id].slot==='body') order.push(id);
+    });
+    // Body cards not in the saved order (hidden ones, or new cards from an
+    // update) get a stable slot at their default position.
+    BODY_IDS.forEach(function(id){ if(order.indexOf(id)===-1) order.push(id); });
   }
-  var visible={};
-  lay.forEach(function(w){ if(w && w.id) visible[homeCardId_(w.id)]=1; });
-  var hid={};
-  HOME_CARDS.forEach(function(c){ if(!visible[c.id]) hid[c.id]=1; });
-  return hid;
+  return {visible:visible, order:order};
 }
-function homeSave(hid){
-  state.dashLayout = HOME_CARDS.filter(function(c){ return !hid[c.id]; })
-    .map(function(c){ return {id:homePersistId_(c.id), size:'s'}; });
+function homeSave(st){
+  var arr=[];
+  HOME_CARDS.forEach(function(c){ if(c.slot==='stats' && st.visible[c.id]) arr.push({id:homePersistId_(c.id), size:'s'}); });
+  st.order.forEach(function(id){ if(st.visible[id]) arr.push({id:homePersistId_(id), size:'s'}); });
+  state.dashLayout = arr;
   try{ localStorage.setItem('sbcDashLayout', JSON.stringify(state.dashLayout)); }catch(e){}
   clearTimeout(homeSave._t);
   homeSave._t = setTimeout(function(){
     run('apiSetDashLayout',{layout:state.dashLayout}).catch(function(e){ console.warn('save home layout:', e&&e.message||e); });
   }, 600);
 }
+function tile_(id){
+  var w=DASH_WIDGETS[id], c=CARD_BY_ID[id], tapAttr='', clickable=false;
+  if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
+  else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
+  return '<div class="dtile'+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+id+'"'+tapAttr+'>'+w.render(c.size||'m')+'</div>';
+}
 function renderDash(){
   dashDestroyCharts();
-  var hid = homeHidden();
-  var visible = HOME_CARDS.filter(function(c){ return !hid[c.id] && DASH_WIDGETS[c.id]; });
-  function tile(c){
-    var w=DASH_WIDGETS[c.id], tapAttr='', clickable=false;
-    if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
-    else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
-    return '<div class="dtile'+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+c.id+'"'+tapAttr+'>'+w.render(c.size)+'</div>';
-  }
-  function slot(s){ return visible.filter(function(c){return c.slot===s;}).map(tile).join(''); }
+  var st = homeState();
+  var stats = HOME_CARDS.filter(function(c){ return c.slot==='stats' && st.visible[c.id] && DASH_WIDGETS[c.id]; }).map(function(c){return c.id;});
+  var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
   var h='<div class="htop"><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
-  var stats=slot('stats');
-  if(stats) h+='<div class="hstats">'+stats+'</div>';
-  h+='<div class="hcols"><div class="col">'+slot('left')+'</div><div class="col">'+slot('right')+'</div></div>';
-  if(!visible.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
-  if(state.homeCustomize) h+=homeCustHtml(hid);
+  if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
+  h+='<div class="hbody">'+body.map(tile_).join('')+'</div>';
+  if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
+  if(state.homeCustomize) h+=homeCustHtml(st);
   $('#shell').innerHTML = h;
   // Chart cards: instantiate now that their canvases are in the DOM.
   if(typeof Chart!=='undefined'){
-    visible.forEach(function(c){
-      var w=DASH_WIDGETS[c.id];
-      if(!w.chart) return;
-      var cv=document.getElementById('dwcv_'+c.id);
-      if(cv){ try{ dashCharts[c.id]=w.init(cv,c.size); }catch(e){ console.warn('chart '+c.id+':', e&&e.message||e); } }
+    body.concat(stats).forEach(function(id){
+      var w=DASH_WIDGETS[id]; if(!w.chart) return;
+      var cv=document.getElementById('dwcv_'+id);
+      if(cv){ try{ dashCharts[id]=w.init(cv,CARD_BY_ID[id].size||'m'); }catch(e){ console.warn('chart '+id+':', e&&e.message||e); } }
     });
   }
   // Lazy-load extra data only when a card that needs it is visible.
-  var on=function(id){ return visible.some(function(c){return c.id===id;}); };
-  if(on('trend')||on('inout')||on('buffer')) dashFetchSeries();
-  if(on('accounts')) dashFetchBalances();
-  if(on('recent')) dashFetchRecent();
+  var vis=st.visible;
+  if(vis.trend||vis.inout||vis.buffer) dashFetchSeries();
+  if(vis.accounts) dashFetchBalances();
+  if(vis.recent) dashFetchRecent();
   dashFetchDash(); // v3.22: shared loader (no duplicate apiDashboard with prewarm)
 }
-function homeCustHtml(hid){
-  var items=HOME_CARDS.map(function(c){
-    var w=DASH_WIDGETS[c.id]; if(!w) return '';
-    var off=!!hid[c.id];
-    return '<div class="dwlibitem'+(off?' off':'')+'" data-act="home-toggle" data-arg="'+c.id+'">'+
+function homeCustHtml(st){
+  function row(id, movable){
+    var w=DASH_WIDGETS[id]; if(!w) return '';
+    var off=!st.visible[id];
+    var ctrls = movable ? '<span class="mv"><button data-act="home-move" data-arg="'+id+'|up" title="Move up">↑</button>'+
+        '<button data-act="home-move" data-arg="'+id+'|down" title="Move down">↓</button></span>' : '';
+    return '<div class="dwlibitem'+(off?' off':'')+'">'+
       '<div class="ic">'+w.icon+'</div>'+
-      '<div><div class="t">'+esc(w.title)+'</div><div class="d">'+(off?'Hidden':'Shown')+'</div></div>'+
-      '<span class="tog">'+(off?'Show':'Hide')+'</span></div>';
-  }).join('');
+      '<div class="lbl"><div class="t">'+esc(w.title)+'</div><div class="d">'+(off?'Hidden':(movable?'Shown':'Top strip'))+'</div></div>'+
+      ctrls+
+      '<button class="tog" data-act="home-toggle" data-arg="'+id+'">'+(off?'Show':'Hide')+'</button></div>';
+  }
+  var statRows = HOME_CARDS.filter(function(c){return c.slot==='stats';}).map(function(c){return row(c.id,false);}).join('');
+  var bodyRows = st.order.map(function(id){ return row(id,true); }).join('');
   return '<div class="dwlib" data-act="home-cust-close"><div class="sheet">'+
-    '<h3>Customize home</h3><div class="desc">Choose which cards show. Layout and order are fixed — hidden cards can come back any time.</div>'+
-    '<div class="dwlibgrid">'+items+'</div></div></div>';
+    '<h3>Customize home</h3><div class="desc">Show or hide cards, and reorder the main cards with ↑ ↓. The two columns balance their height automatically.</div>'+
+    '<div class="custlbl">Top strip</div><div class="dwlibgrid">'+statRows+'</div>'+
+    '<div class="custlbl">Cards</div><div class="custlist">'+bodyRows+'</div></div></div>';
+}
+function homeMove_(id, dir){
+  var st=homeState();
+  var i=st.order.indexOf(id); if(i===-1) return;
+  var j=dir==='up'?i-1:i+1;
+  if(j<0||j>=st.order.length) return;
+  var tmp=st.order[i]; st.order[i]=st.order[j]; st.order[j]=tmp;
+  homeSave(st); renderDash();
 }
 /* v3.30: true-first-run skeleton — shown while the very first apiBoot runs and
    there's no cached view yet, so the home screen is never a blank page. */
@@ -1498,7 +1540,7 @@ function homeSkeletonHtml_(){
   var kv='<div class="dkv"><span class="k"><span class="skv" style="min-width:110px">…</span></span><span class="v"><span class="skv">…</span></span></div>';
   var card='<div class="dtile"><div class="dhead"><div class="dlbl"><span class="skv" style="min-width:120px">…</span></div></div>'+kv+kv+kv+kv+'</div>';
   return '<div class="hstats">'+stat+stat+stat+stat+'</div>'+
-    '<div class="hcols"><div class="col">'+card+card+'</div><div class="col">'+card+card+'</div></div>';
+    '<div class="hbody">'+card+card+card+card+'</div>';
 }
 
 /* ============================ envelopes ============================ */
@@ -3811,9 +3853,10 @@ document.addEventListener('click', function(ev){
     case 'rpt-retry': state.reportErr=null; state.reportErrSig=null; renderReports(); break; // v3.22
     case 'home-customize': state.homeCustomize=!state.homeCustomize; renderDash(); break;
     case 'home-cust-close': if(ev.target===el){ state.homeCustomize=false; renderDash(); } break;
-    case 'home-toggle': (function(){ var hid=homeHidden();
-        if(hid[arg]) delete hid[arg]; else hid[arg]=1;
-        homeSave(hid); renderDash(); })(); break;
+    case 'home-toggle': (function(){ var st=homeState();
+        if(st.visible[arg]) delete st.visible[arg]; else st.visible[arg]=1;
+        homeSave(st); renderDash(); })(); break;
+    case 'home-move': homeMove_(p[0], p[1]); break;
     case 'approve': approve(arg); break;
     case 'approve-all': approveAll(); break;
     case 'approve-split': approveSplit(arg); break;
