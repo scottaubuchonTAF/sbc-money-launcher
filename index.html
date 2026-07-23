@@ -694,7 +694,8 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1 }
    same-session or non-txn undo comes back {notServed:true} and runs on Apps
    Script with NO mirror penalty (see supaWriteCall_ + apiCall_). */
 var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
-  apiResplit:1, apiUnapprove:1, apiRemoveTxn:1, apiUndo:1 };
+  apiResplit:1, apiUnapprove:1, apiRemoveTxn:1, apiUndo:1,
+  apiFundFromPool:1 }; // v3.34 slice 3: funding (journal batch)
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -775,7 +776,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.33.1';
+var FE_VERSION = 'v3.34.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
