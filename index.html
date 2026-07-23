@@ -129,26 +129,32 @@ aside.side{display:none}
 .fundrow .l1 .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fundrow .l1 .v{color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 
-/* ================= v3.18 customizable dashboard ================= */
-.dwtop{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.dwtop .sp{flex:1}
+/* ================= v3.30 home screen (fixed Layout A) =================
+   One fixed layout: a 4-stat row, then two columns of cards. The only
+   customization is SHOW/HIDE per card (Customize sheet) — the v3.18–v3.20
+   drag/resize widget grid is gone. */
+.htop{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.htop .sp{flex:1}
 .dwbtn{border:1.5px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;
   font-size:13px;padding:8px 15px;border-radius:10px;cursor:pointer}
 .dwbtn.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
-.dwnote{display:none;background:var(--teal-50);color:var(--teal-700);border:1px dashed var(--teal-300);
-  border-radius:12px;padding:10px 14px;font-size:12.5px;font-weight:600;margin-bottom:14px}
-.dash-editing .dwnote{display:block}
-.dwgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;grid-auto-rows:170px}
+.hstats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.hstats .dtile{min-height:108px}
+.hcols{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
+.hcols .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.hcols .dtile .dscroll{max-height:320px}
+.hcols .dwchart{height:170px;flex:none}
 .dtile{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
   position:relative;display:flex;flex-direction:column;padding:16px 18px}
-.dtile.s{grid-column:span 1;grid-row:span 1}
-.dtile.m{grid-column:span 2;grid-row:span 1}
-.dtile.l{grid-column:span 2;grid-row:span 2}
 .dtile.hero{background:linear-gradient(140deg,var(--teal-800),var(--teal-600));color:#fff}
 .dtile.nav{cursor:pointer}
-.dash-editing .dtile{cursor:grab;outline:2px dashed transparent}
-.dash-editing .dtile:hover{outline-color:var(--teal-300)}
-.dtile.dragging{opacity:.4}
+/* skeleton shimmer — shown wherever a value hasn't loaded yet (first run /
+   post-invalidate). Cached opens paint real numbers instantly instead. */
+@keyframes skvslide{0%{background-position:-200px 0}100%{background-position:200px 0}}
+.skv{display:inline-block;color:transparent!important;border-radius:6px;min-width:64px;
+  background:linear-gradient(90deg,#e8edf2 25%,#f4f7f9 50%,#e8edf2 75%);
+  background-size:200px 100%;animation:skvslide 1.1s linear infinite;user-select:none}
+.dtile.hero .skv{background:linear-gradient(90deg,rgba(255,255,255,.22) 25%,rgba(255,255,255,.38) 50%,rgba(255,255,255,.22) 75%);background-size:200px 100%}
 .dtile .dlbl{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
 .dtile.hero .dlbl{color:rgba(255,255,255,.72)}
 .dtile .dnum{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
@@ -176,7 +182,7 @@ aside.side{display:none}
   border-radius:99px;background:#fffbeb;color:var(--amber)}
 .dgauge{position:relative;flex:1;min-height:0;display:grid;place-items:center;margin-top:6px}
 .dgauge .ring{width:110px;height:110px;border-radius:50%;display:grid;place-items:center;position:relative}
-.dtile.s .dgauge .ring{width:84px;height:84px}
+.hcols .dgauge{flex:none;padding:8px 0}
 .dgauge .ring::after{content:"";position:absolute;inset:12px;background:var(--card);border-radius:50%}
 .dgauge .ic{position:relative;z-index:1;text-align:center}
 .dgauge .ic b{font-size:20px;font-weight:800}
@@ -184,31 +190,26 @@ aside.side{display:none}
 .dmini{display:flex;gap:18px;margin-top:8px;justify-content:center}
 .dmini .k{font-size:9.5px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .dmini .v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
-.dctl{display:none;position:absolute;top:8px;right:8px;gap:6px;z-index:5}
-.dash-editing .dtile .dctl{display:flex}
-.dctl .szgrp{display:flex;background:rgba(255,255,255,.94);border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.14)}
-.dctl .szgrp button{width:24px;height:26px;border:none;cursor:pointer;font-size:11px;font-weight:800;background:transparent;color:var(--ink-2)}
-.dctl .szgrp button.on{background:var(--teal-600);color:#fff}
-.dctl .rm{width:26px;height:26px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:800;
-  background:rgba(255,255,255,.94);color:var(--red);box-shadow:0 1px 4px rgba(0,0,0,.14)}
+/* Customize sheet (show/hide cards) — reuses the bottom-sheet pattern */
 .dwlib{position:fixed;inset:0;background:rgba(15,23,42,.35);display:flex;align-items:flex-end;justify-content:center;z-index:60}
 .dwlib .sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:680px;padding:20px 22px 26px;max-height:80vh;overflow:auto}
 .dwlib h3{font-size:16px;margin-bottom:4px}
 .dwlib .desc{font-size:13px;color:var(--ink-3);margin-bottom:16px}
 .dwlibgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.dwlibitem{border:1.5px solid var(--line);border-radius:14px;padding:13px;display:flex;gap:11px;align-items:center}
+.dwlibitem{border:1.5px solid var(--line);border-radius:14px;padding:13px;display:flex;gap:11px;align-items:center;cursor:pointer}
+.dwlibitem.off{opacity:.55}
 .dwlibitem .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:var(--teal-50);flex:none}
 .dwlibitem .t{font-weight:700;font-size:13.5px}
 .dwlibitem .d{font-size:11.5px;color:var(--ink-3)}
-.dwlibitem button{margin-left:auto;border:none;background:var(--teal-600);color:#fff;font-weight:700;font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer;flex:none}
-.dwlibitem.added button{background:var(--line);color:var(--ink-3)}
+.dwlibitem .tog{margin-left:auto;border:none;font-weight:700;font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer;flex:none;
+  background:var(--teal-600);color:#fff}
+.dwlibitem.off .tog{background:var(--line);color:var(--ink-2)}
 .dwchart{position:relative;flex:1;min-height:0;margin-top:6px}
 .dwchart.spark{flex:none;height:46px;margin-top:8px}
-.dtile .dwmiss{flex:1;display:grid;place-items:center;color:var(--ink-3);font-size:12.5px;text-align:center}
+.dtile .dwmiss{flex:1;display:grid;place-items:center;color:var(--ink-3);font-size:12.5px;text-align:center;padding:14px 0}
 @media(max-width:900px){
-  .dwgrid{grid-template-columns:repeat(2,1fr)}
-  .dtile.m,.dtile.l{grid-column:span 2}
-  .dtile.l{grid-row:span 2}
+  .hstats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .hcols{grid-template-columns:1fr}
   .dwlibgrid{grid-template-columns:1fr}
 }
 
@@ -697,7 +698,7 @@ var state = {
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, confirmRes:null, importing:false,
-  dashLayout:null, dashEdit:false, dashAddOpen:false, density:'mid',
+  dashLayout:null, homeCustomize:false, density:'mid',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null
 };
@@ -719,7 +720,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.29.1';
+var FE_VERSION = 'v3.30.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -947,7 +948,9 @@ function boot(){
 }
 function bootApply_(res){
     state.boot = res.boot; state.picker = res.picker;
-    if(res.dashLayout && Array.isArray(res.dashLayout.layout)) state.dashLayout = res.dashLayout.layout;
+    // v3.30: isDefault means "no saved row" — keep null so the Layout-A default
+    // hidden set applies (the server default is the OLD grid's starter set).
+    if(res.dashLayout && Array.isArray(res.dashLayout.layout) && !res.dashLayout.isDefault) state.dashLayout = res.dashLayout.layout;
     if(res.density && res.density.value) applyDensity(res.density.value, false); // v3.28: per-user density
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
@@ -1099,25 +1102,42 @@ function render(){
   else renderHistory();
 }
 
-/* ============================ dashboard ============================ */
-/* ---- v3.18 customizable dashboard: per-user widget grid ----
-   Widgets render from the SAME data the old dashboard used (state.dash +
-   state.boot) — no new backend scans. Layout (which widgets, order, size) is
-   per-user: loaded in apiBoot as state.dashLayout, saved via apiSetDashLayout,
-   mirrored to localStorage for instant paint. */
-// Fills a 4-col grid cleanly, with the Spending-trend chart featured on row 2:
-// row1 avail(2)+funded(1)+spent(1); row2 trend(2)+inbox(1)+gauge(1); rows3-4
-// health(2x2) beside targets(2x2). (Negatives dropped from default — Budget
-// Health L already lists them; it's one tap away in the widget library.)
-var DASH_DEFAULT_LAYOUT = [
-  {id:'avail',size:'m'},{id:'funded',size:'s'},{id:'spent',size:'s'},
-  {id:'trend',size:'m'},{id:'inbox',size:'s'},{id:'fundgauge',size:'s'},
-  {id:'health',size:'l'},{id:'targets',size:'l'}
+/* ============================ home screen ============================ */
+/* ---- v3.30 fixed home, Layout A (Scott, 7/22/26) ----
+   The v3.18–v3.20 customizable widget grid (drag/reorder/S-M-L resize) is
+   GONE. Home is ONE fixed layout: a 4-stat row, then two columns of cards.
+   The only customization is SHOW/HIDE per card (Customize sheet).
+   Persistence reuses the v3.18 plumbing UNCHANGED: the saved "layout" is the
+   list of VISIBLE card ids as [{id,size:'s'}] — the server sanitizer already
+   keeps exactly that shape — so old saved grids migrate naturally (their
+   cards stay visible, everything else starts hidden). The 'attention' card
+   (negative envelopes, straight from boot data) persists under 'negatives',
+   the closest server-known id. Cards render at one FIXED size each. */
+var HOME_CARDS = [
+  {id:'avail',    slot:'stats', size:'m'},
+  {id:'funded',   slot:'stats', size:'m'},
+  {id:'spent',    slot:'stats', size:'m'},
+  {id:'inbox',    slot:'stats', size:'m'},
+  {id:'health',   slot:'left',  size:'l'},
+  {id:'trend',    slot:'left',  size:'m'},
+  {id:'targets',  slot:'left',  size:'l'},
+  {id:'areas',    slot:'left',  size:'m'},
+  {id:'inout',    slot:'left',  size:'m'},
+  {id:'attention',slot:'right', size:'l'},
+  {id:'recent',   slot:'right', size:'l'},
+  {id:'fundgauge',slot:'right', size:'m'},
+  {id:'accounts', slot:'right', size:'m'},
+  {id:'buffer',   slot:'right', size:'m'}
 ];
+// Default view = mockup A: the 4 stats + Health/Trend | Attention/Recent.
+var HOME_DEFAULT_HIDDEN = {targets:1, areas:1, inout:1, fundgauge:1, accounts:1, buffer:1};
+// server id ↔ card id (attention rides on the old 'negatives' slot)
+function homePersistId_(id){ return id==='attention' ? 'negatives' : id; }
+function homeCardId_(id){ return id==='negatives' ? 'attention' : id; }
 function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:0); }
 var DASH_WIDGETS = {
   avail:{title:'Available to fund',icon:'💰',hero:true,nav:'fund',render:function(sz){
-    var d=state.dash, n=d?money(d.availableToFund):'…';
+    var d=state.dash, n=d?money(d.availableToFund):'<span class="skv">…</span>';
     if(sz==='s') return '<div class="dlbl">Available to fund</div><div class="dnum big">'+n+'</div>';
     if(sz==='m') return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
       '<div class="dsub">in the income pool · put it to work →</div>';
@@ -1128,7 +1148,7 @@ var DASH_WIDGETS = {
         '<div class="dkv"><span class="k">Budget target</span><span class="v">'+money(d.totals.target)+'</span></div></div>':'');}},
 
   funded:{title:'Funded vs budget',icon:'🎯',nav:'fund',render:function(sz){
-    var d=state.dash; if(!d) return '<div class="dlbl">Funded</div><div class="dnum">…</div>';
+    var d=state.dash; if(!d) return '<div class="dlbl">Funded</div><div class="dnum"><span class="skv">…</span></div>';
     var p=dpct_(d.totals.funded,d.totals.target);
     if(sz==='s') return '<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum big">'+p+'%</div><div class="dsub">of budget</div>';
     var head='<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum">'+money(d.totals.funded)+'</div>'+
@@ -1140,7 +1160,7 @@ var DASH_WIDGETS = {
 
   spent:{title:'Spent this month',icon:'💳',render:function(sz){
     var d=state.dash, s=d?(d.spentActual!=null?d.spentActual:d.totals.spent):null;
-    var n=(s!=null)?money(s):'…';
+    var n=(s!=null)?money(s):'<span class="skv">…</span>';
     var note=(d&&d.spentActual!=null)?'all transactions, incl. pending':'from approved transactions';
     if(sz==='s') return '<div class="dlbl">Spent this month</div><div class="dnum big">'+n+'</div>';
     if(sz==='m') return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub">'+note+'</div>';
@@ -1333,7 +1353,23 @@ var DASH_WIDGETS = {
       '<div class="dmini"><div><div class="k">On-budget cash</div><div class="v">'+money(cash)+'</div></div>'+
       '<div><div class="k">Avg spend/mo</div><div class="v">'+money(avg)+'</div></div>'+
       '<div><div class="k">Covers</div><div class="v">'+(Math.round(months*10)/10)+' mo</div></div></div>'+
-      '<div class="dsub" style="margin-top:8px">Your on-budget cash covers ~'+days+' days of average spending. One month of buffer means you\'re living on last month\'s income.</div>';}}
+      '<div class="dsub" style="margin-top:8px">Your on-budget cash covers ~'+days+' days of average spending. One month of buffer means you\'re living on last month\'s income.</div>';}},
+
+  /* v3.30: Needs attention — negative envelopes straight from boot data (no
+     extra fetch; paints instantly from the cached/booted envelope list). */
+  attention:{title:'Needs attention',icon:'⚠️',nav:'envelopes',render:function(){
+    var b=state.boot;
+    if(!b) return '<div class="dhead"><div class="dlbl">Needs attention</div></div><div class="dwmiss"><span class="skv">loading…</span></div>';
+    var neg=[];
+    (b.groups||[]).forEach(function(g){ (g.envelopes||[]).forEach(function(e){
+      if(!e.hidden && e.type!=='Income' && Number(e.balance)<0) neg.push(e); }); });
+    neg.sort(function(a,b2){ return a.balance-b2.balance; });
+    var head='<div class="dhead"><div class="dlbl">Needs attention'+(neg.length?' · '+neg.length:'')+'</div></div>';
+    if(!neg.length) return head+'<div class="dwmiss">✓ No negative envelopes</div>';
+    var rows=neg.slice(0,8).map(function(e){
+      return '<div class="dkv"><span class="k">'+esc(e.name)+'</span><span class="v neg">'+money(e.balance)+'</span></div>'; }).join('');
+    if(neg.length>8) rows+='<div class="dsub" style="margin-top:6px">+'+(neg.length-8)+' more →</div>';
+    return head+'<div class="dscroll">'+rows+'</div>';}}
 };
 function dAxisOpts(legend){ return {maintainAspectRatio:false,animation:false,
   plugins:{legend:legend?{position:'top',labels:{boxWidth:10,font:{size:11},color:'#94a3b8'}}:{display:false}},
@@ -1341,8 +1377,6 @@ function dAxisOpts(legend){ return {maintainAspectRatio:false,animation:false,
     y:{grid:{color:'#e8edf2'},ticks:{font:{size:10},color:'#94a3b8',callback:function(v){return '$'+Math.round(v/1000)+'k';}},beginAtZero:true}}}; }
 function dSparkOpts(){ return {maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},
   scales:{x:{display:false},y:{display:false}},elements:{point:{radius:0}}}; }
-var DASH_SIZES=['s','m','l'], DASH_SIZE_LABEL={s:'S',m:'M',l:'L'};
-var dashDragId=null;
 var dashCharts={};  // v2a: live Chart.js instances, destroyed before each re-render
 function dashDestroyCharts(){ Object.keys(dashCharts).forEach(function(k){ try{ dashCharts[k].destroy(); }catch(e){} }); dashCharts={}; }
 /* Fetch the 12-month chart series once (lazy — only when a chart widget is on the
@@ -1383,89 +1417,88 @@ function dashFetchRecent(){
   }).catch(function(e){ state.registerLoading=false; console.warn('dash recent:', e&&e.message||e); });
 }
 
-function dashLayout(){
-  return Array.isArray(state.dashLayout) ? state.dashLayout : DASH_DEFAULT_LAYOUT.slice();
+/* Which cards are hidden right now. state.dashLayout (from apiBoot /
+   localStorage) is the saved list of VISIBLE ids [{id,size}] — old grid saves
+   included, so a customized v3.18-29 layout keeps its cards visible here.
+   No saved layout (or server isDefault) → the Layout-A default set. */
+function homeHidden(){
+  var lay = state.dashLayout;
+  if(!Array.isArray(lay)){
+    var d={}; Object.keys(HOME_DEFAULT_HIDDEN).forEach(function(k){ d[k]=1; });
+    return d;
+  }
+  var visible={};
+  lay.forEach(function(w){ if(w && w.id) visible[homeCardId_(w.id)]=1; });
+  var hid={};
+  HOME_CARDS.forEach(function(c){ if(!visible[c.id]) hid[c.id]=1; });
+  return hid;
 }
-function dashSave(){
-  state.dashLayout = dashLayout();
+function homeSave(hid){
+  state.dashLayout = HOME_CARDS.filter(function(c){ return !hid[c.id]; })
+    .map(function(c){ return {id:homePersistId_(c.id), size:'s'}; });
   try{ localStorage.setItem('sbcDashLayout', JSON.stringify(state.dashLayout)); }catch(e){}
-  clearTimeout(dashSave._t);
-  dashSave._t = setTimeout(function(){
-    run('apiSetDashLayout',{layout:state.dashLayout}).catch(function(e){ console.warn('save dash layout:', e&&e.message||e); });
+  clearTimeout(homeSave._t);
+  homeSave._t = setTimeout(function(){
+    run('apiSetDashLayout',{layout:state.dashLayout}).catch(function(e){ console.warn('save home layout:', e&&e.message||e); });
   }, 600);
 }
 function renderDash(){
   dashDestroyCharts();
-  var lay=dashLayout(), editing=!!state.dashEdit;
-  var h='<div class="dwtop">'+
-    '<button class="dwbtn" data-act="dash-add-open">+ Add widget</button><span class="sp"></span>'+
-    '<button class="dwbtn'+(editing?' on':'')+'" data-act="dash-edit">'+(editing?'Done':'Customize')+'</button></div>'+
-    '<div class="dwnote">✏️ Editing — tap <b>S / M / L</b> to resize (each shows more) · drag to reorder · × removes · then hit <b>Done</b>.</div>'+
-    '<div class="dwgrid" id="dwgrid">';
-  lay.forEach(function(item){
-    var w=DASH_WIDGETS[item.id]; if(!w) return;
-    var sz=(DASH_SIZES.indexOf(item.size)===-1)?'s':item.size;
-    var ctl = editing ? '<div class="dctl"><div class="szgrp">'+DASH_SIZES.map(function(s){
-        return '<button data-act="dash-size" data-arg="'+item.id+'|'+s+'" class="'+(sz===s?'on':'')+'">'+DASH_SIZE_LABEL[s]+'</button>';}).join('')+
-        '</div><button class="rm" data-act="dash-remove" data-arg="'+item.id+'" title="Remove">✕</button></div>' : '';
-    var tapAttr='', clickable=false;
-    if(!editing){
-      if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
-      else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
-    }
-    h += '<div class="dtile '+sz+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+item.id+'"'+tapAttr+'>'+ctl+w.render(sz)+'</div>';
-  });
-  if(!lay.length) h += '<div class="dtile m" style="align-items:center;justify-content:center;color:var(--ink-3)">No widgets — tap “+ Add widget”.</div>';
-  h += '</div>';
-  if(state.dashAddOpen) h += dashLibHtml();
+  var hid = homeHidden();
+  var visible = HOME_CARDS.filter(function(c){ return !hid[c.id] && DASH_WIDGETS[c.id]; });
+  function tile(c){
+    var w=DASH_WIDGETS[c.id], tapAttr='', clickable=false;
+    if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
+    else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
+    return '<div class="dtile'+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+c.id+'"'+tapAttr+'>'+w.render(c.size)+'</div>';
+  }
+  function slot(s){ return visible.filter(function(c){return c.slot===s;}).map(tile).join(''); }
+  var h='<div class="htop"><span class="sp"></span>'+
+    '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
+  var stats=slot('stats');
+  if(stats) h+='<div class="hstats">'+stats+'</div>';
+  h+='<div class="hcols"><div class="col">'+slot('left')+'</div><div class="col">'+slot('right')+'</div></div>';
+  if(!visible.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
+  if(state.homeCustomize) h+=homeCustHtml(hid);
   $('#shell').innerHTML = h;
-  document.body.classList.toggle('dash-editing', editing);
-  if(editing){
-    $all('#dwgrid .dtile').forEach(function(tile){
-      if(!tile.dataset.id) return;
-      tile.draggable=true;
-      tile.addEventListener('dragstart',function(){ dashDragId=tile.dataset.id; tile.classList.add('dragging'); });
-      tile.addEventListener('dragend',function(){ tile.classList.remove('dragging'); });
-      tile.addEventListener('dragover',function(e){ e.preventDefault(); });
-      tile.addEventListener('drop',function(e){ e.preventDefault(); dashDrop(tile.dataset.id); });
-    });
-  }
-  // v2a: instantiate chart widgets now that their canvases are in the DOM.
+  // Chart cards: instantiate now that their canvases are in the DOM.
   if(typeof Chart!=='undefined'){
-    lay.forEach(function(item){
-      var w=DASH_WIDGETS[item.id];
-      if(!w || !w.chart) return;
-      var cv=document.getElementById('dwcv_'+item.id);
-      if(cv){ var sz=(DASH_SIZES.indexOf(item.size)===-1)?'s':item.size;
-        try{ dashCharts[item.id]=w.init(cv,sz); }catch(e){ console.warn('chart '+item.id+':', e&&e.message||e); } }
+    visible.forEach(function(c){
+      var w=DASH_WIDGETS[c.id];
+      if(!w.chart) return;
+      var cv=document.getElementById('dwcv_'+c.id);
+      if(cv){ try{ dashCharts[c.id]=w.init(cv,c.size); }catch(e){ console.warn('chart '+c.id+':', e&&e.message||e); } }
     });
   }
-  // Lazy-load extra data only when a widget that needs it is on the board.
-  if(lay.some(function(l){return l.id==='trend'||l.id==='inout'||l.id==='buffer';})) dashFetchSeries();
-  if(lay.some(function(l){return l.id==='accounts';})) dashFetchBalances();
-  if(lay.some(function(l){return l.id==='recent';})) dashFetchRecent();
+  // Lazy-load extra data only when a card that needs it is visible.
+  var on=function(id){ return visible.some(function(c){return c.id===id;}); };
+  if(on('trend')||on('inout')||on('buffer')) dashFetchSeries();
+  if(on('accounts')) dashFetchBalances();
+  if(on('recent')) dashFetchRecent();
   dashFetchDash(); // v3.22: shared loader (no duplicate apiDashboard with prewarm)
 }
-function dashLibHtml(){
-  var lay=dashLayout();
-  var items=Object.keys(DASH_WIDGETS).map(function(id){
-    var w=DASH_WIDGETS[id], on=lay.some(function(l){return l.id===id;});
-    return '<div class="dwlibitem'+(on?' added':'')+'"><div class="ic">'+w.icon+'</div>'+
-      '<div><div class="t">'+esc(w.title)+'</div><div class="d">Card · S/M/L</div></div>'+
-      (on?'<button disabled>Added</button>':'<button data-act="dash-add" data-arg="'+id+'">+ Add</button>')+'</div>';
+function homeCustHtml(hid){
+  var items=HOME_CARDS.map(function(c){
+    var w=DASH_WIDGETS[c.id]; if(!w) return '';
+    var off=!!hid[c.id];
+    return '<div class="dwlibitem'+(off?' off':'')+'" data-act="home-toggle" data-arg="'+c.id+'">'+
+      '<div class="ic">'+w.icon+'</div>'+
+      '<div><div class="t">'+esc(w.title)+'</div><div class="d">'+(off?'Hidden':'Shown')+'</div></div>'+
+      '<span class="tog">'+(off?'Show':'Hide')+'</span></div>';
   }).join('');
-  return '<div class="dwlib" data-act="dash-add-close"><div class="sheet">'+
-    '<h3>Widget library</h3><div class="desc">Add widgets as you grow into the app. Each drops in small — resize with S / M / L.</div>'+
+  return '<div class="dwlib" data-act="home-cust-close"><div class="sheet">'+
+    '<h3>Customize home</h3><div class="desc">Choose which cards show. Layout and order are fixed — hidden cards can come back any time.</div>'+
     '<div class="dwlibgrid">'+items+'</div></div></div>';
 }
-function dashDrop(targetId){
-  if(!dashDragId || dashDragId===targetId) return;
-  var lay=dashLayout();
-  var from=-1, to=-1;
-  lay.forEach(function(l,i){ if(l.id===dashDragId) from=i; if(l.id===targetId) to=i; });
-  if(from<0||to<0) return;
-  var it=lay.splice(from,1)[0]; lay.splice(to,0,it);
-  state.dashLayout=lay; dashSave(); renderDash();
+/* v3.30: true-first-run skeleton — shown while the very first apiBoot runs and
+   there's no cached view yet, so the home screen is never a blank page. */
+function homeSkeletonHtml_(){
+  var stat='<div class="dtile"><div class="dlbl"><span class="skv" style="min-width:88px">…</span></div>'+
+    '<div class="dnum"><span class="skv">…</span></div></div>';
+  var kv='<div class="dkv"><span class="k"><span class="skv" style="min-width:110px">…</span></span><span class="v"><span class="skv">…</span></span></div>';
+  var card='<div class="dtile"><div class="dhead"><div class="dlbl"><span class="skv" style="min-width:120px">…</span></div></div>'+kv+kv+kv+kv+'</div>';
+  return '<div class="hstats">'+stat+stat+stat+stat+'</div>'+
+    '<div class="hcols"><div class="col">'+card+card+'</div><div class="col">'+card+card+'</div></div>';
 }
 
 /* ============================ envelopes ============================ */
@@ -3776,15 +3809,11 @@ document.addEventListener('click', function(ev){
     case 'rpt-fclear': state.report.groups=[]; state.report.accounts=[]; state.report.envelopeIds=[]; rptSave(); renderReports(); break;
     case 'rpt-export': rptExport(); break;
     case 'rpt-retry': state.reportErr=null; state.reportErrSig=null; renderReports(); break; // v3.22
-    case 'dash-edit': state.dashEdit=!state.dashEdit; if(!state.dashEdit) state.dashAddOpen=false; renderDash(); break;
-    case 'dash-add-open': state.dashAddOpen=true; renderDash(); break;
-    case 'dash-add-close': if(ev.target===el){ state.dashAddOpen=false; renderDash(); } break;
-    case 'dash-add': (function(){ var lay=dashLayout();
-        if(!lay.some(function(l){return l.id===arg;})){ lay.push({id:arg,size:'s'}); state.dashLayout=lay; dashSave(); }
-        state.dashAddOpen=false; renderDash(); })(); break;
-    case 'dash-size': (function(){ var lay=dashLayout(); var it=lay.find(function(l){return l.id===p[0];});
-        if(it){ it.size=p[1]; state.dashLayout=lay; dashSave(); renderDash(); } })(); break;
-    case 'dash-remove': state.dashLayout=dashLayout().filter(function(l){return l.id!==arg;}); dashSave(); renderDash(); break;
+    case 'home-customize': state.homeCustomize=!state.homeCustomize; renderDash(); break;
+    case 'home-cust-close': if(ev.target===el){ state.homeCustomize=false; renderDash(); } break;
+    case 'home-toggle': (function(){ var hid=homeHidden();
+        if(hid[arg]) delete hid[arg]; else hid[arg]=1;
+        homeSave(hid); renderDash(); })(); break;
     case 'approve': approve(arg); break;
     case 'approve-all': approveAll(); break;
     case 'approve-split': approveSplit(arg); break;
@@ -4025,6 +4054,9 @@ document.addEventListener('change', function(ev){
     catch(e){ console.warn('hydrate render failed:', e && e.message || e); state.boot=null; hydrated=false; }
   }
   if(authValid()){
+    // v3.30: nothing cached → paint the home skeleton instead of a blank page
+    // while the (possibly cold, 10-25s) apiBoot round trip runs.
+    if(!hydrated){ try{ $('#shell').innerHTML = homeSkeletonHtml_(); }catch(e){} }
     boot();
   } else if(hydrated){
     setRefreshing_(true); // cached view stays up; GSI will refresh the token and boot()
