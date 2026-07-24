@@ -686,9 +686,16 @@ var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
 // cold Apps Script apiBoot was the 10-25s first-paint gate). The mirror boot returns
 // version=null; bootApply_ fires a background apiBootstrap to reconcile the
 // authoritative version + inbox count + group order (SWR — never blocks paint).
+/* v3.38 Phase 3 slice 2c: apiGetInbox is mirror-served too. This one needed the
+   mirror inbox to stop being hourly-stale, so the edge function re-reads JUST the
+   companion Inbox tab on demand (same importer spec as the sync) before serving —
+   the inbox you see is the sheet's, in sheet order, in ~½s instead of a 5-20s cold
+   Apps Script call. It also removes the reason the v3.34.1 batch-approve fallback
+   kept firing (fresh items missing from sbc.inbox); that retry stays as a net. */
 var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1,
   apiBalances:1, apiAccounts:1, // v3.36 Phase 3 slice 2: account/balance read cuts
-  apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1 }; // v3.37 slice 2 cont: plans/drilldowns/accounts-full
+  apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
+  apiGetInbox:1 }; // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
    user's Apps Script backend in the background (we send backendUrl() along as
@@ -782,7 +789,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.37.0';
+var FE_VERSION = 'v3.38.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
