@@ -776,7 +776,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.34.0';
+var FE_VERSION = 'v3.34.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2053,7 +2053,36 @@ function approveAll(){
     if(!ok) return;
     busyButtons(true);
     toast('Approving '+items.length+'…'); // v3.29.1: immediate feedback
+    // v3.34.1: the mirror can only approve inbox rows it already holds, and the
+    // mirror inbox is refreshed on the hourly sync — so freshly-imported items
+    // fail "not in Inbox" in the mirror. A SINGLE approve gets a definitive
+    // {ok:false} and falls back to Apps Script automatically; the BATCH path
+    // reports per-item errors inside an ok:true response, so apiCall_ never
+    // falls back and every fresh item shows "failed (still in inbox)". Fix:
+    // after the mirror batch, retry the mirror-FAILED items on Apps Script
+    // (which owns the live inbox). Those items definitively did NOT apply in the
+    // mirror (each item runs in its own txn and rolls back on throw), so the AS
+    // retry cannot double-approve. Only when the mirror path was actually used —
+    // if sbcSupa is off / disabled, run() already went to Apps Script and a
+    // failure there is genuine, not a retry candidate.
+    var usedMirror = !!(SUPA_WRITES['apiApproveBatch'] && supaOn_());
     run('apiApproveBatch', items).then(function(r){
+      var failedItems = (r.results||[]).filter(function(x){ return x.error; })
+        .map(function(x){ var m=null; items.forEach(function(it){ if(it.txnId===x.txnId) m=it; }); return m; })
+        .filter(Boolean);
+      if(!(usedMirror && failedItems.length)) return r;
+      // retry the failed subset straight on Apps Script; merge the outcomes
+      return legacyCall_('apiApproveBatch', [failedItems], true, true).then(function(r2){
+        return {
+          approved: (r.approved||0) + (r2.approved||0),
+          results: (r.results||[]).filter(function(x){ return !x.error; }).concat(r2.results||[]),
+          tillerWrite: (function(){
+            var q = ((r.tillerWrite&&r.tillerWrite.queued)||0) + ((r2.tillerWrite&&r2.tillerWrite.queued)||0);
+            return q ? { queued:q } : (r.tillerWrite || r2.tillerWrite || null);
+          })()
+        };
+      }, function(){ return r; }); // AS retry itself failed → keep the mirror result
+    }).then(function(r){
       var doneIds = {};
       r.results.forEach(function(x){ if(!x.error) doneIds[x.txnId]=1; });
       markPendingApproved(items.filter(function(it){ return doneIds[it.txnId]; })
