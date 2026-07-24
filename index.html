@@ -682,7 +682,11 @@ function backendUrl(){
         disable the mirror for the rest of the session. Kill switch:
         localStorage.setItem('sbcSupa','off')  — or blank out SUPA_API here. ⬇️ */
 var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
-var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1 };
+// v3.35 Phase 3 slice 1: apiBoot is mirror-served for an INSTANT home screen (the
+// cold Apps Script apiBoot was the 10-25s first-paint gate). The mirror boot returns
+// version=null; bootApply_ fires a background apiBootstrap to reconcile the
+// authoritative version + inbox count + group order (SWR — never blocks paint).
+var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1 };
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
    user's Apps Script backend in the background (we send backendUrl() along as
@@ -776,7 +780,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.34.1';
+var FE_VERSION = 'v3.35.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1027,6 +1031,14 @@ function bootApply_(res){
     render();
     if(state.view!=='dash') setRefreshing_(false); // dash clears when its data lands (dashFetchDash)
     prewarm();
+    // v3.35 Phase 3 slice 1: a mirror-served boot has no server version (and its
+    // inbox count / group order can lag the hourly sync). Reconcile authoritatively
+    // in the BACKGROUND via apiBootstrap (Apps Script) — never blocks first paint.
+    // The Apps-Script path (fallback) already carries a version, so skip it there.
+    if(res && res.boot && !res.boot.version){
+      refreshBoot().then(function(){ saveSnapshot_(); })
+        .catch(function(e){ console.warn('boot reconcile:', e && e.message || e); });
+    }
 }
 /* v3.28: instant-open helpers. We cache the last successful boot + dashboard so the
    next open paints immediately instead of waiting on the cold apiBoot round trip. */
@@ -3783,8 +3795,10 @@ function renderAbout(){
     '<text x="121" y="66" text-anchor="middle" font-size="33" font-weight="700" fill="#ffffff" font-family="inherit">C</text>'+
     '</svg>'+
     '<div class="abname">SBC <span>Money</span></div>'+
-    '<div class="abver">Server '+esc(b.version||'')+' · UI '+esc(FE_VERSION)+' · '+esc(b.versionDate||'')+'</div>'+
-    (b.version!==FE_VERSION?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
+    '<div class="abver">Server '+esc(b.version||'(checking…)')+' · UI '+esc(FE_VERSION)+' · '+esc(b.versionDate||'')+'</div>'+
+    // v3.35: only warn on a REAL mismatch. A mirror-served boot has version=null
+    // until the background apiBootstrap reconcile lands — that's not a deploy skew.
+    ((b.version && b.version!==FE_VERSION)?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
     '<div class="absub">Signed in as '+esc(b.user)+'</div>'+
     '<div class="absoon"><span data-act="goview" data-arg="howto" style="cursor:pointer;text-decoration:underline">📖 How to use SBC Money</span></div>'+
     '</div>';
