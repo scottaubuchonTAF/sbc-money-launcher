@@ -686,7 +686,8 @@ var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
 // cold Apps Script apiBoot was the 10-25s first-paint gate). The mirror boot returns
 // version=null; bootApply_ fires a background apiBootstrap to reconcile the
 // authoritative version + inbox count + group order (SWR — never blocks paint).
-var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1 };
+var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1,
+  apiBalances:1, apiAccounts:1 }; // v3.36 Phase 3 slice 2: account/balance read cuts
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
    user's Apps Script backend in the background (we send backendUrl() along as
@@ -780,7 +781,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.35.0';
+var FE_VERSION = 'v3.36.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
