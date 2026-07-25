@@ -677,11 +677,12 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
    (their bound stack stays deployed and untouched). */
 var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji/exec';
 var BACKENDS = {
-  'scott@theaubuchonfamily.com': BRIDGE_URL,   // v3.39 — first onto the bridge (soaking)
-  // Corey moves next. His own /exec is currently UNREACHABLE anyway (Drive won't
-  // serve his web app anonymously — the reason his About said "Server (checking…)"
-  // and his writes never reached his sheet), so the bridge is his fix, not a risk.
-  'corey@theaubuchonfamily.com': 'https://script.google.com/macros/s/AKfycbz8RA0qilWIIpkoy_CWUp0g1ClwDvFKTjTjL8pIpkGjOcZ71omwfmnPZCyCOmgaz1L6lQ/exec'
+  'scott@theaubuchonfamily.com': BRIDGE_URL,   // v3.39 — first onto the bridge
+  // Corey, 7/25: his own /exec was UNREACHABLE (Drive won't serve his web app
+  // anonymously — the cause of "Server (checking…)" and of his writes never
+  // reaching his sheet), so the bridge is his FIX, not a risk. His retired stack:
+  // AKfycbz8RA0qilWIIpkoy_CWUp0g1ClwDvFKTjTjL8pIpkGjOcZ71omwfmnPZCyCOmgaz1L6lQ
+  'corey@theaubuchonfamily.com': BRIDGE_URL
   /* Brady: add his email to SBC_BRIDGE_USERS on the bridge + a sbc.users row, then
      'brady@theaubuchonfamily.com': BRIDGE_URL — no deploy of his own. */
 };
@@ -803,7 +804,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.39.0';
+var FE_VERSION = 'v3.39.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
