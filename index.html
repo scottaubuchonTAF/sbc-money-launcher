@@ -666,10 +666,24 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
         To onboard someone: deploy their web app, paste the /exec URL here.
         Emails must be lowercase. Anyone not in this map falls back to
         EXEC_URL (where the allowlist will reject non-family accounts). ⬇️ */
+/* v3.39 Phase 3 slice 3a-2: THE BRIDGE. One standalone Apps Script (not bound to
+   any sheet), run as scott@theaubuchonfamily.com, that resolves each caller's own
+   companion sheet from its SBC_BRIDGE_USERS property. Verified 7/25:
+   bridgeCheckUsers() reports "BRIDGE MODE: YES (standalone)" and resolves both
+   users to their own sheet, and an anonymous POST gets the expected auth refusal.
+   Cutover is ONE EMAIL AT A TIME — a wrong resolution here would mean writing to
+   the wrong person's sheet, so each entry moves only after the previous one has
+   done real reads and writes. Rolling one back = point it at their own /exec again
+   (their bound stack stays deployed and untouched). */
+var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji/exec';
 var BACKENDS = {
-  'scott@theaubuchonfamily.com': EXEC_URL,
+  'scott@theaubuchonfamily.com': BRIDGE_URL,   // v3.39 — first onto the bridge (soaking)
+  // Corey moves next. His own /exec is currently UNREACHABLE anyway (Drive won't
+  // serve his web app anonymously — the reason his About said "Server (checking…)"
+  // and his writes never reached his sheet), so the bridge is his fix, not a risk.
   'corey@theaubuchonfamily.com': 'https://script.google.com/macros/s/AKfycbz8RA0qilWIIpkoy_CWUp0g1ClwDvFKTjTjL8pIpkGjOcZ71omwfmnPZCyCOmgaz1L6lQ/exec'
-  /* 'brady@theaubuchonfamily.com': 'PASTE_BRADY_EXEC_URL', */
+  /* Brady: add his email to SBC_BRIDGE_USERS on the bridge + a sbc.users row, then
+     'brady@theaubuchonfamily.com': BRIDGE_URL — no deploy of his own. */
 };
 function backendUrl(){
   var u = BACKENDS[String(auth.email||'').trim().toLowerCase()];
@@ -789,7 +803,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.38.0';
+var FE_VERSION = 'v3.39.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1118,6 +1132,11 @@ function refreshBoot(){
     // inboxCount is stale-high — trust the filtered local inbox instead.
     var pend = Object.keys(state.pendingApproved||{}).length;
     updateBadges((pend && state.inbox) ? state.inbox.length : b.inboxCount);
+    // v3.39: a mirror-served boot has version=null, so About renders
+    // "Server (checking…)". This reconcile is what supplies the real version —
+    // re-render if the user is sitting on that screen, or the placeholder looks
+    // like a failure forever (it did on Corey's stack).
+    if(state.view==='about') renderAbout();
   });
 }
 function updateBadges(n){
