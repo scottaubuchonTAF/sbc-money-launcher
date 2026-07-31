@@ -595,6 +595,44 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
   body[data-d="compact"] .topbar{padding:10px 20px 0}
   body[data-d="compact"] .stats{gap:7px;margin-bottom:10px}
 }
+
+/* =========== v3.40: phone fixes for approve / assign-an-envelope ===========
+   Two real-device problems, both in this flow:
+   1. Tapping "Search envelopes…" ZOOMED the whole app. Safari and Chrome both
+      auto-zoom a focused input whose font-size is under 16px, and the density
+      modes put body at 13-14px with `input{font:inherit}` — so every field in
+      the flow was under the line. Force 16px on phones only (desktop keeps the
+      tighter look).
+   2. The picker is a bottom sheet sized in `vh`, but vh is the LAYOUT viewport,
+      which does not shrink when the keyboard opens. The sheet kept its full
+      height and the list ended up behind the keyboard — 1-2 envelopes visible.
+      --vvh/--vvt track the VISUAL viewport instead (see syncVV()).
+   This block must stay last in the sheet: it wins on source order, not
+   specificity, so density/base rules don't claw the sizes back.            */
+@media(max-width:899px){
+  input,select,textarea{font-size:16px}
+  .panel input,.searchbar input,.splitline input,.dwlibitem input{font-size:16px}
+
+  /* overlay lives inside the visual viewport → sheet sits on top of the keyboard */
+  .ovl{top:var(--vvt,0px);bottom:auto;height:var(--vvh,100%)}
+  .panel{max-height:min(78vh,100%);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .panel.confirm{padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  .picklist{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  body.ovlopen{overflow:hidden}
+
+  /* thumb-sized targets (44px+) and no clipped merchant names */
+  .picklist button{padding:13px 14px;min-height:48px;align-items:center}
+  .picklist .g{max-width:40%;overflow:hidden;text-overflow:ellipsis}
+  .pill{display:inline-flex;align-items:center;min-height:42px;padding:9px 15px;font-size:14px}
+  .btn{padding:12px 22px}
+  .btn.sm{padding:8px 14px}
+  .txncard .desc{overflow-wrap:anywhere}
+  .txncard .top{align-items:flex-start}
+  .splitline{gap:7px}
+  .splitline input{width:92px;flex:none}
+  .splitline .envbtn{padding:11px 12px}
+  .splitline .rm{padding:6px 2px;font-size:19px}
+}
 </style>
 </head>
 <body data-d="mid">
@@ -804,7 +842,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.39.2';
+var FE_VERSION = 'v3.40.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3998,6 +4036,33 @@ function closeConfirm(v){
 }
 
 /* ============================ envelope picker overlay ============================ */
+/* v3.40: on a phone the picker is a bottom sheet, and `vh` units lied to it —
+   the layout viewport does not shrink when the on-screen keyboard opens, so the
+   list rendered behind the keyboard. Mirror the VISUAL viewport into --vvh/--vvt
+   and the sheet sits directly on top of the keyboard instead. */
+var VV = window.visualViewport || null;
+function syncVV(){
+  if(!VV) return;
+  var r = document.documentElement.style;
+  r.setProperty('--vvh', Math.round(VV.height)+'px');
+  r.setProperty('--vvt', Math.round(VV.offsetTop||0)+'px');
+}
+if(VV){ VV.addEventListener('resize', syncVV); VV.addEventListener('scroll', syncVV); }
+window.addEventListener('orientationchange', function(){ setTimeout(syncVV, 250); });
+syncVV();
+/* every overlay writes straight into #ovl from half a dozen places, so watch the
+   node instead of tagging each caller: body.ovlopen stops the page behind the
+   sheet from scrolling, and a fresh syncVV catches a keyboard that is already up. */
+(function(){
+  var box = document.getElementById('ovl');
+  if(!box || !window.MutationObserver) return;
+  new MutationObserver(function(){
+    var open = !!box.firstChild;
+    document.body.classList.toggle('ovlopen', open);
+    if(open) syncVV();
+  }).observe(box, {childList:true});
+})();
+function isPhone(){ return !window.matchMedia || window.matchMedia('(max-width:899px)').matches; }
 function openPicker(ctx){
   state.pickCtx = ctx;
   var h = '<div class="ovl" data-act="picker-close"><div class="panel" data-stop="1">'+
@@ -4005,7 +4070,10 @@ function openPicker(ctx){
     '<div class="picklist" id="pickList">'+pickListHtml('')+'</div></div></div>';
   $('#ovl').innerHTML = h;
   var q = $('#pickQ');
-  q.focus();
+  // v3.40: don't autofocus on a phone — the keyboard would cover the list the
+  // moment the sheet opens, and most picks are a tap, not a search. Desktop
+  // keeps focus so you can type immediately.
+  if(!isPhone()) q.focus();
   q.addEventListener('input', function(){
     $('#pickList').innerHTML = pickListHtml(q.value);
   });
