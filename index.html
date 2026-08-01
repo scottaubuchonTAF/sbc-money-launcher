@@ -842,7 +842,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.40.0';
+var FE_VERSION = 'v3.41.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3450,6 +3450,26 @@ function settingsList(rows){
   });
   return h+'</div>';
 }
+/* v3.41: same look as settingsList, but each row opens an EXTERNAL url in a new
+   tab instead of routing a view. rows = [[url,label],…]; falsy urls are dropped
+   so a user with no "Tiller Sheet ID" set just sees fewer rows. rel=noopener is
+   required — without it the opened tab gets a handle on window. */
+function settingsLinkList(rows){
+  var live = rows.filter(function(r){ return r && r[0]; });
+  if(!live.length) return '';
+  var h = '<div class="card morelist">';
+  live.forEach(function(r){
+    h += '<a class="envrow" href="'+esc(r[0])+'" target="_blank" rel="noopener noreferrer" '+
+      'style="text-decoration:none;color:inherit"><span class="nm">'+r[1]+'</span><span>↗</span></a>';
+  });
+  return h+'</div>';
+}
+/* v3.41: Google Sheets URL from a bare spreadsheet id (apiBootstrap hands back
+   ids, not urls, so the frontend owns the format). */
+function sheetUrl(id){
+  id = String(id||'').trim();
+  return id ? 'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit' : '';
+}
 /* ============================ display density (v3.28) ============================
    Per-user UI density, synced via apiGet/SetDensity (Settings key "Density <email>",
    mirrors the Dashboard Layout pattern). localStorage 'sbcDensity' for instant paint.
@@ -3495,6 +3515,14 @@ function renderSettings(){
     ['activity','Sign-ins & activity'],['about','About']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
     '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
+  // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
+  // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
+  // Corey and Brady land on their own sheets.
+  var tillerLinks = settingsLinkList([
+    [sheetUrl(state.boot.companionSheetId), 'Tiller Companion Sheet'],
+    [sheetUrl(state.boot.tillerSheetId), 'Tiller Spreadsheet'],
+    ['https://my.tiller.com', 'Tiller (my.tiller.com)']]);
+  if(tillerLinks) h += settingsSectionLabel('TILLER')+tillerLinks;
   // Log out: on phones it lives here; on desktop it's in the sidebar footer.
   if(!desktop){
     h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
