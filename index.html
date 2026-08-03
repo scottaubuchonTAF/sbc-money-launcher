@@ -842,7 +842,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.41.0';
+var FE_VERSION = 'v3.42.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1396,22 +1396,46 @@ var DASH_WIDGETS = {
     // v3.23: the residual is DECOMPOSED — feed timing (balance feed behind the
     // transaction feed) is explained noise shown as calm context; ONLY the
     // unexplained remainder alarms. Falls back to the old fields pre-deploy.
+    // v3.42: the mirror now computes that decomposition itself (v_feed_float),
+    // so H.inFlight is present on every payload and is the preferred source.
+    // "In flight" = money the bank has moved that envelopes/pending can't see
+    // yet, and it has TWO stories: the balance feed lagging behind (H.feedBehind)
+    // and the importer not having run (H.importerWindow). We name them
+    // separately because the user's next action differs — one clears itself, the
+    // other lands in the inbox within the hour.
     var un=(H.unexplained!=null)?Number(H.unexplained):(Number(H.residual)||0);
     var unOk=(H.unexplainedOk!=null)?!!H.unexplainedOk:!!H.ok;
-    var lag=(H.feedLag!=null)?Number(H.feedLag):0;
+    var haveFloat=(H.inFlight!=null);
+    var lag=haveFloat?Number(H.inFlight):((H.feedLag!=null)?Number(H.feedLag):0);
+    var imp=haveFloat?(Number(H.importerWindow)||0):0;
     var resid=Number(H.residual)||0;
-    var lagAccts=(H.feedLagAccounts&&H.feedLagAccounts.length)?H.feedLagAccounts.join(', '):'';
+    var lagAcctsArr=(haveFloat&&H.inFlightAccounts&&H.inFlightAccounts.length)?H.inFlightAccounts
+      :((H.feedLagAccounts&&H.feedLagAccounts.length)?H.feedLagAccounts:null);
+    var lagAccts=lagAcctsArr?lagAcctsArr.join(', '):'';
     var pill=unOk?'<span class="dokpill">✓ Envelopes match your accounts</span>'
       :'<span class="dwarnpill">⚠ '+money(un)+' unexplained</span>';
+    // "$Y arriving in your inbox shortly." — only when the importer is behind.
+    var impLine=(Math.abs(imp)>=0.005)
+      ? ' '+money(Math.abs(imp))+' arriving in your inbox shortly.' : '';
     var note='';
-    if(unOk && Math.abs(resid)>=0.005){
-      note='<div class="dsub" style="margin-top:6px">'+money(resid)+' difference — all timing'+
-        (Math.abs(lag)>=0.005?(': balance feed catching up'+(lagAccts?' on '+esc(lagAccts):'')):'')+
-        '. Clears on its own; no action needed.</div>';
+    if(unOk && Math.abs(lag)>=0.005){
+      // Reconciled AFTER float: this is the calm, self-clearing case.
+      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' in flight — feeds catching up'+
+        (lagAccts?' ('+esc(lagAccts)+')':'')+
+        '. Clears on its own; no action needed.'+impLine+'</div>';
+    } else if(unOk && Math.abs(resid)>=0.005){
+      // Reconciled with a residual we can't attribute to a named account.
+      note='<div class="dsub" style="margin-top:6px">'+money(resid)+
+        ' difference — all timing. Clears on its own; no action needed.'+impLine+'</div>';
     } else if(!unOk && Math.abs(lag)>=0.005){
-      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' of the gap is feed timing'+
-        (lagAccts?' ('+esc(lagAccts)+')':'')+'; '+money(un)+' is NOT explained — worth a look on the Reconcile page.</div>';
+      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' of the gap is in flight'+
+        (lagAccts?' ('+esc(lagAccts)+')':'')+'; '+money(un)+
+        ' is NOT explained — worth a look on the Reconcile page.'+impLine+'</div>';
+    } else if(!unOk){
+      note='<div class="dsub" style="margin-top:6px">'+money(un)+
+        ' is not explained by feed timing — worth a look on the Reconcile page.</div>';
     }
+    // Scott, 8/3: the small (phone) card shows just the pill — no decomposition.
     if(sz==='s') return '<div class="dlbl">Budget health</div><div style="margin-top:8px">'+pill+'</div>';
     var kv='<div class="dkv"><span class="k">Envelopes · on-budget</span><span class="v">'+money(H.envelopes)+'</span></div>'+
       '<div class="dkv"><span class="k">Bank cash · chk+sav−cards</span><span class="v">'+money(H.bank)+'</span></div>';
@@ -1420,9 +1444,18 @@ var DASH_WIDGETS = {
     // v3.30.1: feed-timing + unexplained rows are the decomposition of a REAL
     // gap. When reconciled they're just estimator noise, so keep it calm — the
     // green pill already says it all.
+    // v3.42: split the float into its two stories when a real gap remains, so
+    // "Reconcile" has somewhere honest to start.
     if(!unOk){
-      if(Math.abs(lag)>=0.005)
+      if(haveFloat){
+        var fb=Number(H.feedBehind)||0;
+        if(Math.abs(fb)>=0.005)
+          kv+='<div class="dkv"><span class="k" style="color:var(--amber)">Balance feed catching up'+(lagAccts?' · '+esc(lagAccts):'')+'</span><span class="v">'+money(fb)+'</span></div>';
+        if(Math.abs(imp)>=0.005)
+          kv+='<div class="dkv"><span class="k" style="color:var(--amber)">Waiting on the importer</span><span class="v">'+money(imp)+'</span></div>';
+      } else if(Math.abs(lag)>=0.005){
         kv+='<div class="dkv"><span class="k" style="color:var(--amber)">Feed timing'+(lagAccts?' · '+esc(lagAccts):'')+'</span><span class="v">'+money(lag)+'</span></div>';
+      }
       kv+='<div class="dkv"><span class="k">Unexplained</span><span class="v neg">'+money(un)+'</span></div>';
     }
     if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+'</div>';
@@ -1628,9 +1661,16 @@ function dashFetchDash(force){
    the mirror-served health shows a REAL gap (unexplainedOk===false), quietly
    re-fetch health from Apps Script (which has the feed-lag "clears on its own"
    split) and swap just that card. Reconciled = trust the mirror (no extra call).
-   No-op when the dashboard was already served by Apps Script (no .mirror flag). */
+   No-op when the dashboard was already served by Apps Script (no .mirror flag).
+
+   v3.42: the mirror computes the decomposition itself now (sbc.v_feed_float), so
+   health.inFlight is always present and this whole re-fetch is redundant — it
+   short-circuits below. Kept one release as belt-and-suspenders in case the
+   phase1b-float.sql migration hasn't been applied to a given project yet (then
+   inFlight is null and the old path still runs). Delete in v3.43. */
 function dashRevalHealth_(){
   var d=state.dash; if(!d || !d.health || !d.health.mirror) return;
+  if(d.health.inFlight!=null) return;                 // v3.42: mirror already decomposed it
   if(d.health.unexplainedOk!==false) return;          // reconciled → nothing to explain
   if(state._healthReval) return; state._healthReval=true;
   ensureAuth().then(function(){ return legacyCall_('apiDashboard',[null],true,false); })
