@@ -189,6 +189,16 @@ aside.side{display:none}
 .dgauge .ic{position:relative;z-index:1;text-align:center}
 .dgauge .ic b{font-size:20px;font-weight:800}
 .dgauge .ic span{display:block;font-size:10px;color:var(--ink-3);font-weight:700}
+/* v3.45 (Way C2): compact "where the money is" breakdown inside the
+   Available-to-Fund hero. Its own class rather than .dkv — .dkv's hairline is
+   var(--line) and its label ink is var(--ink-2), both invisible on the teal
+   hero. Cards owed is AMBER (#fde68a reads as amber on teal), never red: it is
+   an obligation, not a problem. */
+.dbrk{margin-top:9px;border-top:1px solid rgba(255,255,255,.22);padding-top:5px}
+.dbrk .r{display:flex;justify-content:space-between;gap:8px;font-size:11px;line-height:1.55;font-variant-numeric:tabular-nums}
+.dbrk .r .k{opacity:.82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbrk .r .v{font-weight:700;white-space:nowrap}
+.dbrk .r.owe .k,.dbrk .r.owe .v{color:#fde68a;opacity:1}
 .dmini{display:flex;gap:18px;margin-top:8px;justify-content:center}
 .dmini .k{font-size:9.5px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .dmini .v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -842,7 +852,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.44.0';
+var FE_VERSION = 'v3.45.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1343,14 +1353,47 @@ var HOME_DEFAULT_HIDDEN = {targets:1, areas:1, inout:1, fundgauge:1, accounts:1,
 function homePersistId_(id){ return id==='attention' ? 'negatives' : id; }
 function homeCardId_(id){ return id==='negatives' ? 'attention' : id; }
 function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:0); }
+/* v3.45 — Way C2: WHERE the money behind the budget actually sits.
+   Available to fund is the income pool, and the pool routinely disagrees with
+   the bank: cards owed pull the bank below it, unapproved inbox rows push the
+   pool above it (Corey's "$49.44 above bank" on 8/3 was exactly this). Naming
+   the two makes the difference legible instead of looking like a bug.
+
+   DISPLAY-ONLY — no new server work. Every figure already ships in the
+   dashboard payload's health block from BOTH sources: Apps Script
+   budgetHealth_ (Plans.gs → cash / debt / pendingInbox) and the Supabase
+   mirror (v_budget_health → cash_cents / debt_cents / pending_inbox_cents).
+   So this renders identically on a mirror-served and an Apps-Script-served
+   dashboard, and needs no dashRevalHealth_ round trip.
+
+   Deliberately NOT presented as arithmetic on the hero number — pool =
+   cash − cards + inbox is NOT an identity (envelopes other than the pool hold
+   cash too). These are context rows, which is why there's no total. */
+function availBreakdown_(d){
+  var H=(d&&d.health)?d.health:null;
+  if(!H || H.error) return '';
+  var cash=Number(H.cash);
+  if(!isFinite(cash)) return '';            // pre-v3.31 payload: skip silently
+  var owed=Number(H.debt), pend=Number(H.pendingInbox)||0;
+  var rows='<div class="r"><span class="k">Cash in accounts</span><span class="v">'+money(cash)+'</span></div>';
+  // debt arrives POSITIVE (healthBankSide_ stores the magnitude); show the sign.
+  if(isFinite(owed) && Math.abs(owed)>=0.005)
+    rows+='<div class="r owe"><span class="k">Cards owed</span><span class="v">'+money(-Math.abs(owed))+'</span></div>';
+  // Signed as stored: inbox spend is negative, so this row explains a pool that
+  // sits ABOVE the bank without needing a sentence to do it.
+  if(Math.abs(pend)>=0.005)
+    rows+='<div class="r"><span class="k">Waiting in your inbox</span><span class="v">'+money(pend)+'</span></div>';
+  return '<div class="dbrk">'+rows+'</div>';
+}
 var DASH_WIDGETS = {
   avail:{title:'Available to fund',icon:'💰',hero:true,nav:'fund',render:function(sz){
     var d=state.dash, n=d?money(d.availableToFund):'<span class="skv">…</span>';
-    if(sz==='s') return '<div class="dlbl">Available to fund</div><div class="dnum big">'+n+'</div>';
+    var brk=availBreakdown_(d);
+    if(sz==='s') return '<div class="dlbl">Available to fund</div><div class="dnum big">'+n+'</div>'+brk;
     if(sz==='m') return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
-      '<div class="dsub">in the income pool · put it to work →</div>';
+      '<div class="dsub">in the income pool · put it to work →</div>'+brk;
     return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
-      '<div class="dsub">in the income pool · put it to work →</div>'+
+      '<div class="dsub">in the income pool · put it to work →</div>'+brk+
       (d?'<div class="dscroll" style="margin-top:8px">'+
         '<div class="dkv"><span class="k">Funded this month</span><span class="v">'+money(d.totals.funded)+'</span></div>'+
         '<div class="dkv"><span class="k">Budget target</span><span class="v">'+money(d.totals.target)+'</span></div></div>':'');}},
@@ -3995,7 +4038,8 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">Cards are the one thing that trips people up, and the rule is simpler than you’d guess: <b>a card purchase is spending, and it counts the moment you swipe.</b> When that charge arrives in your Inbox you approve it into Groceries or Gas like any other purchase, and that envelope goes down right then. Nothing special happens later.</p>'+
     '<p style="margin:0 0 8px"><b>So don’t put money in CC Payment 💳.</b> It isn’t a spending envelope — it’s plumbing. When you actually pay the card bill, two things happen at once: money leaves checking and the card balance drops. Both sides land in CC Payment and cancel each other out, which is why it should always sit at about $0.</p>'+
     '<p style="margin:0 0 8px">Funding it would double-count the same debt: once when you swiped, once again in the envelope. The money would sit there forever with nothing to spend it on.</p>'+
-    '<p style="margin:0">What about the balance you owe? It’s already handled — the app subtracts what you owe on cards from what you have in cash before it ever tells you what’s available to fund. You are never budgeting money that’s already promised to a card.</p>');
+    '<p style="margin:0 0 8px">What about the balance you owe? It’s already accounted for — the charge came out of a spending envelope the day you swiped, so the money is spoken for and no envelope is pretending otherwise.</p>'+
+    '<p style="margin:0">You can see it: under the big <b>Available to fund</b> number on the Dashboard, <b>Cash in accounts</b> is what’s sitting in checking and savings, and <b>Cards owed</b> in amber underneath is the part of it that belongs to the card companies. Amber, not red — that’s an obligation, not a problem. <b>Waiting in your inbox</b> shows up there too, which is why the pool can read a little above your bank balance until you clear the Inbox.</p>');
 
   h += S('🩺','Is the budget honest?',
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
