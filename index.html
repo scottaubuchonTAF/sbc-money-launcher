@@ -842,7 +842,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.43.0';
+var FE_VERSION = 'v3.44.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3967,7 +3967,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
     '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
     '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
-    '<p style="margin:0"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>');
+    '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
+    '<p style="margin:0"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>');
 
   h += S('💵','Payday — the routine that matters most',
     '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
@@ -3990,12 +3991,26 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">• <b>Or let it ride negative:</b> negative envelopes are allowed — they stay red and roll forward until you cover them at the next funding. Nothing hides.</p>'+
     '<p style="margin:0">Moving money between envelopes is normal and healthy. The budget is a plan, not a punishment.</p>');
 
+  h += S('💳','Credit cards — and why CC Payment stays empty',
+    '<p style="margin:0 0 8px">Cards are the one thing that trips people up, and the rule is simpler than you’d guess: <b>a card purchase is spending, and it counts the moment you swipe.</b> When that charge arrives in your Inbox you approve it into Groceries or Gas like any other purchase, and that envelope goes down right then. Nothing special happens later.</p>'+
+    '<p style="margin:0 0 8px"><b>So don’t put money in CC Payment 💳.</b> It isn’t a spending envelope — it’s plumbing. When you actually pay the card bill, two things happen at once: money leaves checking and the card balance drops. Both sides land in CC Payment and cancel each other out, which is why it should always sit at about $0.</p>'+
+    '<p style="margin:0 0 8px">Funding it would double-count the same debt: once when you swiped, once again in the envelope. The money would sit there forever with nothing to spend it on.</p>'+
+    '<p style="margin:0">What about the balance you owe? It’s already handled — the app subtracts what you owe on cards from what you have in cash before it ever tells you what’s available to fund. You are never budgeting money that’s already promised to a card.</p>');
+
+  h += S('🩺','Is the budget honest?',
+    '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
+    '<p style="margin:0 0 6px">• <b>"$X in flight — feeds catching up"</b> is normal and needs nothing from you. Your bank posted something the app hasn’t received yet (or the reverse). It clears itself, usually within a few hours.</p>'+
+    '<p style="margin:0 0 6px">• <b>"$Y arriving in your inbox shortly"</b> means transactions are already on their way in — they’ll show up in the Inbox on the next hourly sync.</p>'+
+    '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open the <b>Reconcile accounts</b> page from Settings; it usually means a balance or an envelope needs a nudge.</p>'+
+    '<p style="margin:0">Money sitting in your <b>Inbox unapproved</b> also shows as a difference — the bank has spent it but no envelope has been told yet. Clearing the Inbox is the fix, and that’s another reason not to let it pile up.</p>');
+
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Customize the widgets with the ✏️.</p>'+
     '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history.</p>'+
     '<p style="margin:0 0 6px">• <b>Reports</b> — where the money actually goes, by month, envelope, or account.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
-    '<p style="margin:0"><b>• Budget health</b> — the honesty check: do all envelope balances add up to actual money in the bank? Green means your budget isn’t fiction.</p>');
+    '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
+    '<p style="margin:0">• <b>Settings → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
 
   h += S('↩️','Made a mistake? Nothing is permanent',
     '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
