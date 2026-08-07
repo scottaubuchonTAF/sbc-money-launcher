@@ -755,6 +755,48 @@ var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
    the inbox you see is the sheet's, in sheet order, in ~½s instead of a 5-20s cold
    Apps Script call. It also removes the reason the v3.34.1 batch-approve fallback
    kept firing (fresh items missing from sbc.inbox); that retry stays as a net. */
+/* v3.48 — POST-WRITE MIRROR REFRESH (the "Home is stale after approving" fix).
+   Home reads the mirror (apiBoot = envelope balances + inbox count, apiDashboard
+   = the tiles) and the mirror only refreshes on the hourly pg_cron sync at :07.
+   A write applied THROUGH the mirror updates it instantly — but a write that
+   falls back to Apps Script does not, and that fallback is the normal path for
+   freshly imported rows (the mirror can only approve inbox rows it already
+   holds; see approveAll's v3.34.1 note). The sheet is right, the Inbox screen is
+   right (apiGetInbox refreshes itself), and Home stays wrong for up to 59 min.
+
+   Only the CLIENT knows which backend a write actually went to, so it records
+   that here and asks the next Home read to refresh the mirror from the sheet
+   first. Nothing changes on ordinary loads: no flag, no refresh, no cost.
+
+   Persisted (not just in memory) because the common sequence is approve → close
+   the app → reopen, and the reopen is exactly the read that must not be stale.
+   Self-expires after 2h: by then the hourly sync has covered it and a stuck flag
+   would only buy a pointless refresh on every boot. */
+var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
+var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
+function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
+function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
+function mirrorDirty_(){
+  try{
+    var t = Number(localStorage.getItem(MIRROR_DIRTY_KEY)||0);
+    if(!t) return false;
+    if(Date.now()-t > MIRROR_DIRTY_TTL){ clearMirrorDirty_(); return false; }
+    return true;
+  }catch(e){ return false; }
+}
+/* Returns args with {refreshMirror:true} merged into args[0] for the two Home
+   reads while the flag is set; the ORIGINAL array otherwise (callers use
+   identity to tell whether a refresh was requested). Apps Script ignores the
+   extra key, so a fallback to legacyCall_ is harmless. */
+function withMirrorRefresh_(fn, args){
+  if(!MIRROR_REFRESH_FNS[fn] || !mirrorDirty_()) return args;
+  var a = Array.prototype.slice.call(args);
+  var src = (a[0] && typeof a[0]==='object') ? a[0] : null, o = {};
+  if(src) for(var k in src){ if(Object.prototype.hasOwnProperty.call(src,k)) o[k]=src[k]; }
+  o.refreshMirror = true;
+  a[0] = o;
+  return a;
+}
 var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1,
   apiBalances:1, apiAccounts:1, // v3.36 Phase 3 slice 2: account/balance read cuts
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
@@ -852,7 +894,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.47.0';
+var FE_VERSION = 'v3.48.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -967,7 +1009,16 @@ function apiCall_(fn, args, retry, mutating){
   // failure (network, auth, unsupported, empty mirror) silently falls back
   // to the Apps Script backend below.
   if(!mutating && SUPA_READS[fn] && supaOn_()){
-    return supaCall_(fn, args).catch(function(err){
+    // v3.48: ask for a sheet refresh first when our last write bypassed the mirror
+    var rArgs = withMirrorRefresh_(fn, args), asked = (rArgs !== args);
+    return supaCall_(fn, rArgs).then(function(r){
+      // Cleared on the FIRST refreshed read: refreshMirror reloads the shared
+      // tables (envelopes/inbox/transactions/journal), so the other Home read —
+      // milliseconds behind — already sees fresh data, and the edge function's
+      // own 10s memo makes a second request free anyway.
+      if(asked) clearMirrorDirty_();
+      return r;
+    }).catch(function(err){
       supaFails_++;
       try{ console.info('SBC mirror fallback for '+fn+': '+(err && err.message || err)); }catch(e){}
       return legacyCall_(fn, args, retry, mutating);
@@ -981,11 +1032,15 @@ function apiCall_(fn, args, retry, mutating){
       if(!(err && err.notServed)) supaFails_++;  // v3.33: notServed = routine, no penalty
       if(err && (err.definitive || err.notServed)){
         try{ console.info('SBC mirror write fallback for '+fn+': '+(err.message||err)); }catch(e){}
+        markMirrorDirty_();   // v3.48: the mirror did NOT apply this write
         return legacyCall_(fn, args, retry, mutating);
       }
       throw new Error("That didn't confirm (connection hiccup). Check the inbox in a moment before retrying — it may have gone through.");
     });
   }
+  // v3.48: every other mutation path is Apps-Script-only (not a SUPA_WRITE, or
+  // the mirror is off / 3-strikes out), so the mirror is now behind the sheet.
+  if(mutating) markMirrorDirty_();
   return legacyCall_(fn, args, retry, mutating);
 }
 function legacyCall_(fn, args, retry, mutating){
@@ -1181,6 +1236,12 @@ function refreshBoot(){
     // inboxCount is stale-high — trust the filtered local inbox instead.
     var pend = Object.keys(state.pendingApproved||{}).length;
     updateBadges((pend && state.inbox) ? state.inbox.length : b.inboxCount);
+    // v3.48: apiBoot paints from the mirror and this Apps-Script reconcile is
+    // what corrects it — but nothing re-rendered, so Home kept showing the
+    // mirror's numbers until the user navigated away and back. The inbox tile
+    // reads state.boot.inboxCount at RENDER time; refreshing state without a
+    // render is invisible.
+    if(state.view==='dash') renderDash();
     // v3.39: a mirror-served boot has version=null, so About renders
     // "Server (checking…)". This reconcile is what supplies the real version —
     // re-render if the user is sitting on that screen, or the placeholder looks
