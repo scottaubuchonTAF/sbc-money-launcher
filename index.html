@@ -797,6 +797,26 @@ function withMirrorRefresh_(fn, args){
   a[0] = o;
   return a;
 }
+/* v3.49: after a manual "Refresh from Tiller" the Apps Script answer is
+   authoritative and the MIRROR is the stale one — sbc.v_latest_balances is fed
+   from the Tiller workbook by the hourly pg_cron sync (:07), and the edge
+   function's own refresh path is companion-sourced only, so it cannot be pulled
+   forward on demand. Without this flag the next apiBalances read would quietly
+   serve the pre-refresh numbers again and undo the button in front of the user.
+   Short window on purpose: long enough to cover the session you pressed it in,
+   not so long that Balances permanently gives up the mirror's speed. */
+var MIRROR_BYPASS_FNS = { apiBalances:1 };
+var TILLER_BAL_FRESH_KEY = 'sbcTillerBalFresh', TILLER_BAL_FRESH_TTL = 15*60*1000;
+function markTillerBalFresh_(){ try{ localStorage.setItem(TILLER_BAL_FRESH_KEY, String(Date.now())); }catch(e){} }
+function tillerBalFresh_(){
+  try{
+    var t = Number(localStorage.getItem(TILLER_BAL_FRESH_KEY)||0);
+    if(!t) return false;
+    if(Date.now()-t > TILLER_BAL_FRESH_TTL){ localStorage.removeItem(TILLER_BAL_FRESH_KEY); return false; }
+    return true;
+  }catch(e){ return false; }
+}
+function mirrorBypass_(fn){ return !!MIRROR_BYPASS_FNS[fn] && tillerBalFresh_(); }
 var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1,
   apiBalances:1, apiAccounts:1, // v3.36 Phase 3 slice 2: account/balance read cuts
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
@@ -894,7 +914,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.48.0';
+var FE_VERSION = 'v3.49.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -980,35 +1000,82 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
   apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1 };
-var mutationInFlight = false;
+/* v3.49: mutations QUEUE instead of being rejected.
+   v3.16 blocked a second mutation outright, which is right for a double-click
+   but wrong for deliberate back-to-back work: a Tiller write runs 10-15s
+   (open workbook + locked append + recalc), so typing a second manual balance
+   inside that window just got "Hang on — finishing the last action…" and was
+   DROPPED. The UI is already optimistic on those paths, so the user had every
+   reason to think it saved.
+   The non-idempotency guarantee v3.16 bought is preserved by two properties,
+   not by rejecting: (a) exactly one mutation is ever in flight — the queue is
+   drained strictly one at a time, in order; (b) an IDENTICAL call (same fn +
+   same args) that is already in flight or already queued is still rejected,
+   which is exactly what a double-click looks like. Two different balances, or
+   the same account with a different number, are different work and both run. */
+var mutationInFlight = null;   // sig of the running mutation (null = idle)
+var mutationQueue_ = [];
+var MUTATION_QUEUE_MAX = 40;   // runaway guard; real use never approaches it
+function mutSig_(fn, args){
+  try{ return fn+'|'+JSON.stringify(args); }catch(e){ return fn+'|?'; }
+}
+function mutationPending_(sig){
+  if(mutationInFlight !== null && mutationInFlight === sig) return true;
+  for(var i=0;i<mutationQueue_.length;i++) if(mutationQueue_[i].sig===sig) return true;
+  return false;
+}
+function mutationDepth_(){ return mutationQueue_.length + (mutationInFlight===null?0:1); }
+/* v3.49: "wait until every queued write has landed". Used by Refresh from
+   Tiller: re-reading the Tiller sheet while a manual balance is still queued
+   would read the PRE-write value and revert the number on screen. */
+var mutationIdleWaiters_ = [];
+function mutationsIdle_(){
+  if(mutationDepth_() === 0) return Promise.resolve();
+  return new Promise(function(res){ mutationIdleWaiters_.push(res); });
+}
+function mutationsMaybeIdle_(){
+  if(mutationDepth_() !== 0) return;
+  mutationIdleWaiters_.splice(0).forEach(function(r){ r(); });
+}
+function pumpMutations_(){
+  if(mutationInFlight !== null || !mutationQueue_.length){ mutationsMaybeIdle_(); return; }
+  var job = mutationQueue_.shift();
+  mutationInFlight = job.sig;
+  var done = function(){ mutationInFlight = null; pumpMutations_(); };
+  apiCall_(job.fn, job.args, true, true)
+    .then(function(r){ done(); job.resolve(r); },
+          function(e){ done(); job.reject(e); });
+}
 function run(fn){
   var args = Array.prototype.slice.call(arguments,1);
   var mutating = !!MUTATING[fn];
-  if(mutating && mutationInFlight){
-    if(typeof toast==='function') toast('Hang on — finishing the last action…');
-    return Promise.reject(new Error('Another action is still saving — give it a moment.'));
+  if(!mutating){
+    return ensureAuth().then(function(){ return apiCall_(fn, args, true, false); });
   }
-  // v3.22: acquire the mutation lock only AFTER auth resolves — it was taken
-  // before ensureAuth(), so an abandoned sign-in held the lock forever and
-  // every later action toasted "Hang on…" until a full reload.
+  var sig = mutSig_(fn, args);
+  if(mutationPending_(sig)){
+    if(typeof toast==='function') toast('Already saving that one…');
+    return Promise.reject(new Error('That exact action is already saving.'));
+  }
+  // v3.22: join the queue only AFTER auth resolves — an abandoned sign-in used
+  // to hold the lock forever. Nothing is reserved until we have a token.
   return ensureAuth().then(function(){
-    if(mutating){
-      if(mutationInFlight){
-        toast('Hang on — finishing the last action…');
-        throw new Error('Another action is still saving — give it a moment.');
+    return new Promise(function(res, rej){
+      // Re-check: two clicks can both be waiting on the same auth promise.
+      if(mutationPending_(sig)){ rej(new Error('That exact action is already saving.')); return; }
+      if(mutationQueue_.length >= MUTATION_QUEUE_MAX){
+        rej(new Error('Too many saves are queued — give it a moment.')); return;
       }
-      mutationInFlight = true;
-    }
-    return apiCall_(fn, args, true, mutating);
-  })
-    .then(function(r){ if(mutating) mutationInFlight=false; return r; },
-          function(e){ if(mutating) mutationInFlight=false; throw e; });
+      mutationQueue_.push({ fn:fn, args:args, sig:sig, resolve:res, reject:rej });
+      pumpMutations_();
+    });
+  });
 }
 function apiCall_(fn, args, retry, mutating){
   // v3.29 Phase 1: reads the Supabase mirror serves go there first; any
   // failure (network, auth, unsupported, empty mirror) silently falls back
   // to the Apps Script backend below.
-  if(!mutating && SUPA_READS[fn] && supaOn_()){
+  if(!mutating && SUPA_READS[fn] && supaOn_() && !mirrorBypass_(fn)){   // v3.49 bypass
     // v3.48: ask for a sheet refresh first when our last write bypassed the mirror
     var rArgs = withMirrorRefresh_(fn, args), asked = (rArgs !== args);
     return supaCall_(fn, rArgs).then(function(r){
@@ -1192,7 +1259,7 @@ function hydrateSnapshot_(){
 }
 function setGreeting_(){
   if(!state.boot) return;
-  updateBadges(state.boot.inboxCount||0);
+  updateBadges(inboxCountEff_());
   var sf = $('#sideFoot');
   if(sf) sf.innerHTML = '<div style="margin-bottom:7px;word-break:break-all">'+esc(state.boot.user)+'</div>'+
     '<button data-act="logout" style="width:100%;padding:7px 10px;border-radius:8px;cursor:pointer;'+
@@ -1211,7 +1278,7 @@ function setGreeting_(){
 function prewarm(){
   var warn = function(fn){ return function(e){ console.warn('prewarm '+fn+':', e && e.message || e); }; };
   if(!state.inbox) run('apiGetInbox').then(function(r){
-    state.inbox=filterInbox(r); updateBadges(state.inbox.length); markFetched('inbox'); // v3.27; v3.32 pending filter
+    state.inbox=filterInbox(r); setInboxCount_(state.inbox.length); markFetched('inbox'); // v3.27; v3.32 pending filter
     if(state.view==='inbox' && !userBusy()) drawInbox();
   }).catch(warn('apiGetInbox'));
   dashFetchDash(true); // v3.22: shared loader — renderDash() fired the same call in
@@ -1234,8 +1301,11 @@ function refreshBoot(){
     state.boot=b;
     // v3.32: while mirror-approved rows await their write-back, Apps Script's
     // inboxCount is stale-high — trust the filtered local inbox instead.
-    var pend = Object.keys(state.pendingApproved||{}).length;
-    updateBadges((pend && state.inbox) ? state.inbox.length : b.inboxCount);
+    // v3.49: that correction lived HERE, on the badge only, while the Home
+    // inbox card read state.boot.inboxCount straight — so this reconcile
+    // actively re-broke the card it then re-rendered. Both go through
+    // inboxCountEff_() now (see the note there).
+    updateBadges(inboxCountEff_());
     // v3.48: apiBoot paints from the mirror and this Apps-Script reconcile is
     // what corrects it — but nothing re-rendered, so Home kept showing the
     // mirror's numbers until the user navigated away and back. The inbox tile
@@ -1248,6 +1318,45 @@ function refreshBoot(){
     // like a failure forever (it did on Corey's stack).
     if(state.view==='about') renderAbout();
   });
+}
+/* v3.49: the ONE place "how many are waiting in the inbox" is decided, used by
+   the nav badges AND the Home inbox card. They disagreed before: an approve
+   fired refreshBoot(), whose apiBootstrap reads the SHEET — and on the mirror
+   write path the sheet write-back is still in flight, so its inboxCount comes
+   back stale-HIGH. The badge compensated; the card didn't, and nothing
+   re-rendered it afterwards, so Home showed the pre-approve number until the
+   next cold open.
+   While rows are pending write-back the local (already filtered) inbox is the
+   truth; otherwise the server count is. */
+/* v3.49: honest feedback when a Tiller write is already running. The screen is
+   already patched optimistically, so the only thing left to tell the user is
+   that this one is in line behind the last one — not that it failed. */
+function mutBalanceToast_(account){
+  var ahead = mutationDepth_();
+  return ahead ? ('Queued '+account+' — '+ahead+' still saving to Tiller…')
+               : ('Saving '+account+' to Tiller…');
+}
+function inboxCountEff_(){
+  var pend = Object.keys(state.pendingApproved||{}).length;
+  if(pend && state.inbox) return state.inbox.length;
+  return (state.boot && state.boot.inboxCount) || 0;
+}
+/* Optimistic count nudge so Home moves the instant the row leaves the inbox,
+   with no round trip. Clamped at 0; the next apiBoot/apiBootstrap corrects it. */
+function bumpInboxCount_(delta){
+  if(state.boot && typeof state.boot.inboxCount === 'number'){
+    state.boot.inboxCount = Math.max(0, state.boot.inboxCount + delta);
+  }
+}
+/* A real count just arrived (an inbox fetch, or the importer's own tally):
+   record it AND paint it. Every site that used to call updateBadges(n) with a
+   fresh number goes through here, because a number good enough for the badge is
+   good enough for the Home card — and leaving state.boot behind is what made
+   the two disagree. updateBadges stays pure DOM. */
+function setInboxCount_(n){
+  n = Math.max(0, Number(n)||0);
+  if(state.boot) state.boot.inboxCount = n;
+  updateBadges(n);
 }
 function updateBadges(n){
   ['#tabBadge','#sideBadge'].forEach(function(s){
@@ -1265,6 +1374,27 @@ function invalidateData(){
   state.envTxnCache = {};
   state.sync = null;
   state._fetchedAt = {};     // v3.27: mark all warm views stale
+  homeReval_();              // v3.49
+}
+/* v3.49: dropping the cache is not the same as refreshing the screen.
+   Nulling state.dash only meant "refetch the NEXT time renderDash runs" — and
+   writes happen on Inbox / Fund / Balances, not on Home. So Home kept whatever
+   it had, and worse, the localStorage snapshot the next open paints from still
+   held the pre-write numbers. Refetch in the background right after the write,
+   debounced so a batch of writes costs one read, and repaint if Home is up.
+   Cheap: it's the mirror, answering in ms, and dashFetchDash() re-saves the
+   snapshot when it lands. */
+function homeReval_(tries){
+  saveSnapshot_();           // persist the corrected count / drop the stale dash
+  clearTimeout(homeReval_._t);
+  homeReval_._t = setTimeout(function(){
+    // A dashboard read already in flight may have LEFT before this write landed,
+    // and dashFetchDash() no-ops while one is running — so its answer would be
+    // pre-write. Wait it out (bounded) instead of silently keeping stale data.
+    if(state.dashLoading && (tries||0) < 5){ homeReval_((tries||0)+1); return; }
+    dashFetchDash(true);     // re-renders itself if the user is on Home
+    if(state.view==='dash') renderDash();
+  }, 400);
 }
 /* v3.32 Phase 2: a mirror-served approve vanishes from the UI instantly, but
    Apps Script's Inbox keeps the row until the background write-back lands
@@ -1482,7 +1612,7 @@ var DASH_WIDGETS = {
         '<div class="dkv"><span class="k">Funded so far</span><span class="v">'+money(d.totals.funded)+'</span></div></div>':'');}},
 
   inbox:{title:'Inbox',icon:'📥',nav:'inbox',render:function(sz){
-    var n=state.boot?state.boot.inboxCount:0;
+    var n=inboxCountEff_();   // v3.49: same source as the nav badge
     if(sz==='s') return '<div class="dlbl">Waiting in inbox</div><div class="dnum big">'+n+'</div><div class="dsub">tap to review →</div>';
     if(sz==='m') return '<div class="dlbl">Waiting in inbox</div><div class="dnum">'+n+'</div><div class="dsub">tap to review →</div>';
     var list;
@@ -2182,7 +2312,7 @@ function renderInbox(){
     rows = filterInbox(rows); // v3.32: hide rows whose write-back is in flight
     var changed = JSON.stringify(rows) !== JSON.stringify(state.inbox);
     state.inbox = rows;
-    updateBadges(rows.length);
+    setInboxCount_(rows.length);   // v3.49: keep state.boot in step
     if(state.view==='inbox' && (changed || !$('.txncard, .empty')) && !userBusy()) drawInbox();
   }).catch(function(e){ if(!state.inbox) fail(e); });
 }
@@ -2313,7 +2443,7 @@ function approveAll(){
       state.inbox = state.inbox.filter(function(t){ return !doneIds[t.txnId]; });
       Object.keys(doneIds).forEach(function(id){ delete state.sel[id]; delete state.split[id]; });
       invalidateData();
-      updateBadges(state.inbox.length);
+      setInboxCount_(state.inbox.length);   // v3.49
       refreshBoot();
       drawInbox();
       var failed = r.results.length - r.approved;
@@ -2415,8 +2545,9 @@ function afterApprove(txnId, key){
     toast(tillerNote('Approved ✓', r));
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.sel[txnId]; delete state.split[txnId];
-    invalidateData();
-    updateBadges(state.inbox.length);
+    bumpInboxCount_(-1);     // v3.49: Home's card moves now, not at the next boot
+    invalidateData();        // v3.49: also revalidates Home in the background
+    updateBadges(inboxCountEff_());
     refreshBoot();
     drawInbox();
   };
@@ -2445,7 +2576,7 @@ function renderFund(){
     state.inbox ? Promise.resolve(state.inbox) : run('apiGetInbox')
   ]).then(function(res){
     state.plans = res[0]; state.inbox = res[1];
-    updateBadges(state.inbox.length);
+    setInboxCount_(state.inbox.length);   // v3.49
     drawFund();
   }).catch(fail);
 }
@@ -3127,7 +3258,9 @@ function balEditSave(account){
       rr.balance = g.liability?Math.abs(amt):amt; rr.days=0; rr.updated='today'; } }); });
   state.balEdit=null; state.reconcile=null; invalidateData();
   drawBalances();
-  toast('Saving '+account+' to Tiller…');
+  // v3.49: mutations queue now (see run()), so back-to-back balance entry no
+  // longer bounces off the in-flight guard — say so when a save is waiting.
+  toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
   }).catch(function(e){
@@ -3136,11 +3269,76 @@ function balEditSave(account){
     toast('⚠ Save failed: '+(e.message||e));
   });
 }
+/* ---- v3.49: manual "Refresh from Tiller" (Balances header) --------------
+   Two steps, in this order, because the order is the whole point:
+     1. PUSH — wait for every queued mutation to land. A manual balance you typed
+        five seconds ago is still queued (writes take 10-15s); re-reading Tiller
+        first would read the PRE-write row and visibly revert the number you just
+        entered. This is the failure the queue made possible, so it's handled here.
+     2. PULL — apiRefreshBalances on Apps Script: bumps the Tiller cache
+        generation and re-reads Balance History + the Accounts tab LIVE. Deliberately
+        not a mirror read: the mirror's balances come from the hourly sync, which is
+        exactly what the user is pressing this button to get ahead of.
+   Then Home follows (invalidateData) and, because the mirror can't answer for bank
+   balances either, the dashboard is re-fetched from Apps Script in the background —
+   same shape as dashRevalHealth_. Failure leaves the old numbers on screen: a
+   refresh that fails must not blank the view. */
+function balRefreshFromTiller(){
+  if(state.balRefreshing) return;
+  state.balRefreshing = true;
+  actBusy('bal-refresh', true, 'Refreshing…');
+  var q = mutationDepth_();
+  toast(q ? ('Finishing '+q+' save'+(q>1?'s':'')+' to Tiller first…')
+          : 'Reading balances from Tiller…');
+  var done = function(){
+    state.balRefreshing = false;
+    actBusy('bal-refresh', false);
+  };
+  mutationsIdle_().then(function(){
+    if(q) toast('Reading balances from Tiller…');
+    return run('apiRefreshBalances');
+  }).then(function(r){
+    if(r && r.balances) state.balances = r.balances;
+    if(r && r.reconcile) state.reconcile = r.reconcile;
+    markFetched('balances');
+    markTillerBalFresh_();     // keep later apiBalances reads off the stale mirror
+    done();
+    invalidateData();          // Home tiles + snapshot follow (v3.49 homeReval_)
+    dashRevalFromScript_();    // the mirror can't serve fresh bank balances
+    if(state.view==='balances') drawBalances();
+    else if(state.view==='reconcile') drawReconcile();
+    toast('Balances updated from Tiller ✓'+((r&&r.balances&&r.balances.asOf)?' · as of '+r.balances.asOf:''));
+  }).catch(function(e){
+    done();
+    if(state.view==='balances') drawBalances();
+    toast('⚠ Refresh failed: '+(e.message||e));
+  });
+}
+/* Pull the dashboard from APPS SCRIPT once, in the background, and swap it in.
+   Same idea as dashRevalHealth_ (v3.31) but for the whole payload: after a live
+   Tiller read the mirror is the stale side for anything bank-derived, and Home
+   disagreeing with the Balances screen is the bug class we just spent v3.49
+   fixing. Non-fatal and never blocks the caller. */
+function dashRevalFromScript_(){
+  if(state._dashScriptReval) return;
+  state._dashScriptReval = true;
+  ensureAuth().then(function(){ return legacyCall_('apiDashboard',[null],true,false); })
+    .then(function(fresh){
+      state._dashScriptReval = false;
+      if(!fresh) return;
+      state.dash = fresh; saveSnapshot_();
+      if(state.view==='dash') renderDash();
+    })
+    .catch(function(e){ state._dashScriptReval = false;
+      console.warn('dash reval from Apps Script:', e && e.message || e); });
+}
 function drawBalances(){
   var b = state.balances;
   var h = '<div class="viewhead"><h2>Balances</h2>'+
     '<span style="display:flex;gap:10px;align-items:center">'+
     '<span style="color:var(--ink-3);font-size:12.5px">'+esc(b.asOf||'')+'</span>'+
+    '<button class="btn ghost sm" data-act="bal-refresh" title="Push any queued balance saves to Tiller, then re-read Tiller live">'+
+    (state.balRefreshing?'Refreshing…':'↻ Refresh from Tiller')+'</button>'+
     '<button class="btn ghost sm" data-act="bal-reorder">'+
     (state.balReorder?'Done':'Reorder')+'</button></span></div>';
   if(b.dups && b.dups.length && !state.balReorder){
@@ -3393,7 +3591,7 @@ function importNowUi(){
       ? r.newCount+' new transaction'+(r.newCount>1?'s':'')+' → Inbox ✓'
       : 'No new transactions in Tiller');
     state.inbox = null;
-    updateBadges(r.inboxCount);
+    setInboxCount_(r.inboxCount);   // v3.49
     refreshBoot();
     if(state.view==='inbox') renderInbox();
   }).catch(function(e){
@@ -3916,7 +4114,9 @@ function reconSave(account){
   if(a){ a.balance=amt; a.days=0; a.updated='today'; a.dormant=false; }
   state.baledit=null; state.balances=null; invalidateData();
   drawReconcile();
-  toast('Saving '+account+' to Tiller…');
+  // v3.49: mutations queue now (see run()), so back-to-back balance entry no
+  // longer bounces off the in-flight guard — say so when a save is waiting.
+  toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
   }).catch(function(e){
@@ -4449,6 +4649,7 @@ document.addEventListener('click', function(ev){
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
     case 'import-now': importNowUi(); break;
+    case 'bal-refresh': balRefreshFromTiller(); break;
     case 'bal-reorder':
       state.balReorder = !state.balReorder;
       if(!state.balReorder) balSaveOrder();
