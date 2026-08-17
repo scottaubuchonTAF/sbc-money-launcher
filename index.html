@@ -833,7 +833,10 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
    Script with NO mirror penalty (see supaWriteCall_ + apiCall_). */
 var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
   apiResplit:1, apiUnapprove:1, apiRemoveTxn:1, apiUndo:1,
-  apiFundFromPool:1 }; // v3.34 slice 3: funding (journal batch)
+  apiFundFromPool:1, // v3.34 slice 3: funding (journal batch)
+  apiMove:1 };       // v3.50: envelope moves (journal batch) — was the last
+                     // journal write still doing a full 5-20s Apps Script
+                     // round trip that the UI WAITED on
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -914,7 +917,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.49.0';
+var FE_VERSION = 'v3.50.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2151,14 +2154,21 @@ function renderEnvDetail(){
     '<div class="dbal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</div></div>';
   if(state.move){
     var m = state.move;
+    // v3.50: bidirectional — "out" = this envelope → picked (the only mode
+    // before), "in" = picked → this envelope. The picked envelope stays in
+    // m.toId either way; moveGo() swaps from/to when dir==='in'.
+    var mIn = m.dir==='in';
     h += '<div class="splitbox" style="margin-top:14px">'+
-      '<div class="splitline"><span class="mvlbl">To</span>'+
+      '<div class="filterbar" style="margin:0 0 8px">'+
+      '<button class="pill'+(mIn?'':' sel')+'" data-act="move-dir" data-arg="out">Move out</button>'+
+      '<button class="pill'+(mIn?' sel':'')+'" data-act="move-dir" data-arg="in">Move in</button></div>'+
+      '<div class="splitline"><span class="mvlbl">'+(mIn?'From':'To')+'</span>'+
       '<button class="envbtn'+(m.toId?'':' unset')+'" data-act="open-picker" data-arg="moveto|x|0">'+
       (m.toId?esc(envName(m.toId)):'Pick envelope…')+'</button>'+
       '<input type="number" step="0.01" inputmode="decimal" placeholder="0.00" value="'+(m.amount||'')+
       '" data-act="move-amt"></div>'+
       '<div class="actions" style="margin-top:6px">'+
-      '<button class="btn sm" data-act="env-move-go">Move</button>'+
+      '<button class="btn sm" data-act="env-move-go">'+(mIn?'Move in':'Move out')+'</button>'+
       '<button class="btn ghost sm" data-act="env-move-cancel">Cancel</button></div></div>';
   } else {
     // v3.6.12: one-tap sweep of an income envelope's full balance into the
@@ -2262,23 +2272,61 @@ function envUnarchive(id){
   .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
+/* v3.50: apply a move to the LOCAL boot state so the balances change on screen
+   the moment the button is tapped. Zero-sum, cent-exact, reversible (the catch
+   path calls it again with from/to swapped). state.dash is NOT touched here —
+   startMove_ invalidates it and homeReval_ refetches from the mirror, which the
+   mirror-first write has already updated. */
+function applyMoveLocal_(fromId, toId, amt){
+  if(!state.boot || !state.boot.groups) return;
+  var c = cents(amt);
+  state.boot.groups.forEach(function(g){ (g.envelopes||[]).forEach(function(e){
+    if(e.id===fromId) e.balance = (cents(e.balance) - c)/100;
+    else if(e.id===toId) e.balance = (cents(e.balance) + c)/100;
+  });});
+  if(state.envDetail && (state.envDetail.id===fromId || state.envDetail.id===toId))
+    state.envDetail.txns = null;   // activity list must refetch
+}
+/* v3.50: the shared optimistic move. Before this, moveGo WAITED on apiMove
+   (5-20s when it fell to a cold Apps Script) and then on a full refreshBoot()
+   before the screen changed. Now: balances move locally first, the write goes
+   mirror-first (apiMove joined SUPA_WRITES — the mirror inserts the same
+   zero-sum 'move' journal batch and forwards to Apps Script in the background),
+   and the Activity list refetches once the write confirms, at which point the
+   mirror-served apiEnvelopeTxns already contains the new 'moved' rows. */
+function startMove_(fromId, toId, amt, okMsg){
+  applyMoveLocal_(fromId, toId, amt);
+  state.move = null;
+  invalidateData();                       // drops caches + homeReval_ (mirror is already updated on the happy path)
+  if(state.view==='envdetail') renderEnvDetail();
+  else if(state.view==='envelopes') renderEnvelopes();
+  toast('Moving '+money(amt)+'…');
+  run('apiMove', { fromId:fromId, toId:toId, amount:amt })
+  .then(function(){
+    toast(okMsg);
+    // the mirror now holds the journal rows — refetch the visible activity list
+    delete state.envTxnCache[fromId]; delete state.envTxnCache[toId];
+    if(state.view==='envdetail' && state.envDetail){ state.envDetail.txns = null; renderEnvDetail(); }
+  })
+  .catch(function(e){
+    applyMoveLocal_(toId, fromId, amt);   // revert the optimistic balances
+    invalidateData();
+    if(state.view==='envdetail') renderEnvDetail();
+    else if(state.view==='envelopes') renderEnvelopes();
+    toast('⚠ Move didn’t save — '+(e.message||e));
+  });
+}
 function moveGo(){
   var m = state.move, d = state.envDetail;
   if(!m || !d) return;
-  if(!m.toId){ toast('Pick a destination envelope'); return; }
+  var mIn = m.dir==='in';   // v3.50: bidirectional
+  if(!m.toId){ toast('Pick a'+(mIn?' source':' destination')+' envelope'); return; }
   var amt = Number(m.amount);
   if(!(amt>0)){ toast('Enter a positive amount'); return; }
-  actBusy('env-move-go', true, 'Moving…'); // v3.27: instant feedback
-  toast('Moving '+money(amt)+'…');
-  run('apiMove', { fromId:d.id, toId:m.toId, amount:amt })
-  .then(function(){
-    toast('Moved '+money(amt)+' ✓');
-    state.move = null;
-    invalidateData();
-    if(state.envDetail) state.envDetail.txns = null;
-    return refreshBoot();
-  }).then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
-  .catch(function(e){ actBusy('env-move-go', false); toast('⚠ '+(e.message||e)); });
+  if(m.toId===d.id){ toast('Pick two different envelopes'); return; }
+  var fromId = mIn ? m.toId : d.id;
+  var toId   = mIn ? d.id   : m.toId;
+  startMove_(fromId, toId, amt, 'Moved '+money(amt)+' ✓');
 }
 function sweepToPool(){
   var d = state.envDetail; if(!d) return;
@@ -2291,15 +2339,7 @@ function sweepToPool(){
   confirmUi('Move '+money(amt)+' from '+e.name+' into the Income Cash Pool?', 'Move to pool')
   .then(function(ok){
     if(!ok) return;
-    return run('apiMove', { fromId:e.id, toId:poolId, amount:amt })
-    .then(function(){
-      toast('Moved '+money(amt)+' to pool ✓');
-      state.move = null;
-      invalidateData();
-      if(state.envDetail) state.envDetail.txns = null;
-      return refreshBoot();
-    }).then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
-    .catch(function(err){ toast('⚠ '+(err.message||err)); });
+    startMove_(e.id, poolId, amt, 'Moved '+money(amt)+' to pool ✓');
   });
 }
 
@@ -4673,7 +4713,8 @@ document.addEventListener('click', function(ev){
     case 'inspect-close':
       if(el.tagName==='BUTTON' || ev.target===el) $('#ovl').innerHTML='';
       break;
-    case 'env-move-start': state.move={toId:'', amount:''}; renderEnvDetail(); break;
+    case 'env-move-start': state.move={dir:'out', toId:'', amount:''}; renderEnvDetail(); break;
+    case 'move-dir': if(state.move && state.move.dir!==arg){ state.move.dir=arg; renderEnvDetail(); } break; // v3.50
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
     case 'env-sweep-pool': sweepToPool(); break;
