@@ -894,7 +894,8 @@ var state = {
   sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null, limit:50}, resplit:{},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
-  envTxnCache:{}, confirmRes:null, importing:false,
+  envTxnCache:{}, envTxnSeq:{}, confirmRes:null, importing:false, // v3.50.1: per-envelope fetch seq
+
   dashLayout:null, homeCustomize:false, density:'mid',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null
@@ -917,7 +918,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.50.0';
+var FE_VERSION = 'v3.50.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2123,6 +2124,49 @@ function archivedSectionHtml(){
 }
 
 /* ============================ envelope detail ============================ */
+/* v3.50.1: the ONE way to fetch an envelope's activity, seq-guarded. The v3.50
+   move flow issued two apiEnvelopeTxns fetches in parallel (one from the
+   optimistic repaint — pre-write — and one after the write confirmed), and two
+   edge-function calls have NO ordering guarantee: when the pre-move answer
+   resolved LAST it overwrote the fresh list and the stale copy stuck in
+   envTxnCache. Only the latest fetch per envelope may apply. */
+function fetchEnvTxns_(envId){
+  var seq = state.envTxnSeq[envId] = (state.envTxnSeq[envId]||0)+1;
+  return run('apiEnvelopeTxns', envId, 150, {funding:true}).then(function(txns){
+    if(state.envTxnSeq[envId] !== seq) return null;  // a newer fetch owns this list
+    state.envTxnCache[envId] = txns;
+    if(state.envDetail && state.envDetail.id===envId){
+      state.envDetail.txns = txns;
+      if(state.view==='envdetail') renderEnvDetail();
+    }
+    return txns;
+  });
+}
+/* v3.50.1: overlay rows so a move shows in Activity the INSTANT it's made — on
+   BOTH envelopes — instead of after a server round trip (or, on the Apps Script
+   fallback path, after the hourly sync). An entry lives from tap until the
+   post-confirm refetch has the real journal rows in hand (renders between those
+   two moments happen in the same microtask drain, so no duplicate ever paints),
+   is removed on failure, and self-expires at 5 min as a safety net. */
+var PENDING_MOVE_TTL = 5*60*1000;
+state.pendingMoves = [];
+function pendingMoveRows_(envId){
+  var now = Date.now();
+  state.pendingMoves = state.pendingMoves.filter(function(p){ return now - p.at < PENDING_MOVE_TTL; });
+  return state.pendingMoves.filter(function(p){ return p.fromId===envId || p.toId===envId; })
+    .map(function(p){
+      var out = p.fromId===envId;
+      var dt = new Date(p.at);
+      return { kind:'journal', type:'move', pending:true,
+        date:(dt.getMonth()+1)+'/'+dt.getDate()+'/'+String(dt.getFullYear()).slice(-2),
+        dateMs:p.at,
+        description:'Moved '+(out?'to ':'from ')+envName(out?p.toId:p.fromId),
+        account:'', amount: out ? -p.amount : p.amount };
+    });
+}
+function pendingMoveDrop_(id){
+  state.pendingMoves = state.pendingMoves.filter(function(p){ return p.id!==id; });
+}
 function findEnv(id){
   var hit = null;
   state.boot.groups.forEach(function(g){ g.envelopes.forEach(function(e){
@@ -2193,7 +2237,7 @@ function renderEnvDetail(){
   else {
     var items = d.filter==='spend'
       ? d.txns.filter(function(t){ return t.kind!=='journal'; })
-      : d.txns;
+      : pendingMoveRows_(d.id).concat(d.txns); // v3.50.1: in-flight moves render NOW
     if(!items.length){
       h += '<div class="empty">'+(d.filter==='spend'
         ? 'No transactions assigned to this envelope yet.'
@@ -2218,13 +2262,7 @@ function renderEnvDetail(){
       renderEnvDetail();
       return;
     }
-    run('apiEnvelopeTxns', d.id, 150, {funding:true}).then(function(txns){
-      state.envTxnCache[d.id] = txns;
-      if(state.envDetail && state.envDetail.id===d.id){
-        state.envDetail.txns = txns;
-        if(state.view==='envdetail') renderEnvDetail();
-      }
-    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+    fetchEnvTxns_(d.id).catch(function(e){ toast('⚠ '+(e.message||e)); }); // v3.50.1: seq-guarded
   }
 }
 function envNewSave(){
@@ -2296,6 +2334,9 @@ function applyMoveLocal_(fromId, toId, amt){
    mirror-served apiEnvelopeTxns already contains the new 'moved' rows. */
 function startMove_(fromId, toId, amt, okMsg){
   applyMoveLocal_(fromId, toId, amt);
+  // v3.50.1: the moved row is in Activity from THIS moment (both envelopes)
+  var mv = { id:'pm-'+(startMove_._n=(startMove_._n||0)+1), fromId:fromId, toId:toId, amount:amt, at:Date.now() };
+  state.pendingMoves.push(mv);
   state.move = null;
   invalidateData();                       // drops caches + homeReval_ (mirror is already updated on the happy path)
   if(state.view==='envdetail') renderEnvDetail();
@@ -2304,11 +2345,21 @@ function startMove_(fromId, toId, amt, okMsg){
   run('apiMove', { fromId:fromId, toId:toId, amount:amt })
   .then(function(){
     toast(okMsg);
-    // the mirror now holds the journal rows — refetch the visible activity list
+    // the mirror now holds the journal rows — swap the overlay for the real thing.
+    // Fresh list FIRST, drop the overlay after, so there is no gap where the
+    // move vanishes; the two renders share one paint (same microtask drain).
     delete state.envTxnCache[fromId]; delete state.envTxnCache[toId];
-    if(state.view==='envdetail' && state.envDetail){ state.envDetail.txns = null; renderEnvDetail(); }
+    var d = state.envDetail;
+    var done = function(){
+      pendingMoveDrop_(mv.id);
+      if(state.view==='envdetail' && state.envDetail) renderEnvDetail();
+    };
+    if(state.view==='envdetail' && d && (d.id===fromId || d.id===toId)){
+      fetchEnvTxns_(d.id).then(done, done);
+    } else done();
   })
   .catch(function(e){
+    pendingMoveDrop_(mv.id);
     applyMoveLocal_(toId, fromId, amt);   // revert the optimistic balances
     invalidateData();
     if(state.view==='envdetail') renderEnvDetail();
