@@ -469,6 +469,13 @@ body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px
 .balrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
 .balrow .upd{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .balrow .upd.stale{color:var(--red);font-style:italic}
+/* v3.51: feed-timing divergence is an OBLIGATION, not an error — amber, never
+   red (same call as the v3.45 hero: red says "you broke something"). */
+.balrow .bal.amber{color:var(--amber)}
+/* v3.51: the Hidden section makes the envelope NAME the tap target (the row also
+   holds an Unhide button, so the whole row can't be one). .click alone only
+   styles .envrow.click / .stat.click, so it needed its own rule. */
+.envrow .nm.click{cursor:pointer;color:var(--teal-700)}
 .balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px}
 .balrow .baledit{flex:none;cursor:pointer;border:none;background:none;color:var(--teal-700);font-size:13px;padding:0 2px;line-height:1}
 .balrow.stale .nm,.balrow.stale .bal{color:var(--ink-3);font-style:italic}
@@ -918,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.50.1';
+var FE_VERSION = 'v3.51.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -999,6 +1006,7 @@ function ensureAuth(){
 var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, apiMove:1,
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
+  apiSetEnvelopeHidden:1, // v3.51
   apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
@@ -2079,6 +2087,7 @@ function renderEnvelopes(){
     }
     h += '</div>';
   });
+  h += hiddenSectionHtml();   // v3.51
   h += archivedSectionHtml();
   $('#shell').innerHTML = h;
   // Lazy-load the archived list when that section is expanded.
@@ -2104,6 +2113,41 @@ function envNewFormHtml(){
     '</select></div>'+
     '<div class="actions"><button class="btn" data-act="env-new-save">Create</button>'+
     '<button class="btn ghost" data-act="env-new-cancel">Cancel</button></div></div>';
+}
+/* v3.51: hidden envelopes. Unlike Archived — which needs its own
+   apiArchivedEnvelopes fetch because boot drops archived rows entirely — hidden
+   envelopes ARE in the boot payload (renderEnvelopes just filters them out of
+   the groups), so this section costs no round trip. It renders only when at
+   least one envelope is hidden: nobody who has never used the feature gets a
+   mystery header. */
+function hiddenEnvs_(){
+  var out = [];
+  ((state.boot&&state.boot.groups)||[]).forEach(function(g){
+    g.envelopes.forEach(function(e){
+      if(e.hidden) out.push({ id:e.id, name:e.name, group:g.name, balance:e.balance });
+    });
+  });
+  return out;
+}
+function hiddenSectionHtml(){
+  var list = hiddenEnvs_();
+  if(!list.length) return '';
+  var open = !!state.showHidden;
+  var h = '<div class="plansec"><div class="sechead phead" data-act="env-show-hidden">'+
+    '<span class="chev">'+(open?'▾':'▸')+'</span>'+
+    '<h3 class="sectitle">Hidden · '+list.length+'</h3><span class="grow"></span></div>';
+  if(open){
+    h += '<div class="empty" style="padding:6px 2px;font-size:12px">Out of this list and out of '+
+      '<b>available to fund</b> — but still there in the picker when you categorize a transaction. '+
+      'For money that lives outside your cash accounts (brokerage, stock transactions).</div>';
+    list.forEach(function(e){
+      h += '<div class="envrow"><span class="nm click" data-act="env-open" data-arg="'+esc(e.id)+'">'+esc(e.name)+'</span>'+
+        '<span class="acctchip">'+esc(e.group)+'</span>'+
+        '<span class="bal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</span>'+
+        '<button class="unarch" data-act="env-unhide" data-arg="'+esc(e.id)+'">Unhide</button></div>';
+    });
+  }
+  return h+'</div>';
 }
 function archivedSectionHtml(){
   var open = !!state.showArchived;
@@ -2170,7 +2214,8 @@ function pendingMoveDrop_(id){
 function findEnv(id){
   var hit = null;
   state.boot.groups.forEach(function(g){ g.envelopes.forEach(function(e){
-    if(e.id===id) hit = { id:e.id, name:e.name, type:e.type, balance:e.balance, group:g.name };
+    if(e.id===id) hit = { id:e.id, name:e.name, type:e.type, balance:e.balance,
+      group:g.name, hidden:!!e.hidden }; // v3.51: detail needs hidden for its toggle
   });});
   return hit;
 }
@@ -2194,7 +2239,8 @@ function renderEnvDetail(){
         '<button class="btn sm" data-act="env-rename-save">Save</button>'+
         '<button class="btn ghost sm" data-act="env-rename-cancel">Cancel</button></div>'
       : '<div class="dnm">'+esc(e.name)+'</div>')+
-    '<div class="dgrp">'+esc(e.group)+(e.type==='Income'?' · income':'')+'</div></div>'+
+    '<div class="dgrp">'+esc(e.group)+(e.type==='Income'?' · income':'')+
+      (e.hidden?' · hidden':'')+'</div></div>'+   // v3.51
     '<div class="dbal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</div></div>';
   if(state.move){
     var m = state.move;
@@ -2224,6 +2270,8 @@ function renderEnvDetail(){
       (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move all to pool</button>' : '')+
       '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button>'+
       (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Edit name / group</button>')+
+      (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="'+(e.hidden?'env-unhide':'env-hide')+
+        '" data-arg="'+esc(e.id)+'">'+(e.hidden?'Unhide':'Hide from lists')+'</button>')+
       (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="env-archive" data-arg="'+esc(e.id)+'">Archive</button>')+
       '</div>';
   }
@@ -2303,6 +2351,27 @@ function envArchive(id){
     .then(function(){ go('envelopes'); })
     .catch(function(e){ toast('⚠ '+(e.message||e)); });
   });
+}
+/* v3.51: hide / unhide. Sibling of envArchive, deliberately worded to keep the
+   two apart in the user's head: archive retires an envelope, hide only quiets
+   it. The confirm spells out the one thing that surprises people — a hidden
+   envelope is STILL in the categorize picker. */
+function envHide(id){
+  confirmUi('Hide this envelope? It stays live and you can still pick it when you categorize a transaction — '+
+    'it just drops out of your Envelopes list and out of available to fund. Unhide from Envelopes \u25b8 Hidden.', 'Hide')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiSetEnvelopeHidden', { envelopeId:id, hidden:true })
+    .then(function(){ toast('Hidden \u2713'); state.showHidden=true; invalidateData(); return refreshBoot(); })
+    .then(function(){ go('envelopes'); })
+    .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
+  });
+}
+function envUnhide(id){
+  run('apiSetEnvelopeHidden', { envelopeId:id, hidden:false })
+  .then(function(){ toast('Unhidden \u2713'); invalidateData(); return refreshBoot(); })
+  .then(function(){ if(state.view==='envdetail') renderEnvDetail(); else if(state.view==='envelopes') renderEnvelopes(); })
+  .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
 }
 function envUnarchive(id){
   run('apiArchiveEnvelope', { envelopeId:id, archive:false })
@@ -4122,16 +4191,35 @@ function feedLagPanel(){
     return settingsSectionLabel('📡 FEED CHECK')+'<div class="card"><div class="empty" style="padding:12px;text-align:left">'+
       '✓ All balance feeds are in sync with their transactions (last '+(f.windowDays||35)+' days).</div></div>';
   }
-  var h = settingsSectionLabel('📡 FEED CHECK — '+money(f.totalLag)+' UNSETTLED')+'<div class="card">'+
+  // v3.51: the headline is a MAGNITUDE. totalLag is a signed sum, so it rendered
+  // as "-$20.70 UNSETTLED" — which reads as a loss you took, not an amount still
+  // in flight. And the old closing line ("Reconcile is blocked until then") was
+  // an overclaim: the feed-lag guard sits on the automatic true-up in
+  // apiReconcileToBank, not on anything reachable from this page. Update balance
+  // and ✓ Reviewed have always worked while a feed is catching up.
+  var h = settingsSectionLabel('📡 FEED CHECK — '+money(Math.abs(f.totalLag))+' UNSETTLED')+'<div class="card">'+
     '<div class="empty" style="padding:2px 0 10px;text-align:left">These accounts’ <b>balance feed</b> is out of sync with their <b>transactions</b> — '+
     'usually the bank hasn’t refreshed the balance yet. This is timing noise, not real drift; it clears when the feed catches up. '+
-    'Reconcile is blocked until then.</div>';
+    'Everything on this page still works — it’s the automatic <b>true-up to bank</b> that waits for the feed to agree.</div>';
   (f.accounts||[]).filter(function(a){return a.lagging;}).forEach(function(a){
+    // v3.51: only say "stale" when it IS stale. This was styled red + italic
+    // unconditionally, so a feed that refreshed TODAY (Corey's Discover, 0d)
+    // read as broken when the only thing behind was the transaction side.
+    var feedStale = (a.feedDaysOld==null || a.feedDaysOld>=2);
+    // v3.51: show the delta AS COMPARED. divergence = (sign × feed Δ) − txn Σ, and
+    // sign is −1 on a debt account — so printing the raw feed Δ next to txn Σ gave
+    // "+$1,214.46 vs -$1,193.76" for a -$20.70 divergence, arithmetic no reader
+    // could follow. feedDeltaBank comes from FeedHealth.gs; fall back to the raw
+    // field so an older server payload still renders.
+    var bankDelta = (a.feedDeltaBank==null ? a.feedDelta : a.feedDeltaBank);
+    var liab = (a.sign===-1)
+      ? ' · card balance '+(a.feedDelta<0?'fell ':'rose ')+money(Math.abs(a.feedDelta))
+      : '';
     h += '<div class="balrow" style="flex-wrap:wrap"><span class="nm">'+esc(a.account)+'</span>'+
-      '<span class="upd stale">feed '+esc(a.feedAsOf||'')+(a.feedDaysOld!=null?' · '+a.feedDaysOld+'d':'')+'</span>'+
-      '<span class="bal neg">'+money(a.divergence)+'</span>'+
+      '<span class="upd'+(feedStale?' stale':'')+'">feed '+esc(a.feedAsOf||'')+(a.feedDaysOld!=null?' · '+a.feedDaysOld+'d':'')+'</span>'+
+      '<span class="bal amber">'+money(a.divergence)+'</span>'+
       '<span style="flex-basis:100%;font-size:11px;color:var(--ink-3);margin-top:4px">'+
-      'feed Δ '+money(a.feedDelta)+' vs '+a.txnCount+' txns '+money(a.txnSum)+'</span></div>';
+      'feed Δ '+money(bankDelta)+' vs '+a.txnCount+' txns '+money(a.txnSum)+liab+'</span></div>';
   });
   return h+'</div>';
 }
@@ -4403,6 +4491,9 @@ function renderHowTo(){
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Customize the widgets with the ✏️.</p>'+
     '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history.</p>'+
+    '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
+    '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
+    '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
     '<p style="margin:0 0 6px">• <b>Reports</b> — where the money actually goes, by month, envelope, or account.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
@@ -4710,6 +4801,9 @@ document.addEventListener('click', function(ev){
     case 'env-rename-cancel': state.envRename=null; renderEnvDetail(); break;
     case 'env-rename-save': envRenameSave(); break;
     case 'env-archive': envArchive(arg); break;
+    case 'env-hide': envHide(arg); break;                                    // v3.51
+    case 'env-unhide': envUnhide(arg); break;                                // v3.51
+    case 'env-show-hidden': state.showHidden=!state.showHidden; renderEnvelopes(); break; // v3.51
     case 'hs-group': (function(){
       var hs = state.healthset, g = arg;
       var ci = hs.cashGroups.indexOf(g), di = hs.debtGroups.indexOf(g);
