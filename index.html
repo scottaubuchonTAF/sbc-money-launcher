@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.11';
+var FE_VERSION = 'v3.56.12';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1329,6 +1329,11 @@ function refreshBoot(){
     // re-render if the user is sitting on that screen, or the placeholder looks
     // like a failure forever (it did on Corey's stack).
     if(state.view==='about') renderAbout();
+    // v3.56.12: the same rule, third time. Obligation amounts and their
+    // "where this came from" lines are read out of the boot payload at RENDER
+    // time, so a save that refreshed boot without redrawing left the old
+    // numbers sitting there — Scott: "the numbers are not updating."
+    if(state.view==='obligations' && state.oblConfig) drawObligations();
   });
 }
 /* v3.49: the ONE place "how many are waiting in the inbox" is decided, used by
@@ -3830,9 +3835,18 @@ function oblCheckNow(){
   run('apiObligationsFlags', { fresh:true }).then(function(f){
     actBusy('obl-check', false);
     state.obligations = f;
+    // v3.56.12 — Scott: "the numbers are not updating."
+    // Check now fetched a fresh report, stored it, and REPAINTED NOTHING. You
+    // stood on the screen the amounts live on and watched the old ones stay
+    // put; the new figures only appeared if you navigated away and back. A
+    // button whose whole purpose is "recompute this now" must redraw whatever
+    // is on screen, or it reads as broken however correct the data is.
+    if(state.boot && !state.boot.attention) state.boot.attention = {};
     if(state.boot && state.boot.attention) state.boot.attention.obligations = f;
     toast(f && f.anyFlagged ? (f.flagged.length+' need'+(f.flagged.length===1?'s':'')+' attention — see Home')
                             : 'Nothing needs attention ✓');
+    if(state.view==='obligations') drawObligations();
+    else if(state.view==='dash') renderDash();
   }).catch(function(e){
     actBusy('obl-check', false);
     toast('⚠ Check failed: '+(e.message||e));
