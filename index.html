@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.14';
+var FE_VERSION = 'v3.56.15';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3754,17 +3754,16 @@ function drawObligations(){
       // and every message afterwards was about a dead account. Each option now
       // carries when it last reported a balance, and a dead one says so.
       var ages = o.accountAsOf || {}, deadAfter = o.deadFeedDays || 45;
-      // v3.56.14: hidden and not-on-the-Accounts-tab accounts are LISTED now
-      // (Scott: "i don't see my card listed") — labelled so the odd ones out
-      // are still recognisable.
-      var hid = {}; (o.hiddenAccounts||[]).forEach(function(n){ hid[n]=1; });
+      // v3.56.14/.15: accounts missing from the Accounts TAB are listed here
+      // (Scott: "i don't see my card listed") — but accounts marked HIDE are
+      // not, because Hide is the user's own decision (Scott: "you shouldn't
+      // list anything in there that is hidden").
       var unl = {}; (o.unlistedAccounts||[]).forEach(function(n){ unl[n]=1; });
       var lbl_ = function(n){
         var a = ages[String(n).toLowerCase()];
-        var tail = !a ? ' · no balance rows'
+        var tail = !a ? ' · ⚠ no balance in the last 6 months'
           : (a.days > deadAfter ? ' · ⚠ nothing since '+a.date : ' · balance '+a.date);
-        if(hid[n]) tail += ' · hidden';
-        else if(unl[n]) tail += ' · not on Accounts tab';
+        if(unl[n]) tail += ' · not on Accounts tab';
         return n+tail;
       };
       var acctOpts = [['','']].concat((o.debtAccounts||[]).map(function(n){ return [n, lbl_(n)]; }));
