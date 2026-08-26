@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.55.3';
+var FE_VERSION = 'v3.56.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1199,7 +1199,7 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity','obligations'].indexOf(view)!==-1));
   });
   render();
 }
@@ -1492,7 +1492,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -1509,6 +1509,7 @@ function render(){
   else if(state.view==='removetxn') renderRemoveTxn();
   else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
+  else if(state.view==='obligations') renderObligations();
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
   else if(state.view==='activity') renderActivity();
@@ -1892,12 +1893,33 @@ var DASH_WIDGETS = {
     (b.groups||[]).forEach(function(g){ (g.envelopes||[]).forEach(function(e){
       if(!e.hidden && e.type!=='Income' && Number(e.balance)<0) neg.push(e); }); });
     neg.sort(function(a,b2){ return a.balance-b2.balance; });
-    var head='<div class="dhead"><div class="dlbl">Needs attention'+(neg.length?' · '+neg.length:'')+'</div></div>';
-    if(!neg.length) return head+'<div class="dwmiss">✓ No negative envelopes</div>';
+    // v3.56: obligations ride at the TOP of this panel. A card autopaying out of
+    // an account that hasn't got the money is a harder deadline than a negative
+    // envelope, which is just a number carried forward.
+    var obl = oblRows_();
+    var head='<div class="dhead"><div class="dlbl">Needs attention'+
+      ((neg.length+obl.length)?' · '+(neg.length+obl.length):'')+'</div></div>';
+    var oblHtml = obl.map(function(o){
+      var tone = o.severity==='alarm' ? 'var(--red)' : (o.severity==='suppressed'?'var(--ink-3)':'var(--amber)');
+      var line;
+      if(o.severity==='suppressed'){
+        line = 'Can\'t check — '+esc(o.fundingAccount)+'\'s balance hasn\'t moved since '+esc(o.frozenSince)+'.';
+      } else if(o.severity==='alarm'){
+        line = esc(o.fundingAccount)+' is '+money(o.shortfall)+' short for '+esc(o.name)+' on '+esc(o.dueDate)+
+          ', and there isn\'t cash elsewhere to cover it.';
+      } else {
+        line = 'Move '+money(o.shortfall)+' to '+esc(o.fundingAccount)+' before '+esc(o.dueDate)+' for '+esc(o.name)+'.';
+      }
+      return '<div class="dkv" style="align-items:flex-start"><span class="k" style="color:'+tone+'">'+line+
+        (o.estimated?' <span style="opacity:.7">(estimated)</span>':'')+
+        '</span><span class="v"><button class="btn ghost sm" data-act="obl-snooze" data-arg="'+esc(o.id)+'">I moved it</button></span></div>';
+    }).join('');
+    if(!neg.length && !obl.length) return head+'<div class="dwmiss">✓ Nothing needs attention</div>';
+    if(!neg.length) return head+'<div class="dscroll">'+oblHtml+'</div>';
     var rows=neg.slice(0,8).map(function(e){
       return '<div class="dkv"><span class="k">'+esc(e.name)+'</span><span class="v neg">'+money(e.balance)+'</span></div>'; }).join('');
     if(neg.length>8) rows+='<div class="dsub" style="margin-top:6px">+'+(neg.length-8)+' more →</div>';
-    return head+'<div class="dscroll">'+rows+'</div>';}}
+    return head+'<div class="dscroll">'+oblHtml+rows+'</div>';}}
 };
 function dAxisOpts(legend){ return {maintainAspectRatio:false,animation:false,
   plugins:{legend:legend?{position:'top',labels:{boxWidth:10,font:{size:11},color:'#94a3b8'}}:{display:false}},
@@ -3522,6 +3544,138 @@ function balRefreshFromTiller(){
     toast('⚠ Refresh failed: '+(e.message||e));
   });
 }
+/* ================= v3.56 — obligations (autopay shortfall) =================
+   "Will the cash be in the right account on the day it leaves?" Envelopes can't
+   answer that: Corey can be perfectly on budget with the money sitting in
+   savings while Discover autopays out of checking.
+
+   ⚠ The nudge is TEXT and records NOTHING. Scott, 8/26: "why would I record it?
+   I would need to move the money between banks and then the transaction would
+   get recorded via the regular download." Right — a real transfer arrives as two
+   feed transactions and gets approved as Account Transfer. Writing our own row
+   would duplicate what the feed is about to deliver. The button below only
+   SNOOZES the flag for 3 days so it stops nagging during the feed lag; if the
+   money never lands, it comes back.  */
+var OBL_SNOOZE_KEY = 'sbcOblSnooze', OBL_SNOOZE_MS = 3*24*60*60*1000;
+function oblSnoozeMap_(){ try{ return JSON.parse(localStorage.getItem(OBL_SNOOZE_KEY)||'{}'); }catch(e){ return {}; } }
+function oblSnooze(id){
+  var m = oblSnoozeMap_(); m[id] = Date.now();
+  try{ localStorage.setItem(OBL_SNOOZE_KEY, JSON.stringify(m)); }catch(e){}
+  toast('Hidden for 3 days — it\'ll come back if the money doesn\'t land');
+  if(state.view==='dash') renderDash();
+}
+function oblSnoozed_(id){
+  var t = Number(oblSnoozeMap_()[id]||0);
+  return t && (Date.now()-t) < OBL_SNOOZE_MS;
+}
+/* Flagged obligations minus anything snoozed. Fetched like the freeze check:
+   after paint, from Apps Script, cache-backed by the pulse. */
+function oblRows_(){
+  oblReval_();
+  var f = state.obligations;
+  if(!f || !f.anyFlagged || !f.flagged) return [];
+  return f.flagged.filter(function(o){ return !oblSnoozed_(o.id); });
+}
+function oblReval_(){
+  if(state._oblFetched) return;
+  state._oblFetched = true;
+  ensureAuth().then(function(){ return legacyCall_('apiObligationsFlags',[{}],true,false); })
+    .then(function(f){
+      if(f && f.pending){ state._oblFetched = false; return; }   // another caller is scanning
+      if(!f || !f.anyFlagged) return;
+      state.obligations = f;
+      if(state.view==='dash') renderDash();
+    })
+    .catch(function(e){ console.warn('obligations check:', e&&e.message||e); });
+}
+
+/* ---- config screen (More → Obligations) --------------------------------- */
+function renderObligations(){
+  $('#shell').innerHTML = '<h2 class="viewtitle">Obligations</h2><div class="spin"></div>';
+  run('apiObligations').then(function(o){ state.oblConfig = o; drawObligations(); }).catch(fail);
+}
+function oblModeLabel_(m){
+  return m==='statement' ? 'Statement balance' : (m==='full-current' ? 'Whatever is owed today' : 'Fixed amount');
+}
+function drawObligations(){
+  var o = state.oblConfig, ed = state.oblEdit;
+  var h = '<h2 class="viewtitle">Obligations</h2>'+
+    '<div class="empty" style="padding:4px 0 14px;text-align:left">Tell SBC when each card or loan gets paid '+
+    'and which account it comes out of, and it will warn you before the money isn\'t there. '+
+    'Set it once — the amount is read from your balance history each month, so there\'s nothing to keep updating.</div>';
+
+  h += '<div class="card">';
+  var live = (o.rows||[]).filter(function(r){ return r.active; });
+  if(!live.length) h += '<div class="empty" style="padding:12px;text-align:left">Nothing set up yet.</div>';
+  live.forEach(function(r){
+    h += '<div class="balrow" style="flex-wrap:wrap">'+
+      '<span class="nm">'+esc(r.name)+'</span>'+
+      '<span class="upd">'+esc(oblModeLabel_(r.mode))+' · due the '+r.dueDay+'</span>'+
+      '<span class="bal">'+esc(r.fundingAccount)+'</span>'+
+      '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end">'+
+      '<button class="btn ghost sm" data-act="obl-edit" data-arg="'+esc(r.id)+'">Edit</button>'+
+      '<button class="btn ghost sm" data-act="obl-remove" data-arg="'+esc(r.id)+'">Turn off</button></span></div>';
+  });
+  h += '</div>';
+
+  if(ed){
+    var sel = function(name, opts, cur){
+      return '<select id="obl_'+name+'" class="amt" style="flex:1">'+
+        opts.map(function(v){ var val=(typeof v==='string')?v:v[0], lbl=(typeof v==='string')?v:v[1];
+          return '<option value="'+esc(val)+'"'+(String(cur)===String(val)?' selected':'')+'>'+esc(lbl)+'</option>'; }).join('')+
+        '</select>';
+    };
+    var row = function(label, ctrl){
+      return '<div style="display:flex;gap:8px;align-items:center;margin:8px 0">'+
+        '<span style="flex-basis:38%;color:var(--ink-2);font-size:13px">'+label+'</span>'+ctrl+'</div>';
+    };
+    h += '<div class="grp"><h3>'+(ed.id?'Edit':'Add')+'</h3><div class="card" style="padding:12px">';
+    h += row('Name', '<input id="obl_name" class="amt" style="flex:1" value="'+esc(ed.name||'')+'" placeholder="Discover">');
+    h += row('What is it', sel('type', [['card','Credit card'],['loan','Loan / mortgage']], ed.type||'card'));
+    h += row('Card / loan account', sel('account', [''].concat(o.debtAccounts||[]), ed.account||''));
+    h += row('Paid from', sel('fund', [''].concat(o.cashAccounts||[]), ed.fundingAccount||''));
+    h += row('Amount is', sel('mode', [['statement','Statement balance (cards)'],
+      ['full-current','Whatever is owed today'],['fixed','A fixed amount']], ed.mode||'statement'));
+    h += row('Closing day', '<input id="obl_close" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.closingDay||'')+'" placeholder="28">');
+    h += row('Due day', '<input id="obl_due" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.dueDay||'')+'" placeholder="15">');
+    h += row('Fixed amount', '<input id="obl_fixed" class="amt" style="flex:1" inputmode="decimal" value="'+esc(ed.due||'')+'" placeholder="only for a fixed payment">');
+    h += row('Warn me', '<input id="obl_lead" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.leadDays||o.defaultLeadDays||5)+'"> <span style="color:var(--ink-3);font-size:12px">days ahead</span>');
+    h += '<div class="actions" style="margin-top:10px"><button class="btn" data-act="obl-save">Save</button>'+
+      '<button class="btn ghost" data-act="obl-cancel">Cancel</button></div>';
+    h += '</div></div>';
+  } else {
+    h += '<div class="actions" style="margin-top:14px"><button class="btn" data-act="obl-add">+ Add an obligation</button></div>';
+  }
+  h += '<div class="empty" style="padding-top:14px;font-size:12px;text-align:left">Warnings appear on Home under '+
+    '<b>Needs attention</b>. SBC never moves money — it tells you to, and the flag clears itself once the transfer lands.</div>';
+  $('#shell').innerHTML = h;
+}
+function oblAdd(){ state.oblEdit = { mode:'statement', type:'card' }; drawObligations(); }
+function oblEdit(id){
+  var r = (state.oblConfig.rows||[]).find(function(x){ return x.id===id; });
+  state.oblEdit = r ? JSON.parse(JSON.stringify(r)) : { mode:'statement', type:'card' };
+  drawObligations();
+}
+function oblCancel(){ state.oblEdit = null; drawObligations(); }
+function oblSave(){
+  var v = function(id){ var el=$('#obl_'+id); return el?el.value:''; };
+  var args = {
+    id: (state.oblEdit&&state.oblEdit.id)||'', name: v('name'), type: v('type'),
+    account: v('account'), fundingAccount: v('fund'), mode: v('mode'),
+    closingDay: Number(v('close'))||0, dueDay: Number(v('due'))||0,
+    fixedAmount: v('fixed'), leadDays: Number(v('lead'))||0
+  };
+  run('apiSaveObligation', args).then(function(){
+    state.oblEdit=null; state._oblFetched=false; state.obligations=null;
+    toast('Saved ✓'); renderObligations();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+function oblRemove(id){
+  run('apiRemoveObligation', { id:id }).then(function(){
+    state._oblFetched=false; state.obligations=null; toast('Turned off ✓'); renderObligations();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+
 /* ---- v3.54: "Refresh app data from sheet" (Settings) ---------------------
    The mirror is pulled forward two ways: the hourly pg_cron sync at :07, and an
    apiBoot/apiDashboard read carrying {refreshMirror:true} — which the app only
@@ -4137,7 +4291,7 @@ function renderSettings(){
     h += settingsSectionLabel('SETTINGS');
   }
   h += settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
-    ['healthset','Health settings'],['history','History & undo'],
+    ['healthset','Health settings'],['obligations','💳 Obligations & autopay'],['history','History & undo'],
     ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],
     ['activity','Sign-ins & activity'],['about','About']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
@@ -4975,6 +5129,12 @@ document.addEventListener('click', function(ev){
     case 'recon-manual': reconToggleManual(arg); break;
     case 'snapshot-tiller': snapshotToTiller(); break;
     case 'mirror-refresh': mirrorRefreshFromSheet(); break;
+    case 'obl-add': oblAdd(); break;
+    case 'obl-edit': oblEdit(arg); break;
+    case 'obl-cancel': oblCancel(); break;
+    case 'obl-save': oblSave(); break;
+    case 'obl-remove': oblRemove(arg); break;
+    case 'obl-snooze': oblSnooze(arg); break;
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
