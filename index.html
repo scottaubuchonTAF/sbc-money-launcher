@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.54.0';
+var FE_VERSION = 'v3.55.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1986,11 +1986,13 @@ function renderDash(){
   var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
   var h='<div class="htop"><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
+  h += freezeBanner_();          // v3.55 — above everything; it explains the health card
   if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
   h+='<div class="hbody">'+body.map(tile_).join('')+'</div>';
   if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
   if(state.homeCustomize) h+=homeCustHtml(st);
   $('#shell').innerHTML = h;
+  freezeReval_();                // v3.55 — after paint, never blocking
   // Chart cards: instantiate now that their canvases are in the DOM.
   if(typeof Chart!=='undefined'){
     body.concat(stats).forEach(function(id){
@@ -3509,6 +3511,42 @@ function mirrorRefreshFromSheet(){
     done();
     toast('⚠ Refresh failed: '+(e.message||e));
   });
+}
+
+/* ---- v3.55: "your bank balance stopped moving" banner --------------------
+   The 8/26 case: Rewards Checking read $3,416.80 for days while the 8/19
+   paycheck posted and got approved. Every screen said "updated: today" because
+   Tiller rewrites the same number daily, and Budget Health could only call the
+   difference "unexplained". apiFeedFreeze asks the honest question — when did
+   this VALUE last change, and what has posted since — and this puts the answer
+   where it will be seen. Apps-Script-served (not a mirror read), fetched AFTER
+   Home paints so it can never slow the first screen, and cached server-side by
+   the hourly pulse so it is a cheap round trip. */
+function freezeReval_(){
+  if(state._freezeFetched) return;
+  state._freezeFetched = true;
+  ensureAuth().then(function(){ return legacyCall_('apiFeedFreeze',[{}],true,false); })
+    .then(function(f){
+      if(!f || !f.anyStuck) return;
+      state.freeze = f;
+      if(state.view==='dash') renderDash();
+    })
+    .catch(function(e){ console.warn('feed freeze check:', e&&e.message||e); });
+}
+function freezeBanner_(){
+  var f = state.freeze;
+  if(!f || !f.anyStuck || !f.stuck || !f.stuck.length) return '';
+  return '<div class="dtile" style="border-color:var(--amber);margin-bottom:10px">'+
+    '<div class="dlbl" style="color:var(--amber)">⚠ A bank balance stopped updating</div>'+
+    f.stuck.map(function(a){
+      return '<div class="dsub" style="margin-top:6px"><b>'+esc(a.account)+'</b> still reads '+
+        money(a.balance)+', unchanged since '+esc(a.since)+' ('+a.daysStuck+' days). '+
+        a.txnsSince+' transaction'+(a.txnsSince===1?'':'s')+' worth '+money(a.amountSince)+
+        ' posted since, so it should be about <b>'+money(a.expected)+'</b>.</div>';
+    }).join('')+
+    '<div class="dsub" style="margin-top:8px;color:var(--ink-3)">Refresh the feed in Tiller, '+
+    'or set the balance by hand on Balances. This is what makes Budget Health say "unexplained".</div>'+
+    '</div>';
 }
 
 /* Pull the dashboard from APPS SCRIPT once, in the background, and swap it in.
