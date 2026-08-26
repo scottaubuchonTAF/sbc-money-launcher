@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.10';
+var FE_VERSION = 'v3.56.11';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4944,7 +4944,7 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
     '<p style="margin:0 0 8px">That’s what <b>Settings → 💳 Obligations</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
     '<p style="margin:0 0 6px">Three ways to decide the amount:</p>'+
-    '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes.</p>'+
+    '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes. If the feed didn’t leave a balance right after your closing day, SBC works it back from what the card owes today, minus everything that posted since the close.</p>'+
     '<p style="margin:0 0 6px">• <b>Whatever is owed today</b> — for a card you pay off as you go.</p>'+
     '<p style="margin:0 0 8px">• <b>A fixed amount</b> — a mortgage or car payment. You type the number; no account to pick, because nothing needs to be read.</p>'+
     '<p style="margin:0 0 8px">Then it watches, and the <b>Obligations</b> card on your Dashboard shows what is leaving in the next 30 days, in date order, with the account each one comes out of. A green dot means the money is there. <b>Amber</b> means it isn’t, but you have it somewhere else — <i>“Move $340 to MONEY before the 15th for Discover”</i> — and that warning also rides at the top of <b>Needs attention</b>. <b>Red</b> means it isn’t there and isn’t anywhere else; that one needs a real decision. <b>Grey</b> means the account’s balance hasn’t moved in days, so SBC won’t guess — see “When a balance is frozen”.</p>'+
