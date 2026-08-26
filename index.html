@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.15';
+var FE_VERSION = 'v3.56.16';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4980,6 +4980,7 @@ function renderHowTo(){
   h += S('🏦','Autopay — will the cash be in the right account?',
     '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
     '<p style="margin:0 0 8px">That’s what <b>Settings → 💳 Obligations</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
+    '<p style="margin:0 0 8px">The account pickers list every account your balance history reports on — cash accounts for <b>Paid from</b>, cards and loans for the balance to read — with live accounts first. An account marked <b>Hide</b> on the Tiller Accounts tab never appears here: hiding it means you’re done with it, everywhere.</p>'+
     '<p style="margin:0 0 6px">Three ways to decide the amount:</p>'+
     '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes. If the feed didn’t leave a balance right after your closing day, SBC works it back from what the card owes today, minus everything that posted since the close.</p>'+
     '<p style="margin:0 0 6px">• <b>Whatever is owed today</b> — for a card you pay off as you go.</p>'+
