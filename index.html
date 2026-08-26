@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.7';
+var FE_VERSION = 'v3.56.8';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4890,7 +4890,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
     '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
     '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
-    '<p style="margin:0"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>');
+    '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
+    '<p style="margin:0"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>');
 
   h += S('💵','Payday — the routine that matters most',
     '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
@@ -4920,12 +4921,30 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">What about the balance you owe? It’s already accounted for — the charge came out of a spending envelope the day you swiped, so the money is spoken for and no envelope is pretending otherwise.</p>'+
     '<p style="margin:0">You can see it: under the big <b>Available to fund</b> number on the Dashboard, <b>Cash in accounts</b> is what’s sitting in checking and savings, and <b>Cards owed</b> in amber underneath is the part of it that belongs to the card companies. Amber, not red — that’s an obligation, not a problem. <b>Waiting in your inbox</b> shows up there too, which is why the pool can read a little above your bank balance until you clear the Inbox.</p>');
 
+  h += S('🏦','Autopay — will the cash be in the right account?',
+    '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
+    '<p style="margin:0 0 8px">That’s what <b>Settings → 💳 Obligations</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
+    '<p style="margin:0 0 6px">Three ways to decide the amount:</p>'+
+    '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes.</p>'+
+    '<p style="margin:0 0 6px">• <b>Whatever is owed today</b> — for a card you pay off as you go.</p>'+
+    '<p style="margin:0 0 8px">• <b>A fixed amount</b> — a mortgage or car payment. You type the number; no account to pick, because nothing needs to be read.</p>'+
+    '<p style="margin:0 0 8px">Then it watches, and the <b>Obligations</b> card on your Dashboard shows what is leaving in the next 30 days, in date order, with the account each one comes out of. A green dot means the money is there. <b>Amber</b> means it isn’t, but you have it somewhere else — <i>“Move $340 to MONEY before the 15th for Discover”</i> — and that warning also rides at the top of <b>Needs attention</b>. <b>Red</b> means it isn’t there and isn’t anywhere else; that one needs a real decision. <b>Grey</b> means the account’s balance hasn’t moved in days, so SBC won’t guess — see “When a balance is frozen”.</p>'+
+    '<p style="margin:0 0 8px"><b>“I moved it” hides the warning for three days and records nothing.</b> That’s deliberate. When you really move money between banks, the transfer arrives in your Inbox on its own as two transactions and you approve it as an Account Transfer — if SBC wrote its own row you’d end up with the same transfer twice. If the money lands, the warning never comes back. If it doesn’t, it does.</p>'+
+    '<p style="margin:0 0 8px">It is deliberately pessimistic: it compares what you have <b>today</b> against what leaves, and never counts on a paycheck arriving first. Better an early nudge you can ignore than a late one you can’t.</p>'+
+    '<p style="margin:0">Amounts refresh with the hourly sync. Just set one up and want the answer this second? <b>Obligations → Check now</b>.</p>');
+
   h += S('🩺','Is the budget honest?',
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
     '<p style="margin:0 0 6px">• <b>"$X in flight — feeds catching up"</b> is normal and needs nothing from you. Your bank posted something the app hasn’t received yet (or the reverse). It clears itself, usually within a few hours.</p>'+
     '<p style="margin:0 0 6px">• <b>"$Y arriving in your inbox shortly"</b> means transactions are already on their way in — they’ll show up in the Inbox on the next hourly sync.</p>'+
     '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open the <b>Reconcile accounts</b> page from Settings; it usually means a balance or an envelope needs a nudge.</p>'+
     '<p style="margin:0">Money sitting in your <b>Inbox unapproved</b> also shows as a difference — the bank has spent it but no envelope has been told yet. Clearing the Inbox is the fix, and that’s another reason not to let it pile up.</p>');
+
+  h += S('🧊','When a balance is frozen',
+    '<p style="margin:0 0 8px">Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old. On 8/26/26 that hid a $1,061.54 gap for a week.</p>'+
+    '<p style="margin:0 0 8px">SBC now watches for it: an account whose balance hasn’t changed in days <i>while transactions kept arriving</i> gets called out in a banner above the Dashboard, and you get one email a day until it’s sorted.</p>'+
+    '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Reconcile accounts</b>.</p>'+
+    '<p style="margin:0">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>');
 
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Customize the widgets with the ✏️.</p>'+
@@ -4945,7 +4964,8 @@ function renderHowTo(){
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
     '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
-    '<p style="margin:0 0 8px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes.</p>'+
+    '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes.</p>'+
+    '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>Settings → 💳 Obligations</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
     '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
 
   $('#shell').innerHTML = h;
