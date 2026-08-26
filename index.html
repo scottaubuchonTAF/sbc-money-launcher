@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.5';
+var FE_VERSION = 'v3.56.6';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2044,6 +2044,28 @@ function dashFetchRecent(){
    layout (apiBoot / localStorage). The saved array holds VISIBLE ids in order;
    array order carries body order. Old grid saves migrate: their cards stay
    visible, in their saved order. No saved layout → the Layout-A defaults. */
+/* v3.56.6 — NEW CARDS vs DELIBERATELY HIDDEN ONES.
+   A saved layout is the list of VISIBLE ids, so "absent" has meant two different
+   things: you turned it off, or it didn't exist when you saved. Scott expected
+   the new Obligations card to appear and it didn't — his layout predates it.
+   So we remember which ids existed at save time (`sbcHomeKnown`). An id that is
+   absent AND unknown is NEW → visible (unless default-hidden). An id that is
+   absent but known was switched off → stays off.
+   The first run after this update has no record, so it is seeded as "everything
+   except the ids introduced now" — that way this release's card appears and
+   nothing anyone hid comes back. After the next save the list is exact, and
+   future cards need no migration entry at all. */
+var HOME_KNOWN_KEY = 'sbcHomeKnown';
+var HOME_CARDS_SINCE = {coming:1};   // introduced in v3.56 — only needed once
+function homeKnown_(){
+  var saved=null;
+  try{ saved = JSON.parse(localStorage.getItem(HOME_KNOWN_KEY)||'null'); }catch(e){}
+  if(Array.isArray(saved)) return saved;
+  return HOME_CARDS.map(function(c){return c.id;}).filter(function(id){ return !HOME_CARDS_SINCE[id]; });
+}
+function homeKnownSave_(){
+  try{ localStorage.setItem(HOME_KNOWN_KEY, JSON.stringify(HOME_CARDS.map(function(c){return c.id;}))); }catch(e){}
+}
 function homeState(){
   var lay = state.dashLayout;
   var visible={}, order=[];
@@ -2051,13 +2073,20 @@ function homeState(){
     HOME_CARDS.forEach(function(c){ if(!HOME_DEFAULT_HIDDEN[c.id]) visible[c.id]=1; });
     order = BODY_IDS.slice();
   } else {
-    var seen={};
+    var seen={}, known={};
+    homeKnown_().forEach(function(id){ known[id]=1; });
     lay.forEach(function(w){
       if(!w || !w.id) return;
       var id=homeCardId_(w.id);
       if(!CARD_BY_ID[id] || seen[id]) return;
       seen[id]=1; visible[id]=1;
       if(CARD_BY_ID[id].slot==='body') order.push(id);
+    });
+    // A card the saved layout never knew about is NEW, not switched off.
+    HOME_CARDS.forEach(function(c){
+      if(seen[c.id] || known[c.id] || HOME_DEFAULT_HIDDEN[c.id]) return;
+      visible[c.id]=1;
+      if(c.slot==='body' && order.indexOf(c.id)===-1) order.push(c.id);
     });
     // Body cards not in the saved order (hidden ones, or new cards from an
     // update) get a stable slot at their default position.
@@ -2066,6 +2095,7 @@ function homeState(){
   return {visible:visible, order:order};
 }
 function homeSave(st){
+  homeKnownSave_();   // v3.56.6: this layout now knows about every current card
   var arr=[];
   HOME_CARDS.forEach(function(c){ if(c.slot==='stats' && st.visible[c.id]) arr.push({id:homePersistId_(c.id), size:'s'}); });
   st.order.forEach(function(id){ if(st.visible[id]) arr.push({id:homePersistId_(id), size:'s'}); });
