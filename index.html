@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.12';
+var FE_VERSION = 'v3.56.13';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3749,9 +3749,25 @@ function drawObligations(){
     // day) appear only for the modes that must actually look a balance up.
     var mode = ed.mode || 'statement';
     if(mode !== 'fixed'){
-      var acctOpts = [''].concat(o.debtAccounts||[]);
-      if((o.otherAccounts||[]).length) acctOpts = acctOpts.concat(o.otherAccounts);
+      // v3.56.13 — a bare list of names is how the wrong account gets picked.
+      // Scott chose "Citi Double Cash Card", whose feed stopped in May 2023,
+      // and every message afterwards was about a dead account. Each option now
+      // carries when it last reported a balance, and a dead one says so.
+      var ages = o.accountAsOf || {}, deadAfter = o.deadFeedDays || 45;
+      var lbl_ = function(n){
+        var a = ages[String(n).toLowerCase()];
+        if(!a) return n+' · no balance rows';
+        return n+(a.days > deadAfter ? ' · ⚠ nothing since '+a.date : ' · balance '+a.date);
+      };
+      var acctOpts = [['','']].concat((o.debtAccounts||[]).map(function(n){ return [n, lbl_(n)]; }));
+      if((o.otherAccounts||[]).length)
+        acctOpts = acctOpts.concat(o.otherAccounts.map(function(n){ return [n, lbl_(n)]; }));
       h += row('Read the amount from', sel('account', acctOpts, ed.account||''));
+      var cur = ages[String(ed.account||'').toLowerCase()];
+      if(ed.account && cur && cur.days > deadAfter)
+        h += '<div style="margin:-2px 0 8px;font-size:12px;color:var(--amber-600,#b45309);line-height:1.5">'+
+          '⚠ This account hasn\'t reported a balance since '+esc(cur.date)+'. If the card was re-linked '+
+          'or renamed, pick the one that is still reporting — otherwise use a fixed amount.</div>';
     }
     if(mode === 'statement')
       h += row('Closing day', '<input id="obl_close" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.closingDay||'')+'" placeholder="28">');
