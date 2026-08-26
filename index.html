@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.0';
+var FE_VERSION = 'v3.56.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3570,23 +3570,16 @@ function oblSnoozed_(id){
 }
 /* Flagged obligations minus anything snoozed. Fetched like the freeze check:
    after paint, from Apps Script, cache-backed by the pulse. */
+/* v3.56.1: read what the PULSE left, out of the boot payload. No fetch of our
+   own. Two background Apps Script calls from Home (freeze + obligations) meant
+   two more executions in a per-user QUEUE — Apps Script runs one at a time for a
+   given user — so Home waited behind seconds of Balance-History I/O. Scott,
+   8/26: "it takes way tooo long to load." The pulse scans; boot carries the
+   answer; the UI paints it. Nothing on the render path touches the network. */
 function oblRows_(){
-  oblReval_();
-  var f = state.obligations;
+  var f = (state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations;
   if(!f || !f.anyFlagged || !f.flagged) return [];
   return f.flagged.filter(function(o){ return !oblSnoozed_(o.id); });
-}
-function oblReval_(){
-  if(state._oblFetched) return;
-  state._oblFetched = true;
-  ensureAuth().then(function(){ return legacyCall_('apiObligationsFlags',[{}],true,false); })
-    .then(function(f){
-      if(f && f.pending){ state._oblFetched = false; return; }   // another caller is scanning
-      if(!f || !f.anyFlagged) return;
-      state.obligations = f;
-      if(state.view==='dash') renderDash();
-    })
-    .catch(function(e){ console.warn('obligations check:', e&&e.message||e); });
 }
 
 /* ---- config screen (More → Obligations) --------------------------------- */
@@ -3632,13 +3625,24 @@ function drawObligations(){
     h += '<div class="grp"><h3>'+(ed.id?'Edit':'Add')+'</h3><div class="card" style="padding:12px">';
     h += row('Name', '<input id="obl_name" class="amt" style="flex:1" value="'+esc(ed.name||'')+'" placeholder="Discover">');
     h += row('What is it', sel('type', [['card','Credit card'],['loan','Loan / mortgage']], ed.type||'card'));
-    h += row('Card / loan account', sel('account', [''].concat(o.debtAccounts||[]), ed.account||''));
     h += row('Paid from', sel('fund', [''].concat(o.cashAccounts||[]), ed.fundingAccount||''));
     h += row('Amount is', sel('mode', [['statement','Statement balance (cards)'],
       ['full-current','Whatever is owed today'],['fixed','A fixed amount']], ed.mode||'statement'));
-    h += row('Closing day', '<input id="obl_close" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.closingDay||'')+'" placeholder="28">');
+    // v3.56.1: Scott, adding his mortgage — "that shouldn't even matter, you
+    // just need to know the amount." Right: a FIXED payment needs no account to
+    // read a balance from, so don't ask. The account picker (and the closing
+    // day) appear only for the modes that must actually look a balance up.
+    var mode = ed.mode || 'statement';
+    if(mode !== 'fixed'){
+      var acctOpts = [''].concat(o.debtAccounts||[]);
+      if((o.otherAccounts||[]).length) acctOpts = acctOpts.concat(o.otherAccounts);
+      h += row('Read the amount from', sel('account', acctOpts, ed.account||''));
+    }
+    if(mode === 'statement')
+      h += row('Closing day', '<input id="obl_close" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.closingDay||'')+'" placeholder="28">');
     h += row('Due day', '<input id="obl_due" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.dueDay||'')+'" placeholder="15">');
-    h += row('Fixed amount', '<input id="obl_fixed" class="amt" style="flex:1" inputmode="decimal" value="'+esc(ed.due||'')+'" placeholder="only for a fixed payment">');
+    if(mode === 'fixed')
+      h += row('Amount', '<input id="obl_fixed" class="amt" style="flex:1" inputmode="decimal" value="'+esc(ed.fixedAmount||ed.due||'')+'" placeholder="2133.35">');
     h += row('Warn me', '<input id="obl_lead" class="amt" style="flex:1" inputmode="numeric" value="'+esc(ed.leadDays||o.defaultLeadDays||5)+'"> <span style="color:var(--ink-3);font-size:12px">days ahead</span>');
     h += '<div class="actions" style="margin-top:10px"><button class="btn" data-act="obl-save">Save</button>'+
       '<button class="btn ghost" data-act="obl-cancel">Cancel</button></div>';
@@ -3649,6 +3653,28 @@ function drawObligations(){
   h += '<div class="empty" style="padding-top:14px;font-size:12px;text-align:left">Warnings appear on Home under '+
     '<b>Needs attention</b>. SBC never moves money — it tells you to, and the flag clears itself once the transfer lands.</div>';
   $('#shell').innerHTML = h;
+  var ms = $('#obl_mode');
+  if(ms) ms.onchange = function(){ oblFormRead_(); state.oblEdit.mode = ms.value; drawObligations(); };
+  var ts = $('#obl_type');
+  if(ts) ts.onchange = function(){ oblFormRead_();
+    // A loan is a fixed payment far more often than not — start there, they can
+    // still change it.
+    if(ts.value==='loan' && !state.oblEdit.id && state.oblEdit.mode==='statement') state.oblEdit.mode='fixed';
+    state.oblEdit.type = ts.value; drawObligations(); };
+}
+/* Snapshot whatever is typed so switching mode doesn't wipe the form. */
+function oblFormRead_(){
+  var ed = state.oblEdit || (state.oblEdit = {});
+  var v = function(id){ var el=$('#obl_'+id); return el?el.value:undefined; };
+  ['name','type','account','mode'].forEach(function(k){
+    var val = v(k==='account'?'account':k); if(val!==undefined) ed[k==='account'?'account':k]=val;
+  });
+  var f = v('fund'); if(f!==undefined) ed.fundingAccount = f;
+  var c = v('close'); if(c!==undefined) ed.closingDay = c;
+  var d = v('due'); if(d!==undefined) ed.dueDay = d;
+  var x = v('fixed'); if(x!==undefined) ed.fixedAmount = x;
+  var l = v('lead'); if(l!==undefined) ed.leadDays = l;
+  return ed;
 }
 function oblAdd(){ state.oblEdit = { mode:'statement', type:'card' }; drawObligations(); }
 function oblEdit(id){
@@ -3658,12 +3684,12 @@ function oblEdit(id){
 }
 function oblCancel(){ state.oblEdit = null; drawObligations(); }
 function oblSave(){
-  var v = function(id){ var el=$('#obl_'+id); return el?el.value:''; };
+  var ed = oblFormRead_();
   var args = {
-    id: (state.oblEdit&&state.oblEdit.id)||'', name: v('name'), type: v('type'),
-    account: v('account'), fundingAccount: v('fund'), mode: v('mode'),
-    closingDay: Number(v('close'))||0, dueDay: Number(v('due'))||0,
-    fixedAmount: v('fixed'), leadDays: Number(v('lead'))||0
+    id: ed.id||'', name: ed.name||'', type: ed.type||'card',
+    account: ed.account||'', fundingAccount: ed.fundingAccount||'', mode: ed.mode||'statement',
+    closingDay: Number(ed.closingDay)||0, dueDay: Number(ed.dueDay)||0,
+    fixedAmount: ed.fixedAmount||'', leadDays: Number(ed.leadDays)||0
   };
   run('apiSaveObligation', args).then(function(){
     state.oblEdit=null; state._oblFetched=false; state.obligations=null;
@@ -3722,20 +3748,11 @@ function mirrorRefreshFromSheet(){
    where it will be seen. Apps-Script-served (not a mirror read), fetched AFTER
    Home paints so it can never slow the first screen, and cached server-side by
    the hourly pulse so it is a cheap round trip. */
+/* v3.56.1: same as oblRows_ — the pulse scans, boot carries it, we paint it.
+   This used to fetch on every unreconciled Home load. */
 function freezeReval_(){
-  if(state._freezeFetched) return;
-  state._freezeFetched = true;
-  ensureAuth().then(function(){ return legacyCall_('apiFeedFreeze',[{}],true,false); })
-    .then(function(f){
-      // v3.55.1: {pending:true} means another caller is scanning — let it finish
-      // and pick the answer up on the next Home load rather than starting a
-      // second scan of the same sheets.
-      if(f && f.pending){ state._freezeFetched = false; return; }
-      if(!f || !f.anyStuck) return;
-      state.freeze = f;
-      if(state.view==='dash') renderDash();
-    })
-    .catch(function(e){ console.warn('feed freeze check:', e&&e.message||e); });
+  var f = state.boot && state.boot.attention && state.boot.attention.freeze;
+  if(f && f.anyStuck) state.freeze = f;
 }
 function freezeBanner_(){
   var f = state.freeze;
