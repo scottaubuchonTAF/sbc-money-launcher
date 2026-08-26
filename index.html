@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.6';
+var FE_VERSION = 'v3.56.7';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1768,6 +1768,14 @@ var DASH_WIDGETS = {
     // every Home load is an advert, not information.
     if(!f || !f.configured) return '';
     var head='<div class="dhead"><div class="dlbl">Obligations'+(up.length?' · next 30 days':'')+'</div></div>';
+    /* v3.56.7 — CONFIGURED BUT NOT YET SCANNED.
+       The amounts come from the hourly pulse, so between saving your first
+       obligation and the next pulse there is nothing to list. Before v3.56.7
+       that state arrived as a null summary, the card rendered '' and stayed
+       invisible — Scott, 8/26: "i added the card but it doesn't stick", then
+       "still not showing". Say what is true instead of disappearing. */
+    if(f.pending) return head+'<div class="dwmiss">'+f.configured+' set up · amounts arrive with the next hourly check'+
+      '<div class="dsub" style="margin-top:4px">Obligations → <b>Check now</b> for an answer this second.</div></div>';
     if(!up.length) return head+'<div class="dwmiss">✓ Nothing due in the next 30 days</div>';
     var total = up.reduce(function(t,o){ return t + (Number(o.due)||0); }, 0);
     if(sz==='s') return '<div class="dlbl">Obligations</div><div class="dnum big">'+money(total)+
