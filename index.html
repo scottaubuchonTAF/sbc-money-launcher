@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.55.1';
+var FE_VERSION = 'v3.55.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3455,12 +3455,22 @@ function balEditSave(account){
     if(rr.name===account){ prevRows.push({r:rr,balance:rr.balance,days:rr.days,updated:rr.updated});
       rr.balance = g.liability?Math.abs(amt):amt; rr.days=0; rr.updated='today'; } }); });
   state.balEdit=null; state.reconcile=null; invalidateData();
+  // v3.55.2: apiBalances is a MIRROR read, and the mirror's balances come from
+  // the hourly pg_cron sync of the TILLER workbook — so the row we just wrote is
+  // invisible there for up to an hour, and the next Balances visit serves the
+  // OLD number over the one you just typed. v3.49 hit this exact hazard with the
+  // "Refresh from Tiller" button and answered it with the 15-minute bypass; a
+  // manual balance needs it just as much. Set BEFORE the write: the flag only
+  // routes reads to Apps Script (authoritative), and a failed write reverts the
+  // UI anyway.
+  markTillerBalFresh_();
   drawBalances();
   // v3.49: mutations queue now (see run()), so back-to-back balance entry no
   // longer bounces off the in-flight guard — say so when a save is waiting.
   toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
+    dashRevalFromScript_();   // v3.55.2: Home is mirror-served too — keep it in step
   }).catch(function(e){
     prevRows.forEach(function(p){ p.r.balance=p.balance; p.r.days=p.days; p.r.updated=p.updated; });
     state.reconcile=null; drawBalances();
@@ -4416,12 +4426,22 @@ function reconSave(account){
   var prev = a ? {balance:a.balance,days:a.days,updated:a.updated,dormant:a.dormant} : null;
   if(a){ a.balance=amt; a.days=0; a.updated='today'; a.dormant=false; }
   state.baledit=null; state.balances=null; invalidateData();
+  // v3.55.2: apiBalances is a MIRROR read, and the mirror's balances come from
+  // the hourly pg_cron sync of the TILLER workbook — so the row we just wrote is
+  // invisible there for up to an hour, and the next Balances visit serves the
+  // OLD number over the one you just typed. v3.49 hit this exact hazard with the
+  // "Refresh from Tiller" button and answered it with the 15-minute bypass; a
+  // manual balance needs it just as much. Set BEFORE the write: the flag only
+  // routes reads to Apps Script (authoritative), and a failed write reverts the
+  // UI anyway.
+  markTillerBalFresh_();
   drawReconcile();
   // v3.49: mutations queue now (see run()), so back-to-back balance entry no
   // longer bounces off the in-flight guard — say so when a save is waiting.
   toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
+    dashRevalFromScript_();   // v3.55.2: Home is mirror-served too — keep it in step
   }).catch(function(e){
     if(a&&prev){ a.balance=prev.balance; a.days=prev.days; a.updated=prev.updated; a.dormant=prev.dormant; state.balances=null; drawReconcile(); }
     toast('⚠ Save failed: '+(e.message||e));
