@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.2';
+var FE_VERSION = 'v3.56.5';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1541,6 +1541,7 @@ var HOME_CARDS = [
   {id:'health',   slot:'body', size:'l'},
   {id:'trend',    slot:'body', size:'m'},
   {id:'attention',slot:'body', size:'l'},
+  {id:'coming',   slot:'body', size:'l'},   // v3.56.4 — Obligations: what leaves, and from where
   {id:'recent',   slot:'body', size:'l'},
   {id:'targets',  slot:'body', size:'l'},
   {id:'areas',    slot:'body', size:'m'},
@@ -1553,6 +1554,9 @@ var CARD_BY_ID = {}; HOME_CARDS.forEach(function(c){ CARD_BY_ID[c.id]=c; });
 var BODY_IDS = HOME_CARDS.filter(function(c){return c.slot==='body';}).map(function(c){return c.id;});
 // Default view = mockup A: the 4 stats + Health/Trend/Attention/Recent shown.
 var HOME_DEFAULT_HIDDEN = {targets:1, areas:1, inout:1, fundgauge:1, accounts:1, buffer:1};
+/* v3.56.4: 'coming' is NOT in the default-hidden set — a new card people never
+   discover is a wasted card. But it renders nothing at all until obligations
+   exist, so an empty Home doesn't grow a dead tile either (see its render). */
 // server id ↔ card id (attention rides on the old 'negatives' slot)
 function homePersistId_(id){ return id==='attention' ? 'negatives' : id; }
 function homeCardId_(id){ return id==='negatives' ? 'attention' : id; }
@@ -1748,6 +1752,47 @@ var DASH_WIDGETS = {
     if(H.stalest)
       extra+='<div class="dkv"><span class="k">Newest balance row</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
     return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+extra+'</div>';}},
+
+  /* v3.56.4 — "Obligations". Needs attention says what's WRONG; this says what is
+     LEAVING, in order, and from which account — the question you actually ask on
+     the 3rd of the month. Same data the flags come from (boot payload, filled by
+     the pulse): no fetch, no scan on the render path.
+     v3.56.5: titled "Obligations" (Scott) — it matches the Settings entry and the
+     sheet tab, so one word means one thing everywhere. The card ID stays
+     'coming': ids are what saved Home layouts persist, and renaming one would
+     orphan every grid already saved. */
+  coming:{title:'Obligations',icon:'💳',nav:'obligations',render:function(sz){
+    var f = (state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations;
+    var up = (f && f.upcoming) || [];
+    // Nothing configured → render NOTHING. A card that says "set this up" on
+    // every Home load is an advert, not information.
+    if(!f || !f.configured) return '';
+    var head='<div class="dhead"><div class="dlbl">Obligations'+(up.length?' · next 30 days':'')+'</div></div>';
+    if(!up.length) return head+'<div class="dwmiss">✓ Nothing due in the next 30 days</div>';
+    var total = up.reduce(function(t,o){ return t + (Number(o.due)||0); }, 0);
+    if(sz==='s') return '<div class="dlbl">Obligations</div><div class="dnum big">'+money(total)+
+      '</div><div class="dsub">'+up.length+' payment'+(up.length===1?'':'s')+' · 30 days</div>';
+    var dot = function(sev){
+      if(sev==='alarm')  return '<span title="short" style="color:var(--red)">●</span>';
+      if(sev==='nudge')  return '<span title="needs a transfer" style="color:var(--amber)">●</span>';
+      if(sev==='suppressed'||sev==='unknown') return '<span title="can\'t check" style="color:var(--ink-3)">●</span>';
+      return '<span title="covered" style="color:var(--teal-500)">●</span>';
+    };
+    var when = function(o){
+      if(o.daysUntil < 0) return 'overdue';
+      if(o.daysUntil === 0) return 'today';
+      if(o.daysUntil === 1) return 'tomorrow';
+      return esc(o.dueDate);
+    };
+    var rows = up.map(function(o){
+      return '<div class="dkv"><span class="k">'+dot(o.severity)+' '+esc(o.name)+
+        '<span style="color:var(--ink-3)"> · '+when(o)+' · '+esc(o.fundingAccount)+'</span>'+
+        (o.estimated?'<span style="color:var(--ink-3)"> (est.)</span>':'')+
+        '</span><span class="v">'+money(o.due)+'</span></div>';
+    }).join('');
+    return head+'<div class="dscroll">'+rows+
+      '<div class="dkv" style="border-top:1px solid var(--line);margin-top:4px"><span class="k">Total</span>'+
+      '<span class="v">'+money(total)+'</span></div></div>';}},
 
   targets:{title:'Target vs funded',icon:'📊',nav:'envelopes',render:function(sz){
     var d=state.dash, head='<div class="dhead"><div class="dlbl">Target vs funded'+(d?' · '+esc(d.monthLabel):'')+'</div></div>';
@@ -2035,8 +2080,16 @@ function tile_(id){
   var w=DASH_WIDGETS[id], c=CARD_BY_ID[id], tapAttr='', clickable=false;
   if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
   else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
-  return '<div class="dtile'+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+id+'"'+tapAttr+'>'+w.render(c.size||'m')+'</div>';
+  var body = w.render(c.size||'m');
+  // v3.56.4: a card may render NOTHING and mean it — 'coming' stays invisible
+  // until obligations exist, rather than sitting on Home as an empty advert for
+  // itself. Without this the wrapper would still paint a blank tile. In
+  // Customize the card is always shown, or it couldn't be found and toggled.
+  if(!body && !state.homeCustomize) return '';
+  return '<div class="dtile'+(w.hero?' hero':'')+(clickable?' nav':'')+'" data-id="'+id+'"'+tapAttr+'>'+
+    (body || '<div class="dlbl">'+esc(c && CARD_TITLE_[id] || id)+'</div><div class="dwmiss">Nothing set up yet</div>')+'</div>';
 }
+var CARD_TITLE_ = {}; Object.keys(DASH_WIDGETS).forEach(function(k){ CARD_TITLE_[k]=DASH_WIDGETS[k].title||k; });
 function renderDash(){
   dashDestroyCharts();
   var st = homeState();
@@ -3648,7 +3701,8 @@ function drawObligations(){
       '<button class="btn ghost" data-act="obl-cancel">Cancel</button></div>';
     h += '</div></div>';
   } else {
-    h += '<div class="actions" style="margin-top:14px"><button class="btn" data-act="obl-add">+ Add an obligation</button></div>';
+    h += '<div class="actions" style="margin-top:14px"><button class="btn" data-act="obl-add">+ Add an obligation</button>'+
+      ((o.rows||[]).length ? '<button class="btn ghost" data-act="obl-check">Check now</button>' : '')+'</div>';
   }
   h += '<div class="empty" style="padding-top:14px;font-size:12px;text-align:left">Warnings appear on Home under '+
     '<b>Needs attention</b>. SBC never moves money — it tells you to, and the flag clears itself once the transfer lands.</div>';
@@ -3684,6 +3738,11 @@ function oblEdit(id){
 }
 function oblCancel(){ state.oblEdit = null; drawObligations(); }
 function oblSave(){
+  // v3.56.3: a mutating call has NO client timeout (v3.22 — an aborted write
+  // could double-apply), so a slow save looks identical to a dead button. Say
+  // "Saving…" and refuse the second press; the server-side name match now makes
+  // a duplicate impossible either way, but the UI shouldn't invite it.
+  if(state._oblSaving) return;
   var ed = oblFormRead_();
   var args = {
     id: ed.id||'', name: ed.name||'', type: ed.type||'card',
@@ -3691,14 +3750,36 @@ function oblSave(){
     closingDay: Number(ed.closingDay)||0, dueDay: Number(ed.dueDay)||0,
     fixedAmount: ed.fixedAmount||'', leadDays: Number(ed.leadDays)||0
   };
+  state._oblSaving = true;
+  actBusy('obl-save', true, 'Saving…');
   run('apiSaveObligation', args).then(function(){
+    state._oblSaving = false; actBusy('obl-save', false);
     state.oblEdit=null; state.obligations=null;
     toast('Saved ✓');
     renderObligations();
-    // v3.56.2: the server just recomputed the flags; pull the fresh boot payload
-    // so Home has them the moment you go back, instead of after the next pulse.
+    // v3.56.3: the save writes the row and returns — it does NOT scan (that hung
+    // the button). The hourly pulse fills the warnings; "Check now" on this
+    // screen forces it when you don't want to wait.
     refreshBoot().catch(function(e){ console.warn('boot after obligation save:', e&&e.message||e); });
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  }).catch(function(e){
+    state._oblSaving = false; actBusy('obl-save', false);
+    toast('⚠ '+(e.message||e));
+  });
+}
+/* Force the scan on demand. A READ, so the 30s abort applies and a slow one
+   fails cleanly instead of hanging — the opposite of what Save used to do. */
+function oblCheckNow(){
+  actBusy('obl-check', true, 'Checking…');
+  run('apiObligationsFlags', { fresh:true }).then(function(f){
+    actBusy('obl-check', false);
+    state.obligations = f;
+    if(state.boot && state.boot.attention) state.boot.attention.obligations = f;
+    toast(f && f.anyFlagged ? (f.flagged.length+' need'+(f.flagged.length===1?'s':'')+' attention — see Home')
+                            : 'Nothing needs attention ✓');
+  }).catch(function(e){
+    actBusy('obl-check', false);
+    toast('⚠ Check failed: '+(e.message||e));
+  });
 }
 function oblRemove(id){
   run('apiRemoveObligation', { id:id }).then(function(){
@@ -5156,6 +5237,7 @@ document.addEventListener('click', function(ev){
     case 'obl-cancel': oblCancel(); break;
     case 'obl-save': oblSave(); break;
     case 'obl-remove': oblRemove(arg); break;
+    case 'obl-check': oblCheckNow(); break;
     case 'obl-snooze': oblSnooze(arg); break;
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
