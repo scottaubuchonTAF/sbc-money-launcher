@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.8';
+var FE_VERSION = 'v3.56.10';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1763,7 +1763,10 @@ var DASH_WIDGETS = {
      orphan every grid already saved. */
   coming:{title:'Obligations',icon:'💳',nav:'obligations',render:function(sz){
     var f = (state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations;
-    var up = (f && f.upcoming) || [];
+    // v3.56.10: the server drops $0 rows, but a cached summary written by an
+    // older server lives up to 6 hours — filter here too so the fix is visible
+    // on the next load rather than after the cache expires.
+    var up = ((f && f.upcoming) || []).filter(function(o){ return Math.abs(Number(o.due)||0) > 0.005; });
     // Nothing configured → render NOTHING. A card that says "set this up" on
     // every Home load is an advert, not information.
     if(!f || !f.configured) return '';
@@ -1793,7 +1796,10 @@ var DASH_WIDGETS = {
       return esc(o.dueDate);
     };
     var rows = up.map(function(o){
-      return '<div class="dkv"><span class="k">'+dot(o.severity)+' '+esc(o.name)+
+      // v3.56.9: the amount explains itself on hover/long-press; the full
+      // sentence lives on Settings → Obligations.
+      return '<div class="dkv"'+(o.dueBasis?' title="'+esc(o.dueBasis)+'"':'')+
+        '><span class="k">'+dot(o.severity)+' '+esc(o.name)+
         '<span style="color:var(--ink-3)"> · '+when(o)+' · '+esc(o.fundingAccount)+'</span>'+
         (o.estimated?'<span style="color:var(--ink-3)"> (est.)</span>':'')+
         '</span><span class="v">'+money(o.due)+'</span></div>';
@@ -3691,11 +3697,24 @@ function drawObligations(){
   h += '<div class="card">';
   var live = (o.rows||[]).filter(function(r){ return r.active; });
   if(!live.length) h += '<div class="empty" style="padding:12px;text-align:left">Nothing set up yet.</div>';
+  // v3.56.9 — WHERE DID THAT NUMBER COME FROM?
+  // Scott, 8/26: "why did it estimate my Citi Double Cash obligation as over
+  // 8k?" There was no way to find out: the card showed an amount and nothing
+  // else. Every computed amount now carries the row it was read from, the
+  // closing date it was measured against, and a warning when it fell back to
+  // the latest balance instead of a real statement row. An estimate you can
+  // interrogate is worth ten you can only doubt.
+  var lastRep = (state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations;
+  var byId = {}; ((lastRep && lastRep.upcoming) || []).forEach(function(u){ byId[u.id]=u; });
   live.forEach(function(r){
+    var u = byId[r.id];
     h += '<div class="balrow" style="flex-wrap:wrap">'+
       '<span class="nm">'+esc(r.name)+'</span>'+
-      '<span class="upd">'+esc(oblModeLabel_(r.mode))+' · due the '+r.dueDay+'</span>'+
-      '<span class="bal">'+esc(r.fundingAccount)+'</span>'+
+      '<span class="upd">'+esc(oblModeLabel_(r.mode))+' · due the '+r.dueDay+
+        (r.fundingAccount?' · from '+esc(r.fundingAccount):'')+'</span>'+
+      '<span class="bal">'+(u ? money(u.due)+(u.estimated?' <span style="color:var(--ink-3);font-weight:400">est.</span>':'') : esc(r.fundingAccount))+'</span>'+
+      (u && u.dueBasis ? '<span style="flex-basis:100%;margin-top:4px;font-size:12px;color:var(--ink-3);line-height:1.5">'+
+        esc(u.dueBasis)+'</span>' : '')+
       '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end">'+
       '<button class="btn ghost sm" data-act="obl-edit" data-arg="'+esc(r.id)+'">Edit</button>'+
       '<button class="btn ghost sm" data-act="obl-remove" data-arg="'+esc(r.id)+'">Turn off</button></span></div>';
