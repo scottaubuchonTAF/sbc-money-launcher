@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.55.0';
+var FE_VERSION = 'v3.55.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1651,6 +1651,8 @@ var DASH_WIDGETS = {
     // other lands in the inbox within the hour.
     var un=(H.unexplained!=null)?Number(H.unexplained):(Number(H.residual)||0);
     var unOk=(H.unexplainedOk!=null)?!!H.unexplainedOk:!!H.ok;
+    if(!unOk) freezeReval_();   // v3.55: a real gap earns the frozen-balance check
+                                // (self-guarded — one fetch per session, after paint)
     var haveFloat=(H.inFlight!=null);
     var lag=haveFloat?Number(H.inFlight):((H.feedLag!=null)?Number(H.feedLag):0);
     var imp=haveFloat?(Number(H.importerWindow)||0):0;
@@ -1658,8 +1660,20 @@ var DASH_WIDGETS = {
     var lagAcctsArr=(haveFloat&&H.inFlightAccounts&&H.inFlightAccounts.length)?H.inFlightAccounts
       :((H.feedLagAccounts&&H.feedLagAccounts.length)?H.feedLagAccounts:null);
     var lagAccts=lagAcctsArr?lagAcctsArr.join(', '):'';
+    // v3.55: find the frozen account FIRST — if a stuck balance accounts for the
+    // gap, the word "unexplained" is simply wrong and the pill must not say it.
+    var frz=(state.freeze&&state.freeze.anyStuck&&state.freeze.stuck&&state.freeze.stuck.length)
+      ?state.freeze.stuck:null;
+    var frzMatch=null;
+    if(frz && !unOk){
+      for(var fi=0;fi<frz.length;fi++){
+        if(Math.abs(Math.abs(Number(frz[fi].amountSince)||0)-Math.abs(un))<1){ frzMatch=frz[fi]; break; }
+      }
+    }
     var pill=unOk?'<span class="dokpill">✓ Envelopes match your accounts</span>'
-      :'<span class="dwarnpill">⚠ '+money(un)+' unexplained</span>';
+      :(frzMatch
+        ?'<span class="dwarnpill">⚠ '+money(un)+' · '+esc(frzMatch.account)+' is behind</span>'
+        :'<span class="dwarnpill">⚠ '+money(un)+' unexplained</span>');
     // "$Y arriving in your inbox shortly." — only when the importer is behind.
     var impLine=(Math.abs(imp)>=0.005)
       ? ' '+money(Math.abs(imp))+' arriving in your inbox shortly.' : '';
@@ -1680,6 +1694,19 @@ var DASH_WIDGETS = {
     } else if(!unOk){
       note='<div class="dsub" style="margin-top:6px">'+money(un)+
         ' is not explained by feed timing — worth a look on the Reconcile page.</div>';
+    }
+    // v3.55: if a balance has stopped MOVING, say THAT instead of "unexplained".
+    // On 8/26 this card showed "−$1,061.54 unexplained · Oldest balance update
+    // 8/26/26" while Rewards Checking had been frozen at $3,416.80 for a week —
+    // every line technically true and the whole card misleading. A freeze whose
+    // size matches the gap IS the explanation, so it replaces the note.
+    if(frz && !unOk){
+      var f0=frzMatch||frz[0];
+      note='<div class="dsub" style="margin-top:6px">'+
+        (frzMatch?'That is ':'')+'<b>'+esc(f0.account)+'</b>: its balance has not moved since '+
+        esc(f0.since)+' ('+f0.daysStuck+' days) while '+f0.txnsSince+' transaction'+
+        (f0.txnsSince===1?'':'s')+' worth '+money(f0.amountSince)+' posted. It should read about <b>'+
+        money(f0.expected)+'</b> — refresh the feed in Tiller, or set it by hand on Balances.</div>';
     }
     // Scott, 8/3: the small (phone) card shows just the pill — no decomposition.
     if(sz==='s') return '<div class="dlbl">Budget health</div><div style="margin-top:8px">'+pill+'</div>';
@@ -1702,14 +1729,23 @@ var DASH_WIDGETS = {
       } else if(Math.abs(lag)>=0.005){
         kv+='<div class="dkv"><span class="k" style="color:var(--amber)">Feed timing'+(lagAccts?' · '+esc(lagAccts):'')+'</span><span class="v">'+money(lag)+'</span></div>';
       }
-      kv+='<div class="dkv"><span class="k">Unexplained</span><span class="v neg">'+money(un)+'</span></div>';
+      kv+='<div class="dkv"><span class="k">'+(frzMatch?'Balance behind · '+esc(frzMatch.account):'Unexplained')+
+        '</span><span class="v neg">'+money(un)+'</span></div>';
     }
     if(sz==='m') return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+'</div>';
     var extra='';
     if(d.negatives && d.negatives.count)
       extra+='<div class="dkv"><span class="k">'+d.negatives.count+' negative envelope'+(d.negatives.count===1?'':'s')+'</span><span class="v neg">'+money(d.negatives.total)+'</span></div>';
+    // v3.55: "Oldest balance update 8/26/26" was the most misleading line on the
+    // card — Tiller rewrites the same number daily, so the DATE is always today
+    // while the VALUE is a week old. When something is frozen, report that.
+    if(frz){
+      extra+='<div class="dkv"><span class="k" style="color:var(--amber)">Balance not moving · '+
+        esc(frz[0].account)+'</span><span class="v" style="color:var(--amber)">'+
+        frz[0].daysStuck+' days</span></div>';
+    }
     if(H.stalest)
-      extra+='<div class="dkv"><span class="k">Oldest balance update</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
+      extra+='<div class="dkv"><span class="k">Newest balance row</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
     return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+extra+'</div>';}},
 
   targets:{title:'Target vs funded',icon:'📊',nav:'envelopes',render:function(sz){
@@ -3527,6 +3563,10 @@ function freezeReval_(){
   state._freezeFetched = true;
   ensureAuth().then(function(){ return legacyCall_('apiFeedFreeze',[{}],true,false); })
     .then(function(f){
+      // v3.55.1: {pending:true} means another caller is scanning — let it finish
+      // and pick the answer up on the next Home load rather than starting a
+      // second scan of the same sheets.
+      if(f && f.pending){ state._freezeFetched = false; return; }
       if(!f || !f.anyStuck) return;
       state.freeze = f;
       if(state.view==='dash') renderDash();
@@ -4311,7 +4351,13 @@ function reconRow(a, rev){
     '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end;align-items:center">';
   if(rev[a.name]) h += '<span style="font-size:11px;color:var(--ink-3)">reviewed '+esc(rev[a.name])+'</span>';
   h += '<button class="btn ghost sm" data-act="recon-manual" data-arg="'+esc(a.name)+'">'+(a.manual?'✓ Manual':'Mark manual')+'</button>';
-  if(a.manual) h += '<button class="btn ghost sm" data-act="recon-update" data-arg="'+esc(a.name)+'">Update balance</button>';
+  // v3.55: a FED account needs this too — a frozen feed is exactly when you must
+  // set the number by hand, and the old rule (manual accounts only) meant marking
+  // a healthy account "manual" just to correct it once, then remembering to flip
+  // it back. apiManualBalance appends a Balance History row dated today; when the
+  // feed catches up its own newer row wins, so the correction is self-clearing.
+  h += '<button class="btn ghost sm" data-act="recon-update" data-arg="'+esc(a.name)+'">'+
+    (a.manual?'Update balance':'Set balance')+'</button>';
   h += '<button class="btn ghost sm" data-act="recon-reviewed" data-arg="'+esc(a.name)+'">✓ Reviewed</button></span>';
   if(editing){
     h += '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:8px">'+
