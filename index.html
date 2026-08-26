@@ -925,7 +925,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.53.0';
+var FE_VERSION = 'v3.54.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3474,6 +3474,43 @@ function balRefreshFromTiller(){
     toast('⚠ Refresh failed: '+(e.message||e));
   });
 }
+/* ---- v3.54: "Refresh app data from sheet" (Settings) ---------------------
+   The mirror is pulled forward two ways: the hourly pg_cron sync at :07, and an
+   apiBoot/apiDashboard read carrying {refreshMirror:true} — which the app only
+   asks for when ITS OWN write set the dirty flag in THIS browser.
+
+   That leaves a real hole: a repair made server-side — FixStuckSplit, CleanBreak,
+   Rebalance, anything run from the Apps Script editor or straight in the sheet —
+   never touches a browser, so nothing sets the flag and SBC keeps serving the
+   pre-repair rows for up to an hour. It happened for real on 8/26: Corey's $200
+   Venmo was fixed to two $100 legs in the sheet and the app went on showing $600,
+   which reads as "the fix didn't work" to everyone looking at it.
+
+   So: set the flag by hand and re-boot. Refreshes exactly what the edge function
+   calls companion-sourced (envelopes, inbox, transactions, journal_entries) —
+   it can NOT pull bank balances forward, because those come from the Tiller
+   workbook via the hourly sync; that is what "↻ Refresh from Tiller" on Balances
+   is for. Two buttons, two sources, deliberately not merged. */
+function mirrorRefreshFromSheet(){
+  if(state.mirrorRefreshing) return;
+  state.mirrorRefreshing = true;
+  actBusy('mirror-refresh', true, 'Refreshing…');
+  var done = function(){ state.mirrorRefreshing = false; actBusy('mirror-refresh', false); };
+  markMirrorDirty_();                 // the next Home read asks for the re-read
+  toast('Re-reading your sheet…');
+  mutationsIdle_().then(function(){   // never re-read ahead of a queued write
+    return refreshBoot();
+  }).then(function(){
+    done();
+    invalidateData();                 // Home tiles + snapshot follow
+    if(state.view==='settings') renderSettings();
+    toast('App data refreshed from your sheet ✓');
+  }).catch(function(e){
+    done();
+    toast('⚠ Refresh failed: '+(e.message||e));
+  });
+}
+
 /* Pull the dashboard from APPS SCRIPT once, in the background, and swap it in.
    Same idea as dashRevalHealth_ (v3.31) but for the whole payload: after a live
    Tiller read the mirror is the stale side for anything bank-derived, and Home
@@ -4017,6 +4054,9 @@ function renderSettings(){
     ['activity','Sign-ins & activity'],['about','About']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
     '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
+  // v3.54: see mirrorRefreshFromSheet.
+  h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="mirror-refresh">↻ Refresh app data from sheet</button></div>'+
+    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour.</div>';
   // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
   // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
   // Corey and Brady land on their own sheets.
@@ -4830,6 +4870,7 @@ document.addEventListener('click', function(ev){
     case 'recon-reviewed': reconReviewed(arg); break;
     case 'recon-manual': reconToggleManual(arg); break;
     case 'snapshot-tiller': snapshotToTiller(); break;
+    case 'mirror-refresh': mirrorRefreshFromSheet(); break;
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
