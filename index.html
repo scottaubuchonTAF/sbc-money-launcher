@@ -933,7 +933,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.57.1';
+var FE_VERSION = 'v3.57.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1239,7 +1239,9 @@ function bootApply_(res){
     // hidden set applies (the server default is the OLD grid's starter set).
     if(res.dashLayout && Array.isArray(res.dashLayout.layout) && !res.dashLayout.isDefault) state.dashLayout = res.dashLayout.layout;
     if(res.density && res.density.value) applyDensity(res.density.value, false); // v3.28: per-user density
-    if(res.birthday){ state.birthday = String(res.birthday.value||''); try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){} } // v3.57
+    var bdv = (res.boot && typeof res.boot.birthday==='string') ? res.boot.birthday
+            : (res.birthday ? String(res.birthday.value||'') : null);   // v3.57.2: bootstrap first, apiBoot top-level second
+    if(bdv !== null){ state.birthday = bdv; try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){} }
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
     applySeason();                         // v3.57: dress for the season/birthday
@@ -1328,6 +1330,13 @@ function prewarm(){
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
     state.boot=b;
+    // v3.57.2: the bootstrap carries the account's birthday (the mirror-served
+    // apiBoot doesn't know it) — adopt it so every device agrees.
+    if(typeof b.birthday === 'string'){
+      state.birthday = b.birthday;
+      try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){}
+      applySeason();
+    }
     // v3.32: while mirror-approved rows await their write-back, Apps Script's
     // inboxCount is stale-high — trust the filtered local inbox instead.
     // v3.49: that correction lived HERE, on the badge only, while the Home
@@ -4788,27 +4797,41 @@ function densityControl(){
 }
 /* v3.57: Settings card for the seasonal dress-up + birthday. The date input is
    16px so iOS doesn't zoom (see sbc-mobile rules). Toggle is per device. */
+/* v3.57.2 (Scott): the dress-up switch is a plain row in the main settings
+   list, right above About — not its own section. What it does is explained in
+   the help file, not here. */
 function seasonControl(){
   var on = seasonOn();
+  return '<div class="envrow" data-act="season-toggle" style="cursor:pointer">'+
+    '<span class="nm">Monthly dress-up</span>'+
+    '<button class="dwbtn'+(on?' on':'')+'" data-act="season-toggle">'+(on?'On':'Off')+'</button></div>';
+}
+/* v3.57.2: birthday lives under PERSONAL INFORMATION (Scott 8/28), and the card
+   SHOWS the saved value — a save that changes nothing on screen looks broken
+   (the state-refresh-without-render lesson, fourth sighting). */
+function bdayPretty_(v){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))) return '';
+  var d = new Date(Number(v.slice(0,4)), Number(v.slice(5,7))-1, Number(v.slice(8,10)));
+  return d.toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'});
+}
+function personalControl(){
   var b = String(state.birthday||'');
-  return settingsSectionLabel('SEASONAL THEMES')+
+  var saved = bdayPretty_(b);
+  return settingsSectionLabel('PERSONAL INFORMATION')+
     '<div class="card" style="padding:12px">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
-    '<span style="font-weight:600">Monthly dress-up</span>'+
-    '<button class="dwbtn'+(on?' on':'')+'" data-act="season-toggle">'+(on?'On':'Off')+'</button></div>'+
-    '<div class="empty" style="padding:6px 2px 0;font-size:11.5px;text-align:left">The logo and sidebar dress for the season — snow in January, fireworks in July, a Derby horse in May. Decoration only; this switch is per device.</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">'+
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
     '<label for="bdayInp" style="font-weight:600;font-size:13.5px">Birthday</label>'+
     '<input type="date" id="bdayInp" value="'+esc(b)+'" style="padding:6px 9px;border:1.5px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font-size:16px">'+
-    '<button class="btn ghost" data-act="bday-save">Save</button></div>'+
-    '<div class="empty" style="padding:6px 2px 0;font-size:11.5px;text-align:left">Balloons and confetti for your whole birthday month, cake for the last week, and a proper greeting on the day. Saved to your account; the full date also feeds future age-based reports.</div>'+
+    '<button class="btn ghost" data-act="bday-save">Save</button>'+
+    '<span style="font-size:12px;color:'+(saved?'var(--green)':'var(--ink-3)')+'">'+
+      (saved ? '✓ Saved: '+esc(saved) : 'Not saved yet')+'</span></div>'+
     '</div>';
 }
 function renderSettings(){
   var desktop = window.innerWidth >= 900;
   var h = '<h2 class="viewtitle">Settings</h2>';
   h += densityControl();
-  h += seasonControl();     // v3.57 — seasonal themes + birthday
+  h += personalControl();   // v3.57.2 — birthday (PERSONAL INFORMATION)
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
@@ -4816,10 +4839,14 @@ function renderSettings(){
       ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports']]);
     h += settingsSectionLabel('SETTINGS');
   }
-  h += settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
+  // v3.57.2 (Scott): Monthly dress-up rides the main list as a row above About.
+  var mainList = settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
     ['healthset','Health settings'],['obligations','💳 Obligations & autopay'],['history','History & undo'],
     ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],
-    ['activity','Sign-ins & activity'],['about','About']]);
+    ['activity','Sign-ins & activity']]);
+  h += mainList.slice(0, -'</div>'.length) + seasonControl() +
+    '<div class="envrow" data-act="goview" data-arg="about"><span class="nm">About</span><span>›</span></div>' +
+    '</div>';
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
     '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // v3.54: see mirrorRefreshFromSheet.
@@ -5345,7 +5372,7 @@ function renderHowTo(){
 
   h += S('🎨','Seasonal themes & birthdays',
     '<p style="margin:0 0 8px">The logo and sidebar dress for the season — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
-    '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Seasonal themes) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
+    '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Personal information) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
     '<p style="margin:0">Not your thing? The <b>Seasonal themes</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
 
   h += S('↩️','Made a mistake? Nothing is permanent',
@@ -5556,7 +5583,14 @@ document.addEventListener('click', function(ev){
         try{ localStorage.setItem('sbcBday', state.birthday); }catch(e2){}
         toast(v ? 'Birthday saved' : 'Birthday cleared');
         applySeason(); setGreeting_();
-      }).catch(fail);
+        // v3.57.2: repaint so the card's "Saved:" line reflects it — a save
+        // that changes nothing on screen looks broken.
+        if(state.view==='settings' || state.view==='more') renderSettings();
+      }).catch(function(e2){
+        // v3.57.2: fail() replaces the WHOLE Settings view with the error —
+        // for an inline save, keep the page and say what went wrong.
+        toast('⚠ Birthday not saved: '+(e2 && e2.message || e2));
+      });
     })(); break;
     case 'goreport': state.report.id=arg; rptSave(); go('reports'); break;
     case 'rpt-select': state.report.id=arg; rptSave(); renderReports(); break;
