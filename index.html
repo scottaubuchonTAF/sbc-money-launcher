@@ -542,6 +542,78 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .signin .serr{color:#fca5a5;font-size:13px;max-width:320px;min-height:18px}
 
 /* ================= Reports (v3.21) ================= */
+/* ---- v3.59 Reports v2 ---- */
+.rptper{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:14px 0 0;padding:12px 14px;background:var(--bg);border-radius:12px}
+.rptseg2{display:inline-flex;background:var(--card);border:1.5px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.rptseg2 button{border:none;background:transparent;padding:7px 11px;font-size:12px;font-weight:700;color:var(--ink-2);cursor:pointer}
+.rptseg2 button.on{background:var(--teal-600);color:#fff}
+.rptpnav{display:flex;align-items:center;gap:6px}
+.rptpnav button{width:30px;height:30px;border:1.5px solid var(--line);background:var(--card);border-radius:9px;cursor:pointer;font-size:14px;font-weight:800;color:var(--ink-2)}
+.rptpnav button:disabled{opacity:.35;cursor:not-allowed}
+.plabel2{min-width:168px;text-align:center;font-size:13.5px;font-weight:800;letter-spacing:-.01em}
+.plabel2 small{display:block;font-size:10px;color:var(--ink-3);font-weight:700}
+.rptpill{border:1.5px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;font-size:11.5px;padding:6px 11px;border-radius:99px;cursor:pointer}
+.rpttoggle{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;margin-left:auto}
+.rpttoggle input{accent-color:var(--teal-600);width:15px;height:15px}
+.rptdates2{display:flex;align-items:center;gap:7px}
+.rptdates2 input[type=date]{padding:7px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:16px;font-weight:600;background:var(--card)}
+.rptdates2 .to{color:var(--ink-3);font-size:12px;font-weight:700}
+.rptfbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}
+.rptfbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px dashed var(--line);background:var(--card);color:var(--ink-2);font-weight:700;font-size:12px;padding:6px 11px;border-radius:99px;cursor:pointer}
+.rptfbtn.active{border-style:solid;border-color:var(--teal-300);background:var(--teal-50);color:var(--teal-700)}
+.rptfbtn .n{background:var(--teal-600);color:#fff;font-size:10px;border-radius:99px;padding:1px 6px}
+.rptfbtn.clear{border:none;text-decoration:underline;color:var(--ink-3);background:transparent}
+.rptfpanel{background:var(--bg);border-radius:12px;padding:11px 13px;margin-top:8px}
+.rptfpanel .fttl{font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.rptchips{display:flex;flex-wrap:wrap;gap:6px}
+.rptchip{border:1.5px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:600;font-size:12px;padding:5px 11px;border-radius:99px;cursor:pointer}
+.rptchip.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
+.fnote2{font-size:11.5px;color:var(--ink-3);margin-top:8px}
+.rptlink{border:none;background:transparent;color:var(--teal-700);font-weight:700;font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0}
+.rptstatrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.rptstat{background:var(--bg);border-radius:11px;padding:11px 13px;border-left:3px solid var(--teal-500)}
+.rptstat .k{font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.rptstat .v{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.rptstat .v.pos{color:var(--green)} .rptstat .v.neg{color:var(--red)}
+.rptstat .d{font-size:11px;font-weight:700;margin-top:2px;color:var(--ink-3)}
+.rptstat .d.pos{color:var(--green)} .rptstat .d.neg{color:var(--red)}
+.rptchartbox{position:relative;height:300px;margin-top:14px}
+.rptchartbox.tall{height:340px} .rptchartbox.short{height:240px;margin-top:4px}
+.rptctls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-top:12px}
+.rptctl{display:flex;flex-direction:column;gap:5px}
+.rptctl .lb{font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.rptctl input[type=range]{width:150px;accent-color:var(--teal-600)}
+.rptctl .rangeval{color:var(--teal-700)}
+.rpttwocol{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media(max-width:900px){.rpttwocol{grid-template-columns:1fr}}
+.rptmini{background:var(--bg);border-radius:12px;padding:13px 15px}
+.rptmini h4{font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin:0 0 9px}
+.rpthbar{display:flex;align-items:center;gap:9px;margin-bottom:7px;font-size:12.5px}
+.rpthbar .nm{width:128px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpthbar .trk{flex:1;height:9px;background:var(--line);border-radius:99px;overflow:hidden}
+.rpthbar .trk i{display:block;height:100%;background:var(--teal-500);border-radius:99px}
+.rpthbar .amt{width:74px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.rpttxlist{max-height:340px;overflow:auto}
+.rpttx{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+.rpttx:last-child{border-bottom:none}
+.rpttx .dt{width:52px;color:var(--ink-3);font-weight:600;flex:none}
+.rpttx .ds{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rpttx .ds small{display:block;color:var(--ink-3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpttx .env{color:var(--ink-3);font-size:11.5px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.rpttx .am{width:80px;text-align:right;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
+.rpttx .am.pos{color:var(--green)}
+.rpttx .tg{max-width:180px;overflow:hidden}
+.rpttblwrap{overflow-x:auto;margin-top:12px}
+.rpttbl{width:100%;border-collapse:collapse;font-size:13px}
+.rpttbl th{font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--line)}
+.rpttbl th.r,.rpttbl td.r{text-align:right}
+.rpttbl td{padding:9px 8px;border-bottom:1px solid var(--line);font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.rpttbl td.strong{color:var(--ink);font-weight:800}
+.rpttbl tr.click{cursor:pointer}
+.rpttbl tr.click:hover td{background:var(--teal-50)}
+.rptback{border:none;background:transparent;color:var(--teal-700);font-weight:800;font-size:13px;cursor:pointer;padding:0;margin:12px 0 0}
+@media(max-width:860px){ .rptlayout{grid-template-columns:1fr} .rptlist{display:flex;gap:7px;overflow:auto} .rptlist button{white-space:nowrap} .rptside h3{display:none} .rpttoggle{margin-left:0} }
+
 .rptlayout{display:grid;grid-template-columns:210px 1fr;gap:16px}
 .rptside h3{font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px 2px}
 .rptlist button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:transparent;
@@ -931,13 +1003,16 @@ var state = {
   report:null, reportData:null, reportLoading:false, reportErr:null,
   tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{} // v3.58 tags UI
 };
-/* Reports section (v3.21) — current selection + controls, persisted per browser. */
-var RPT_DEFAULTS = { id:'spend', gran:'month', from:null, to:null, chartType:'area',
-  topN:8, view:'donut', groupBy:'envelope', showNet:true, compare:false,
-  envelopeIds:[], groups:[], accounts:[] };
-try{ var _rp=JSON.parse(localStorage.getItem('sbcReport')||'null'); }catch(e){ var _rp=null; }
+/* Reports v2 (v3.59) — period navigator + filters, persisted per browser
+   (new key sbcReport2; the old v3.21 sbcReport blob is simply orphaned). */
+var RPT_DEFAULTS = { id:'summary', ptype:'month', anchor:null, custFrom:null, custTo:null,
+  compare:true, accounts:[], groups:[], envelopeIds:[], tags:[], tagDetail:null,
+  openFilter:null, manageScope:false, chartType:'bar', topN:8, areaView:'donut',
+  groupBy:'envelope', showNet:true };
+try{ var _rp=JSON.parse(localStorage.getItem('sbcReport2')||'null'); }catch(e){ var _rp=null; }
 state.report = Object.assign({}, RPT_DEFAULTS, (_rp&&typeof _rp==='object')?_rp:{});
-state.report.envelopeIds = state.report.envelopeIds||[]; state.report.groups = state.report.groups||[]; state.report.accounts = state.report.accounts||[];
+['accounts','groups','envelopeIds','tags'].forEach(function(k){ if(!Array.isArray(state.report[k])) state.report[k]=[]; });
+if(['summary','spend','areas','inout','tags','txns','worth'].indexOf(state.report.id)===-1) state.report.id='summary';
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array.isArray(_dl)) state.dashLayout=_dl; }catch(e){}
 /* v3.28: paint at the user's saved density before first render (server value from
@@ -950,7 +1025,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.58.1';
+var FE_VERSION = 'v3.59.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1210,7 +1285,7 @@ $all('aside.side button.nav').forEach(function(b){
   var v=b.dataset.v;
   b.innerHTML = icon(v)+'<span>'+NAV_LABELS[v]+'</span>'+
     (v==='inbox'?'<span class="badge" id="sideBadge" style="display:none"></span>':'')+
-    (v==='reports'?'<span class="beta">BETA</span>':''); // v3.26: Reports is being revamped
+    ''; // v3.26: Reports is being revamped
   b.addEventListener('click', function(){ go(v); });
 });
 $all('nav.tabs button').forEach(function(b){
@@ -3313,6 +3388,7 @@ function fetchTags(){
   run('apiTags').then(function(r){
     state.tagsList = (r && r.tags) || [];
     if(state.view==='txns') drawTxns();
+    else if(state.view==='reports' && state.report.openFilter==='tags') renderReports(); // v3.59
   }).catch(function(){ /* picker just has no history yet */ });
 }
 /* Optimistic save of a txn's full tag list (v3.27 pattern: patch now, rollback
@@ -4410,183 +4486,386 @@ function importNowUi(){
   });
 }
 
-/* ============================ Reports (v3.21) ============================
- * Full Reports section: date range + presets, granularity, per-report controls,
- * group/account filters, compare-to-previous, and working CSV export. Server
- * data comes from apiReport; display-only controls (chart type, top-N, donut/bar,
- * group-by, net line) transform the already-fetched payload with no round-trip. */
+/* ============================ Reports v2 (v3.59) ============================
+ * The approved reports-v2 mockup made real. Period NAVIGATOR (weekly/monthly/
+ * quarterly/yearly, ◀ ▶ steps whole periods, Custom range), report scope =
+ * SPENDING ACCOUNTS (checking/savings/credit via the health cash+debt groups,
+ * per-account flag managed inline), one-row filters (accounts/groups/envelopes/
+ * tags), compare-to-previous, and seven reports: Period summary · Spending over
+ * time · Where it goes · Income vs spending · Tags (with cross-envelope tag
+ * detail) · Transactions · Net worth. Server data = apiReport v2 (Apps Script +
+ * mirror, identical shapes); display-only controls (chart type, top-N, donut/
+ * bars, group-by, net line) transform the fetched payload with no round-trip. */
 var RPT_META = {
-  spend: {title:'Spending over time', icon:'📈', desc:'How much you spend each period, with the trend.', gran:true, compare:true, controls:['type']},
-  areas: {title:'Where your money goes', icon:'🍩', desc:'Top spending categories over the selected range.', gran:false, compare:false, controls:['topN','view','groupBy']},
-  inout: {title:'Income vs spending', icon:'⚖️', desc:'Money in vs out each period, with the net.', gran:true, compare:true, controls:['net']},
-  worth: {title:'Net worth over time', icon:'🏦', desc:'Assets minus liabilities across your accounts.', gran:true, compare:true, controls:[]}
+  summary:{title:'Period summary', icon:'📊', desc:'The whole period on one page — totals, where it went, biggest items.', server:'summary', compare:true, controls:[]},
+  spend:  {title:'Spending over time', icon:'📈', desc:'Spending per bucket inside the period, previous period overlaid.', server:'spend', compare:true, controls:['type']},
+  areas:  {title:'Where it goes', icon:'🍩', desc:'Top envelopes or groups for the period.', server:'areas', compare:false, controls:['topN','view','groupBy']},
+  inout:  {title:'Income vs spending', icon:'⚖️', desc:'Money in vs out per bucket, with the net.', server:'spend', compare:false, controls:['net']},
+  tags:   {title:'Tags', icon:'🏷️', desc:'Everything you tagged, across every envelope and account.', server:'tags', compare:false, controls:[]},
+  txns:   {title:'Transactions', icon:'🧾', desc:'The raw rows behind the numbers — filtered, tagged, exportable.', server:'txns', compare:false, controls:[]},
+  worth:  {title:'Net worth', icon:'🏦', desc:'Assets minus liabilities across your accounts.', server:'worth', compare:true, controls:[]}
 };
-var RPT_GRANS=[['day','Day'],['week','Week'],['month','Month'],['quarter','Quarter'],['year','Year']];
-var RPT_PRESETS=[['30D',30],['3M',91],['6M',182],['12M',365],['YTD','ytd'],['All',1825]];
+var RPT_PTYPES=[['week','Weekly'],['month','Monthly'],['quarter','Quarterly'],['year','Yearly'],['custom','Custom']];
 var rptChart=null;
-var RTEAL='#0d9488', RTEALL='#5eead4', RLINE='#e8edf2', RINK3='#94a3b8';
+var RTEAL='#0d9488', RLINE='#e8edf2', RINK3='#94a3b8', RINK2='#475569';
+/* categorical palette — CVD-validated (dataviz six-checks, 8/28/26) */
+var RCAT=['#0d9488','#d97706','#3b82f6','#e11d48','#8b5cf6','#65a30d'], ROTHER='#94a3b8';
 
 function rptPad(n){ return (n<10?'0':'')+n; }
 function rptISO(d){ return d.getFullYear()+'-'+rptPad(d.getMonth()+1)+'-'+rptPad(d.getDate()); }
 function rptParse(s){ var p=String(s||'').split('-'); return new Date(+p[0],(+p[1]||1)-1,+p[2]||1); }
 function rptToday(){ var d=new Date(); d.setHours(0,0,0,0); return d; }
-function rptSave(){ try{ localStorage.setItem('sbcReport', JSON.stringify(state.report)); }catch(e){} }
-function rptEnsureRange(){ var r=state.report;
-  if(!r.to) r.to=rptISO(rptToday());
-  if(!r.from){ var f=rptToday(); f.setDate(f.getDate()-364); r.from=rptISO(f); } }
-function rptRangeDays(){ return Math.round((rptParse(state.report.to)-rptParse(state.report.from))/86400000)+1; }
-function rptAutoGran(){ var d=rptRangeDays(); state.report.gran = d<=45?'day':d<=120?'week':d<=550?'month':'quarter'; }
-function rptGranDisabled(g){ var d=rptRangeDays(); return (g==='day'&&d>120)||(g==='week'&&d>550)||(g==='year'&&d<365); }
-function rptApplyPreset(p){ var r=state.report; r.to=rptISO(rptToday());
-  if(p==='ytd'){ r.from=rptISO(new Date(new Date().getFullYear(),0,1)); }
-  else { var f=rptToday(); f.setDate(f.getDate()-(Number(p)-1)); r.from=rptISO(f); }
-  rptAutoGran(); }
-function rptActivePreset(){ var r=state.report; if(r.to!==rptISO(rptToday())) return null;
-  var f=rptParse(r.from);
-  if(f.getFullYear()===new Date().getFullYear()&&f.getMonth()===0&&f.getDate()===1) return 'YTD';
-  return {30:'30D',91:'3M',182:'6M',365:'12M',1825:'All'}[rptRangeDays()]||null; }
-function rptSig(){ var r=state.report; return JSON.stringify([r.id,r.from,r.to,r.gran,r.compare,r.envelopeIds,r.groups,r.accounts]); }
-function rptAxis(legend,o){ o=o||{}; return {maintainAspectRatio:false,animation:false,
-  plugins:{legend:legend?{position:'top',labels:{boxWidth:12,color:RINK3,font:{size:12}}}:{display:false}},
-  scales:{x:{grid:{display:false},ticks:{color:RINK3,font:{size:11},maxRotation:0,autoSkip:true,maxTicksLimit:14}},
-    y:{grid:{color:RLINE},ticks:{color:RINK3,font:{size:11},callback:function(v){return '$'+Math.round(v/1000)+'k';}},beginAtZero:o.zero!==false}}}; }
+function rptSave(){ try{ localStorage.setItem('sbcReport2', JSON.stringify(state.report)); }catch(e){} }
+var RPT_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var RPT_MONF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+/* ---- the period navigator ---- */
+function rptAnchor(){ var r=state.report; var d=r.anchor?rptParse(r.anchor):rptToday(); return isNaN(d)?rptToday():d; }
+function rptRange(){
+  var r=state.report, a=rptAnchor(), f, t;
+  if(r.ptype==='week'){ f=new Date(a); f.setDate(a.getDate()-a.getDay()); t=new Date(f); t.setDate(f.getDate()+6); }
+  else if(r.ptype==='quarter'){ var q=Math.floor(a.getMonth()/3); f=new Date(a.getFullYear(),q*3,1); t=new Date(a.getFullYear(),q*3+3,0); }
+  else if(r.ptype==='year'){ f=new Date(a.getFullYear(),0,1); t=new Date(a.getFullYear(),11,31); }
+  else if(r.ptype==='custom'){
+    f=r.custFrom?rptParse(r.custFrom):rptToday(); t=r.custTo?rptParse(r.custTo):rptToday();
+    if(isNaN(f)) f=rptToday(); if(isNaN(t)) t=rptToday();
+    if(f>t){ var tmp=f; f=t; t=tmp; }
+  }
+  else { f=new Date(a.getFullYear(),a.getMonth(),1); t=new Date(a.getFullYear(),a.getMonth()+1,0); }
+  return { from:rptISO(f), to:rptISO(t), f:f, t:t };
+}
+function rptDays(rng){ return Math.round((rng.t-rng.f)/86400000)+1; }
+function rptAutoGran(rng){ var r=state.report;
+  if(r.ptype==='week'||r.ptype==='month') return 'day';
+  if(r.ptype==='quarter') return 'week';
+  if(r.ptype==='year') return 'month';
+  var d=rptDays(rng); return d<=45?'day':d<=180?'week':'month';
+}
+function rptStep(dir){
+  var r=state.report, a=rptAnchor();
+  if(r.ptype==='week') a.setDate(a.getDate()+7*dir);
+  else if(r.ptype==='month'){ a.setDate(1); a.setMonth(a.getMonth()+dir); }
+  else if(r.ptype==='quarter'){ a.setDate(1); a.setMonth(a.getMonth()+3*dir); }
+  else if(r.ptype==='year') a.setFullYear(a.getFullYear()+dir);
+  r.anchor=rptISO(a);
+}
+function rptLabel(rng){
+  var r=state.report, f=rng.f, t=rng.t;
+  if(r.ptype==='week') return 'Week of '+RPT_MON[f.getMonth()]+' '+f.getDate()+' – '+(f.getMonth()===t.getMonth()?'':RPT_MON[t.getMonth()]+' ')+t.getDate();
+  if(r.ptype==='month') return RPT_MONF[f.getMonth()]+' '+f.getFullYear();
+  if(r.ptype==='quarter') return 'Q'+(Math.floor(f.getMonth()/3)+1)+' '+f.getFullYear();
+  if(r.ptype==='year') return String(f.getFullYear());
+  return RPT_MON[f.getMonth()]+' '+f.getDate()+" '"+String(f.getFullYear()).slice(2)+' → '+RPT_MON[t.getMonth()]+' '+t.getDate()+" '"+String(t.getFullYear()).slice(2);
+}
+function rptPeriodNoun(){ var r=state.report;
+  return {week:'week',month:'month',quarter:'quarter',year:'year',custom:'range'}[r.ptype]||'period'; }
+
+/* ---- fetch (v3.22 error-sig machinery kept: a failed sig never auto-retries) ---- */
+function rptSig(){ var r=state.report, rng=rptRange();
+  return JSON.stringify([r.id,rng.from,rng.to,r.compare,r.envelopeIds,r.groups,r.accounts,r.tags,r.tagDetail]); }
 function rptFetch(){
-  var r=state.report, sig=rptSig();
-  var opts={ report:r.id, from:r.from, to:r.to, gran:r.gran, compare:!!(r.compare&&RPT_META[r.id].compare!==false),
-    filters:{ envelopeIds:r.envelopeIds, groups:r.groups, accounts:r.accounts } };
+  var r=state.report, meta=RPT_META[r.id], rng=rptRange(), sig=rptSig();
+  var opts={ report:meta.server, from:rng.from, to:rng.to, gran:rptAutoGran(rng),
+    scope:(meta.server==='worth'?'all':'spending'), // net worth spans ALL accounts
+    compare:!!(r.compare&&meta.compare),
+    filters:{ envelopeIds:r.envelopeIds, groups:r.groups, accounts:r.accounts, tags:r.tags } };
+  if(r.id==='tags'&&r.tagDetail) opts.tag=r.tagDetail;
   state.reportLoading=true; state.reportErr=null;
   run('apiReport', opts).then(function(res){
     res._sig=sig; state.reportData=res; state.reportLoading=false; state.reportErrSig=null;
     if(state.view==='reports') renderReports();
   }).catch(function(e){ state.reportLoading=false; state.reportErr=(e&&e.message)||String(e);
-    // v3.22: remember WHICH request failed — without this, renderReports saw
-    // needFetch=true (sig only stored on success) and refetched immediately,
-    // an INFINITE retry loop hammering the backend on every report error.
     state.reportErrSig=sig;
     if(state.view==='reports') renderReports(); });
 }
 
-function rptSeg(key,opts){ var r=state.report;
-  return '<span class="rptseg">'+opts.map(function(o){
-    return '<button data-act="rpt-ctl" data-arg="'+key+'|'+o[0]+'" class="'+(String(r[key])===String(o[0])?'on':'')+'">'+o[1]+'</button>'; }).join('')+'</span>'; }
-function rptControlsHtml(meta){ var r=state.report; if(!meta.controls.length) return '';
-  var h='<div class="rptfilters" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">';
-  meta.controls.forEach(function(c){
-    if(c==='type') h+='<span class="flab">Chart</span>'+rptSeg('chartType',[['area','Area'],['bar','Bars']]);
-    else if(c==='view') h+='<span class="flab">View</span>'+rptSeg('view',[['donut','Donut'],['bar','Bars']]);
-    else if(c==='groupBy') h+='<span class="flab" style="margin-left:8px">Group by</span>'+rptSeg('groupBy',[['envelope','Envelope'],['group','Group']]);
-    else if(c==='topN') h+='<span class="flab" style="margin-left:8px">Top <span class="rangeval" id="rptTopNval">'+r.topN+'</span></span><input type="range" id="rptTopN" min="3" max="12" value="'+r.topN+'" style="width:140px;accent-color:var(--teal-600)">';
-    else if(c==='net') h+='<label class="rpttoggle" style="margin-left:8px"><input type="checkbox" id="rptNet"'+(r.showNet?' checked':'')+'> Show net line</label>';
-  });
-  return h+'</div>'; }
-function rptFiltersHtml(){ var d=state.reportData, r=state.report; if(!d||!d.meta) return '';
-  var groups=d.meta.groups||[], accts=d.meta.accounts||[];
-  if(!groups.length && !accts.length) return '';
-  var h='<div class="rptfilters">';
-  if(groups.length){ h+='<span class="flab">Groups</span>'+groups.map(function(g){
-    return '<button class="rptchip'+(r.groups.indexOf(g)!==-1?' on':'')+'" data-act="rpt-fgroup" data-arg="'+esc(g)+'">'+esc(g)+'</button>'; }).join(''); }
-  if(accts.length){ h+='<span class="flab" style="margin-left:8px">Accounts</span>'+accts.map(function(a){
-    return '<button class="rptchip'+(r.accounts.indexOf(a)!==-1?' on':'')+'" data-act="rpt-facct" data-arg="'+esc(a)+'">'+esc(a)+'</button>'; }).join(''); }
-  if(r.groups.length||r.accounts.length) h+='<button class="rptchip" data-act="rpt-fclear" style="margin-left:8px">Clear filters</button>';
-  return h+'</div>'; }
+/* ---- shared UI bits ---- */
+function rptAxis(legend,o){ o=o||{}; return {maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},
+  plugins:{legend:legend?{position:'top',labels:{boxWidth:12,color:RINK2,font:{size:12}}}:{display:false}},
+  scales:{x:{grid:{display:false},ticks:{color:RINK3,font:{size:11},maxRotation:0,autoSkip:true,maxTicksLimit:14}},
+    y:{grid:{color:RLINE},ticks:{color:RINK3,font:{size:11},callback:function(v){return Math.abs(v)>=1000?'$'+Math.round(v/1000)+'k':'$'+v;}},beginAtZero:o.zero!==false}}}; }
+function rptSeg(act,key,opts){ var r=state.report;
+  return '<div class="rptseg2">'+opts.map(function(o){
+    return '<button data-act="'+act+'" data-arg="'+key+'|'+o[0]+'" class="'+(String(r[key])===String(o[0])?'on':'')+'">'+o[1]+'</button>'; }).join('')+'</div>'; }
+function rptPeriodBarHtml(rng){
+  var r=state.report, meta=RPT_META[r.id];
+  var custom=r.ptype==='custom';
+  var atNow = rng.t >= rptToday();
+  return '<div class="rptper">'+
+    '<div class="rptseg2">'+RPT_PTYPES.map(function(p){
+      return '<button data-act="rpt-ptype" data-arg="'+p[0]+'" class="'+(r.ptype===p[0]?'on':'')+'">'+p[1]+'</button>'; }).join('')+'</div>'+
+    (custom
+      ? '<div class="rptdates2"><input type="date" id="rptFrom" value="'+esc(rng.from)+'"><span class="to">→</span><input type="date" id="rptTo" value="'+esc(rng.to)+'"></div>'
+      : '<div class="rptpnav"><button data-act="rpt-step" data-arg="-1">‹</button>'+
+        '<div class="plabel2">'+esc(rptLabel(rng))+'<small>'+esc(rng.from)+' → '+esc(rng.to)+' · '+rptDays(rng)+' days</small></div>'+
+        '<button data-act="rpt-step" data-arg="1"'+(atNow?' disabled':'')+'>›</button>'+
+        '<button class="rptpill" data-act="rpt-now">Current</button></div>')+
+    (meta.compare?'<label class="rpttoggle"><input type="checkbox" id="rptCompare"'+(r.compare?' checked':'')+'> Compare to previous '+rptPeriodNoun()+'</label>':'')+
+  '</div>';
+}
+function rptFilterBarHtml(){
+  var r=state.report, d=state.reportData, meta=(d&&d.meta)||{};
+  var spendList=meta.spendingAccounts||[];
+  function fb(key,label,n){ var on=n>0;
+    return '<button class="rptfbtn'+(on?' active':'')+'" data-act="rpt-filter" data-arg="'+key+'">'+label+(on?' <span class="n">'+n+'</span>':'')+' ▾</button>'; }
+  var any=r.accounts.length||r.groups.length||r.envelopeIds.length||r.tags.length;
+  var h='<div class="rptfbar">'+
+    fb('accts','Spending accounts',r.accounts.length)+
+    fb('groups','Groups',r.groups.length)+
+    fb('envs','Envelopes',r.envelopeIds.length)+
+    fb('tags','Tags',r.tags.length)+
+    (any?'<button class="rptfbtn clear" data-act="rpt-fclear">Reset filters</button>':'')+'</div>';
+  var f=r.openFilter;
+  if(f==='accts'){
+    var all=(meta.accounts||[]);
+    h+='<div class="rptfpanel"><div class="fttl">'+(r.manageScope?'Manage which accounts count as spending':'Report scope — spending accounts only')+'</div><div class="rptchips">'+
+      (r.manageScope
+        ? all.map(function(a){ var on=spendList.indexOf(a)!==-1;
+            return '<button class="rptchip'+(on?' on':'')+'" data-act="rpt-scope-flag" data-arg="'+esc(a)+'">'+(on?'✓ ':'')+esc(a)+'</button>'; }).join('')
+        : spendList.map(function(a){ var picked=!r.accounts.length||r.accounts.indexOf(a)!==-1;
+            return '<button class="rptchip'+(picked?' on':'')+'" data-act="rpt-facct" data-arg="'+esc(a)+'">'+esc(a)+'</button>'; }).join(''))+
+      '</div><div class="fnote2">'+(r.manageScope
+        ? 'Tap to flag / unflag. Defaults come from your Checking / Savings / Credit account groups. <button class="rptlink" data-act="rpt-scope-manage">Done</button>'
+        : 'Tap accounts to narrow this report. Investment, loan and property accounts never enter these reports. <button class="rptlink" data-act="rpt-scope-manage">Manage spending flags…</button>')+'</div></div>';
+  }
+  if(f==='groups') h+='<div class="rptfpanel"><div class="fttl">Filter by group</div><div class="rptchips">'+
+    (meta.groups||[]).map(function(g){ return '<button class="rptchip'+(r.groups.indexOf(g)!==-1?' on':'')+'" data-act="rpt-fgroup" data-arg="'+esc(g)+'">'+esc(g)+'</button>'; }).join('')+'</div></div>';
+  if(f==='envs') h+='<div class="rptfpanel"><div class="fttl">Filter by envelope</div><div class="rptchips">'+
+    (meta.envelopes||[]).map(function(e0){ return '<button class="rptchip'+(r.envelopeIds.indexOf(e0.id)!==-1?' on':'')+'" data-act="rpt-fenv" data-arg="'+esc(e0.id)+'">'+esc(e0.name)+'</button>'; }).join('')+'</div></div>';
+  if(f==='tags'){
+    var opts={}; (state.tagsList||[]).forEach(function(x){ opts[x.tag]=1; }); r.tags.forEach(function(x){ opts[x]=1; });
+    var names=Object.keys(opts).sort();
+    h+='<div class="rptfpanel"><div class="fttl">Filter by tag</div><div class="rptchips">'+
+      (names.length?names.map(function(x){ return '<button class="rptchip'+(r.tags.indexOf(x)!==-1?' on':'')+'" data-act="rpt-ftag" data-arg="'+esc(x)+'">🏷 '+esc(x)+'</button>'; }).join(''):'<span class="fnote2">No tags yet — add some from the Transactions page.</span>')+
+      '</div><div class="fnote2">Tags cut across envelopes and accounts — any report above filters to just the tagged activity.</div></div>';
+  }
+  return h;
+}
+function rptStatTiles(stats, prev){
+  var r=state.report;
+  function tile(k,v,cur,before,goodWhenDown){
+    var d='';
+    if(prev&&before!==null&&before!==undefined){
+      var up=cur>=before, diff=Math.abs(cur-before);
+      var pct=before?Math.round(diff/Math.abs(before)*100):null;
+      var cls=goodWhenDown?(up?'neg':'pos'):(up?'pos':'neg');
+      d='<div class="d '+cls+'">'+(up?'▲':'▼')+' '+money(diff)+(pct!==null?' ('+pct+'%)':'')+' vs prev</div>';
+    }
+    return '<div class="rptstat"><div class="k">'+k+'</div><div class="v">'+v+'</div>'+d+'</div>';
+  }
+  return '<div class="rptstatrow">'+
+    tile('Income', money(stats.totalIncome), stats.totalIncome, prev?prev.totalIncome:null, false)+
+    tile('Spending', money(stats.totalSpend), stats.totalSpend, prev?prev.totalSpend:null, true)+
+    tile('Net', money(stats.net), stats.net, prev?prev.net:null, false)+
+    (stats.txns!==undefined?'<div class="rptstat"><div class="k">Transactions</div><div class="v">'+stats.txns+'</div></div>':'')+
+  '</div>';
+}
+function rptHBar(name, amt, max, col){
+  return '<div class="rpthbar"><span class="nm">'+esc(name)+'</span><span class="trk"><i style="width:'+Math.max(2,Math.round(amt/(max||1)*100))+'%'+(col?';background:'+col:'')+'"></i></span><span class="amt">'+money(amt)+'</span></div>';
+}
 
+/* ---- the seven report bodies ---- */
+function rptBodySummary(d){
+  var h=rptStatTiles(d.stats, d.compareStats||null);
+  var max=(d.topEnvelopes&&d.topEnvelopes[0])?d.topEnvelopes[0].spent:1;
+  h+='<div class="rpttwocol"><div class="rptmini"><h4>Top envelopes</h4>'+
+    ((d.topEnvelopes||[]).map(function(e0){ return rptHBar(e0.name, e0.spent, max); }).join('')||'<div class="fnote2">No spending in this period.</div>')+
+  '</div><div class="rptmini"><h4>Largest transactions</h4>'+
+    ((d.largest||[]).map(function(t){
+      return '<div class="rpttx"><span class="dt">'+esc(t.date)+'</span><span class="ds">'+esc(t.desc)+
+        ((t.tags&&t.tags.length)?'<small>'+t.tags.map(function(x){return '🏷 '+esc(x);}).join(' · ')+'</small>':'')+
+        '</span><span class="env">'+esc((t.envelopes||[]).join(', '))+'</span><span class="am">'+money(t.amount)+'</span></div>';
+    }).join('')||'<div class="fnote2">Nothing yet.</div>')+
+  '</div></div>';
+  return h;
+}
+function rptBodyFlows(d, wantIncome){
+  var r=state.report, h='';
+  if(!wantIncome){
+    h+=rptStatTiles(d.stats||{totalSpend:0,totalIncome:0,net:0}, null);
+    h+='<div class="rptctls">'+rptSeg('rpt-ctl','chartType',[['bar','Bars'],['area','Area']])+'</div>';
+  } else {
+    h+=rptStatTiles(d.stats||{totalSpend:0,totalIncome:0,net:0}, null);
+    h+='<div class="rptctls"><label class="rpttoggle" style="margin:0"><input type="checkbox" id="rptNet"'+(r.showNet?' checked':'')+'> Show net line</label></div>';
+  }
+  h+='<div class="rptchartbox"><canvas id="rptCv"></canvas></div>';
+  if(d.compareLabel&&!wantIncome) h+='<div class="fnote2" style="margin-top:8px">Gray = previous '+rptPeriodNoun()+' ('+esc(d.compareLabel)+'), same buckets.</div>';
+  return h;
+}
+function rptBodyAreas(d){
+  var r=state.report;
+  var h='<div class="rptctls">'+
+    rptSeg('rpt-ctl','areaView',[['donut','Donut'],['bars','Bars']])+
+    rptSeg('rpt-ctl','groupBy',[['envelope','Envelope'],['group','Group']])+
+    '<div class="rptctl"><span class="lb">Top slices <span class="rangeval" id="rptTopNval">'+r.topN+'</span></span><input type="range" id="rptTopN" min="3" max="12" value="'+r.topN+'"></div>'+
+  '</div>';
+  h+='<div class="rptchartbox tall"><canvas id="rptCv"></canvas></div>';
+  var tot=(d.stats&&d.stats.total)||0;
+  h+='<div class="fnote2" style="margin-top:8px">Total '+money(tot)+(d.stats&&d.stats.top?' · biggest: '+esc(d.stats.top)+' ('+money(d.stats.topAmt)+')':'')+'</div>';
+  return h;
+}
+function rptBodyWorth(d){
+  if(d.noData) return '<div class="empty">No balance snapshots yet — they build up daily.</div>';
+  var st=d.stats||{};
+  return '<div class="rptstatrow">'+
+    '<div class="rptstat"><div class="k">Current</div><div class="v">'+money(st.current||0)+'</div></div>'+
+    '<div class="rptstat"><div class="k">Start of period</div><div class="v">'+money(st.start||0)+'</div></div>'+
+    '<div class="rptstat"><div class="k">Change</div><div class="v '+((st.change||0)>=0?'pos':'neg')+'">'+money(st.change||0)+'</div></div>'+
+  '</div><div class="rptchartbox"><canvas id="rptCv"></canvas></div>';
+}
+function rptBodyTags(d){
+  var r=state.report;
+  if(r.tagDetail && d.detail) return rptBodyTagDetail(d.detail);
+  var rows=d.rows||[];
+  if(!rows.length) return '<div class="empty">No tags yet. Tag transactions from the <b>Transactions</b> page — "2026 Myrtle Beach Vacation", "Deck Rebuild" — and this table lights up.</div>';
+  return '<div class="rpttblwrap"><table class="rpttbl"><thead><tr><th>Tag</th><th>Active</th><th class="r">Txns</th><th class="r">This '+rptPeriodNoun()+'</th><th class="r">All time</th></tr></thead><tbody>'+
+    rows.map(function(x,i){
+      return '<tr class="click" data-act="rpt-tagopen" data-arg="'+i+'"><td class="strong">🏷 '+esc(x.tag)+'</td>'+
+        '<td>'+esc(x.first)+' → '+esc(x.last)+'</td><td class="r">'+x.count+'</td>'+
+        '<td class="r">'+(x.periodTotal?money(x.periodTotal):'—')+'</td><td class="r strong">'+money(x.total)+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+  '<div class="fnote2" style="margin-top:10px">A tag follows the <b>event</b>, not the envelope. Click one for the full story. All-time totals ignore the period picked above; refunds net out.</div>';
+}
+function rptBodyTagDetail(det){
+  var h='<button class="rptback" data-act="rpt-tagback">‹ All tags</button>';
+  h+='<div class="rptstatrow">'+
+    '<div class="rptstat"><div class="k">Tag total</div><div class="v">'+money(det.total)+'</div></div>'+
+    '<div class="rptstat"><div class="k">Transactions</div><div class="v">'+det.count+'</div></div>'+
+    '<div class="rptstat"><div class="k">Envelopes touched</div><div class="v">'+(det.byEnvelope||[]).length+'</div></div>'+
+    '<div class="rptstat"><div class="k">Active</div><div class="v" style="font-size:14px;padding-top:5px">'+esc(det.first)+' → '+esc(det.last)+'</div></div>'+
+  '</div>';
+  h+='<div class="rpttwocol"><div class="rptmini"><h4>Across envelopes</h4><div class="rptchartbox short"><canvas id="rptCv"></canvas></div></div>'+
+  '<div class="rptmini"><h4>Every transaction'+((det.txns||[]).length>=400?' (first 400)':'')+'</h4><div class="rpttxlist">'+
+    (det.txns||[]).map(function(t){
+      return '<div class="rpttx"><span class="dt">'+esc(t.date)+'</span><span class="ds">'+esc(t.desc)+'<small>'+esc((t.envelopes||[]).join(', '))+' · '+esc(t.account)+'</small></span><span class="am">'+money(t.amount)+'</span></div>';
+    }).join('')+
+  '</div></div></div>';
+  h+='<div class="fnote2" style="margin-top:10px">🏷 <b>'+esc(det.tag)+'</b> — one event, '+(det.byEnvelope||[]).length+' envelopes, one answer: <b>'+money(det.total)+'</b>.</div>';
+  return h;
+}
+function rptBodyTxns(d){
+  var rows=d.rows||[];
+  var h='<div class="fnote2" style="margin:2px 0 8px">'+d.total+' matching transaction'+(d.total===1?'':'s')+(d.total>rows.length?' · showing newest '+rows.length:'')+'</div>';
+  if(!rows.length) return h+'<div class="empty">Nothing matches these filters in this period.</div>';
+  h+='<div class="rpttxlist">'+rows.map(function(t){
+    return '<div class="rpttx"><span class="dt">'+esc(t.date)+'</span>'+
+      '<span class="ds">'+esc(t.desc)+'<small>'+esc((t.envelopes||[]).join(', '))+' · '+esc(t.account)+'</small></span>'+
+      '<span class="tg">'+((t.tags||[]).map(function(x){return '<span class="tagchip">🏷 '+esc(x)+'</span>';}).join(''))+'</span>'+
+      '<span class="am'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span></div>';
+  }).join('')+'</div>';
+  return h;
+}
+
+/* ---- charts (display-only; rebuilt from the fetched payload) ---- */
+function drawReportChart(){
+  var r=state.report, d=state.reportData;
+  if(rptChart){ try{ rptChart.destroy(); }catch(e){} rptChart=null; }
+  var cv=$('#rptCv');
+  if(!cv||!d||typeof Chart==='undefined') return;
+  if(r.id==='spend'){
+    var lab=(d.buckets||[]).map(function(b){return b.label;}), data=(d.buckets||[]).map(function(b){return b.spend;});
+    var area=r.chartType==='area';
+    var ds=[{label:'Spending',data:data,borderColor:RTEAL,backgroundColor:area?'rgba(13,148,136,.12)':RTEAL,fill:area,tension:.3,borderWidth:2,pointRadius:0,borderRadius:4}];
+    if(d.compareBuckets) ds.push({label:'Previous',data:d.compareBuckets.map(function(b){return b.spend;}),
+      borderColor:RINK3,backgroundColor:area?'transparent':'rgba(148,163,184,.45)',fill:false,tension:.3,borderWidth:2,pointRadius:0,borderRadius:4,borderDash:area?[6,4]:undefined});
+    rptChart=new Chart(cv,{type:area?'line':'bar',data:{labels:lab,datasets:ds},options:rptAxis(ds.length>1)});
+  } else if(r.id==='inout'){
+    var lab2=(d.buckets||[]).map(function(b){return b.label;});
+    var ds2=[{label:'Income',data:(d.buckets||[]).map(function(b){return b.income;}),backgroundColor:RCAT[0],borderRadius:4},
+             {label:'Spending',data:(d.buckets||[]).map(function(b){return b.spend;}),backgroundColor:RCAT[1],borderRadius:4}];
+    if(r.showNet) ds2.push({label:'Net',type:'line',data:(d.buckets||[]).map(function(b){return Math.round((b.income-b.spend)*100)/100;}),borderColor:RCAT[2],borderWidth:2,pointRadius:0,tension:.3});
+    rptChart=new Chart(cv,{type:'bar',data:{labels:lab2,datasets:ds2},options:rptAxis(true)});
+  } else if(r.id==='areas'){
+    var src=(r.groupBy==='group')?(d.groups||[]).map(function(g){return {name:g.name,spent:g.spent};}):(d.rows||[]);
+    var top=src.slice(0,r.topN), rest=src.slice(r.topN);
+    var other=rest.reduce(function(a,x){return a+x.spent;},0);
+    var labs=top.map(function(x){return x.name;}), data3=top.map(function(x){return x.spent;});
+    if(other>0){ labs.push('Other ('+rest.length+')'); data3.push(Math.round(other*100)/100); }
+    var cols=labs.map(function(_,i){ return (i<RCAT.length&&i<top.length)?RCAT[i]:ROTHER; });
+    if(r.areaView==='donut'){
+      rptChart=new Chart(cv,{type:'doughnut',data:{labels:labs,datasets:[{data:data3,backgroundColor:cols,borderColor:'#fff',borderWidth:2}]},
+        options:{maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,color:RINK2,font:{size:12}}},
+          tooltip:{callbacks:{label:function(c){ var tot=data3.reduce(function(a,b){return a+b;},0)||1;
+            return ' '+c.label+': '+money(c.parsed)+' ('+Math.round(c.parsed/tot*100)+'%)'; }}}}}});
+    } else {
+      var o=rptAxis(false); o.indexAxis='y'; o.interaction={mode:'nearest'};
+      o.scales={x:{grid:{color:RLINE},ticks:{color:RINK3,font:{size:11},callback:function(v){return Math.abs(v)>=1000?'$'+Math.round(v/1000)+'k':'$'+v;}}},
+                y:{grid:{display:false},ticks:{color:RINK2,font:{size:12}}}};
+      rptChart=new Chart(cv,{type:'bar',data:{labels:labs,datasets:[{label:'Spending',data:data3,backgroundColor:cols,borderRadius:4}]},options:o});
+    }
+  } else if(r.id==='worth'){
+    var lab4=(d.buckets||[]).map(function(b){return b.label;});
+    rptChart=new Chart(cv,{type:'line',data:{labels:lab4,datasets:[{label:'Net worth',data:(d.buckets||[]).map(function(b){return b.nw;}),
+      borderColor:RTEAL,backgroundColor:'rgba(13,148,136,.10)',fill:true,tension:.3,borderWidth:2,pointRadius:0}]},options:rptAxis(false,{zero:false})});
+  } else if(r.id==='tags'&&r.tagDetail&&d.detail){
+    var be=(d.detail.byEnvelope||[]).slice(0,8);
+    var cols5=be.map(function(_,i){return i<RCAT.length?RCAT[i]:ROTHER;});
+    rptChart=new Chart(cv,{type:'doughnut',data:{labels:be.map(function(x){return x.name;}),datasets:[{data:be.map(function(x){return x.spent;}),backgroundColor:cols5,borderColor:'#fff',borderWidth:2}]},
+      options:{maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,color:RINK2,font:{size:12}}},
+        tooltip:{callbacks:{label:function(c){ return ' '+c.label+': '+money(c.parsed); }}}}}});
+  }
+}
+
+/* ---- render ---- */
 function renderReports(){
-  rptEnsureRange();
-  var r=state.report, meta=RPT_META[r.id]||(r.id='spend',RPT_META.spend);
-  // v3.22: a failed request must NOT auto-refetch the same sig (infinite loop);
-  // changing any control changes the sig and fetches fresh, or use Retry.
-  var sameErr = state.reportErr && state.reportErrSig===rptSig();
-  var needFetch = (!state.reportData || state.reportData._sig!==rptSig()) && !sameErr;
-  if(needFetch && !state.reportLoading) rptFetch();
+  if(state.report.id!=='tags') state.report.tagDetail=null;
+  var r=state.report, meta=RPT_META[r.id]||(r.id='summary',RPT_META.summary);
+  var rng=rptRange();
+  var needFetch=!state.reportData||state.reportData._sig!==rptSig();
+  var sameErr=state.reportErr&&state.reportErrSig===rptSig();
+  if(needFetch&&!state.reportLoading&&!sameErr) rptFetch();
+  if(state.tagsList===null&&!state.reportLoading) fetchTags(); // tag filter options (lazy, reports-only)
   var side='<div class="rptside"><h3>Reports</h3><div class="rptlist">'+
-    Object.keys(RPT_META).map(function(id){ var m=RPT_META[id];
-      return '<button data-act="rpt-select" data-arg="'+id+'" class="'+(id===r.id?'on':'')+'"><span class="ic">'+m.icon+'</span>'+esc(m.title)+'</button>'; }).join('')+
+    Object.keys(RPT_META).map(function(id){
+      return '<button data-act="rpt-select" data-arg="'+id+'" class="'+(r.id===id?'on':'')+'"><span class="ic">'+RPT_META[id].icon+'</span>'+RPT_META[id].title+'</button>'; }).join('')+
     '</div></div>';
-  var head='<div class="rpthead"><div><h2>'+esc(meta.title)+'</h2><div class="desc">'+esc(meta.desc)+'</div></div>'+
-    '<button class="exp" data-act="rpt-export">⤓ Export CSV</button></div>';
-  var bar='<div class="rptbar">'+
-    '<div class="rptctl"><span class="lb">Date range</span><div class="rptdates">'+
-      '<input type="date" id="rptFrom" value="'+r.from+'"><span>→</span><input type="date" id="rptTo" value="'+r.to+'"></div></div>'+
-    '<div class="rptctl"><span class="lb">Quick presets</span><div class="rptpresets">'+
-      RPT_PRESETS.map(function(p){ return '<button data-act="rpt-preset" data-arg="'+p[1]+'" class="'+(rptActivePreset()===p[0]?'on':'')+'">'+p[0]+'</button>'; }).join('')+'</div></div>'+
-    (meta.gran!==false?('<div class="rptctl"><span class="lb">Granularity</span><div class="rptseg">'+
-      RPT_GRANS.map(function(g){ var dis=rptGranDisabled(g[0]); return '<button data-act="rpt-gran" data-arg="'+g[0]+'"'+(dis?' disabled':'')+' class="'+(r.gran===g[0]?'on':'')+'">'+g[1]+'</button>'; }).join('')+'</div></div>'):'')+
-    (meta.compare!==false?('<label class="rpttoggle"><input type="checkbox" id="rptCompare"'+(r.compare?' checked':'')+'> Compare to previous period</label>'):'')+
-    '</div>';
   var body;
   if(state.reportErr) body='<div class="empty">⚠ '+esc(state.reportErr)+
     '<div style="margin-top:10px"><button class="btn sm" data-act="rpt-retry">Try again</button></div></div>';
-  else if(needFetch || !state.reportData) body='<div class="spin"></div>';
-  else body='<div class="rptchartbox"><canvas id="rptCanvas"></canvas></div><div class="rptstats" id="rptStats"></div>';
-  $('#shell').innerHTML='<div class="rptlayout">'+side+'<div class="rptpanel">'+head+bar+rptControlsHtml(meta)+rptFiltersHtml()+body+'</div></div>';
-  // v3.22: manual date edits re-derive granularity when the current one is no
-  // longer valid for the range (a persisted gran:'day' over 5 years previously
-  // stayed active and produced huge/slow apiReport requests).
-  var fEl=$('#rptFrom'); if(fEl) fEl.addEventListener('change',function(){ state.report.from=this.value; if(rptParse(state.report.from)>rptParse(state.report.to)) state.report.to=state.report.from; if(rptGranDisabled(state.report.gran)) rptAutoGran(); rptSave(); renderReports(); });
-  var tEl=$('#rptTo'); if(tEl) tEl.addEventListener('change',function(){ state.report.to=this.value; if(rptParse(state.report.to)<rptParse(state.report.from)) state.report.from=state.report.to; if(rptGranDisabled(state.report.gran)) rptAutoGran(); rptSave(); renderReports(); });
+  else if(needFetch||state.reportLoading) body='<div class="spin"></div>';
+  else {
+    var d=state.reportData;
+    if(r.id==='summary') body=rptBodySummary(d);
+    else if(r.id==='areas') body=rptBodyAreas(d);
+    else if(r.id==='inout') body=rptBodyFlows(d,true);
+    else if(r.id==='tags') body=rptBodyTags(d);
+    else if(r.id==='txns') body=rptBodyTxns(d);
+    else if(r.id==='worth') body=rptBodyWorth(d);
+    else body=rptBodyFlows(d,false);
+  }
+  var h='<h2 class="viewtitle">Reports</h2><div class="rptlayout">'+side+'<div class="rptpanel">'+
+    '<div class="rpthead"><div><h2>'+meta.title+'</h2><div class="desc">'+meta.desc+'</div></div>'+
+    '<button class="exp" data-act="rpt-export">⤓ Export CSV</button></div>'+
+    rptPeriodBarHtml(rng)+rptFilterBarHtml()+body+'</div></div>';
+  $('#shell').innerHTML=h;
+  var fEl=$('#rptFrom'); if(fEl) fEl.addEventListener('change',function(){ state.report.custFrom=this.value; rptSave(); renderReports(); });
+  var tEl=$('#rptTo'); if(tEl) tEl.addEventListener('change',function(){ state.report.custTo=this.value; rptSave(); renderReports(); });
   var cEl=$('#rptCompare'); if(cEl) cEl.addEventListener('change',function(){ state.report.compare=this.checked; rptSave(); renderReports(); });
   var nEl=$('#rptNet'); if(nEl) nEl.onchange=function(){ state.report.showNet=nEl.checked; rptSave(); drawReportChart(); };
   var tn=$('#rptTopN'); if(tn) tn.oninput=function(){ state.report.topN=Number(tn.value); var l=$('#rptTopNval'); if(l) l.textContent=state.report.topN; rptSave(); drawReportChart(); };
-  if(!needFetch && state.reportData && !state.reportErr) drawReportChart();
+  if(!needFetch&&state.reportData&&!state.reportErr) drawReportChart();
 }
-function rptStats(arr){ var el=$('#rptStats'); if(!el) return;
-  el.innerHTML=arr.map(function(s){ return '<div class="s"><div class="k">'+esc(s[0])+'</div><div class="v'+(s[2]?' '+s[2]:'')+'">'+esc(s[1])+'</div></div>'; }).join(''); }
-function drawReportChart(){
-  var cv=$('#rptCanvas'); if(!cv) return;
-  if(typeof Chart==='undefined'){ var bx=$('.rptchartbox'); if(bx) bx.innerHTML='<div class="empty">Chart unavailable — reload the page.</div>'; return; }
-  if(rptChart){ try{rptChart.destroy();}catch(e){} rptChart=null; }
-  var r=state.report, d=state.reportData;
-  if(r.id==='areas'){
-    var src=(r.groupBy==='group')?(d.groups||[]):(d.rows||[]);
-    var rows=src.slice().sort(function(a,b){return b.spent-a.spent;}).slice(0,r.topN);
-    var lab=rows.map(function(x){return x.name;}), data=rows.map(function(x){return x.spent;});
-    var pal=['#0f766e','#0d9488','#14b8a6','#5eead4','#99f6e4','#2dd4bf','#115e59','#ccfbf1','#5eead4','#0d9488','#14b8a6','#99f6e4'];
-    if(!rows.length){ var b0=$('.rptchartbox'); if(b0) b0.innerHTML='<div class="empty">No spending in this range.</div>'; rptStats([]); return; }
-    if(r.view==='donut') rptChart=new Chart(cv,{type:'doughnut',data:{labels:lab,datasets:[{data:data,backgroundColor:pal,borderWidth:0}]},
-      options:{maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,color:RINK3,font:{size:12}}}}}});
-    else rptChart=new Chart(cv,{type:'bar',data:{labels:lab,datasets:[{data:data,backgroundColor:RTEAL,borderRadius:5}]},options:Object.assign(rptAxis(false),{indexAxis:'y'})});
-    var st=d.stats||{};
-    rptStats([['Range',rptRangeDays()+' days'],['Top category',st.top||'—'],['Top amount',money(st.topAmt||0)],['Categories',String(st.count||0)]]);
-    return;
-  }
-  if(r.id==='worth'){
-    if(d.noData){ var bw=$('.rptchartbox'); if(bw) bw.innerHTML='<div class="empty">No balance snapshots yet — net-worth history builds as the daily snapshot runs.</div>'; rptStats([]); return; }
-    var b=d.buckets||[]; var lab=b.map(function(x){return x.label;}), data=b.map(function(x){return x.nw;});
-    var ds=[{label:'Net worth',data:data,borderColor:RTEAL,backgroundColor:'rgba(13,148,136,.10)',fill:true,tension:.3,borderWidth:2.5,pointRadius:0}];
-    if(r.compare && d.compareBuckets) ds.push({label:'Previous ('+(d.compareLabel||'prev')+')',data:d.compareBuckets.map(function(x){return x.nw;}),borderColor:RINK3,borderDash:[5,4],borderWidth:2,pointRadius:0,fill:false,tension:.3});
-    rptChart=new Chart(cv,{type:'line',data:{labels:lab,datasets:ds},options:rptAxis(!!r.compare,{zero:false})});
-    var s=d.stats||{}; rptStats([['Current',money(s.current||0)],['Start of range',money(s.start||0)],['Change',money(s.change||0),(s.change||0)>=0?'pos':'neg'],['Buckets',String(s.buckets||0)]]);
-    return;
-  }
-  if(r.id==='inout'){
-    var b=d.buckets||[]; var lab=b.map(function(x){return x.label;}), inc=b.map(function(x){return x.income;}), sp=b.map(function(x){return x.spend;});
-    var ds=[{label:'Income',data:inc,backgroundColor:RTEAL,borderRadius:4,type:'bar'},{label:'Spending',data:sp,backgroundColor:RTEALL,borderRadius:4,type:'bar'}];
-    if(r.showNet) ds.push({label:'Net',type:'line',data:inc.map(function(v,i){return v-sp[i];}),borderColor:'#0f766e',borderWidth:2.5,pointRadius:0,tension:.3});
-    if(r.compare && d.compareBuckets) ds.push({label:'Prev net',type:'line',data:d.compareBuckets.map(function(x){return x.income-x.spend;}),borderColor:RINK3,borderDash:[5,4],borderWidth:2,pointRadius:0,tension:.3});
-    rptChart=new Chart(cv,{type:'bar',data:{labels:lab,datasets:ds},options:rptAxis(true)});
-    var s2=d.stats||{}; rptStats([['Total income',money(s2.totalIncome||0)],['Total spending',money(s2.totalSpend||0)],['Net',money(s2.net||0),(s2.net||0)>=0?'pos':'neg'],['Buckets',String(s2.buckets||0)]]);
-    return;
-  }
-  // spend (default)
-  var b=d.buckets||[]; var lab=b.map(function(x){return x.label;}), data=b.map(function(x){return x.spend;});
-  var area=(r.chartType!=='bar');
-  var ds=[{label:'Spending',data:data,borderColor:RTEAL,backgroundColor:area?'rgba(13,148,136,.12)':RTEAL,fill:area,tension:.32,borderWidth:2.5,pointRadius:0,borderRadius:4,type:area?'line':'bar'}];
-  if(r.compare && d.compareBuckets) ds.push({label:'Previous ('+(d.compareLabel||'prev')+')',data:d.compareBuckets.map(function(x){return x.spend;}),borderColor:RINK3,borderDash:[5,4],borderWidth:2,pointRadius:0,fill:false,tension:.32,type:'line'});
-  rptChart=new Chart(cv,{type:area?'line':'bar',data:{labels:lab,datasets:ds},options:rptAxis(!!r.compare)});
-  var tot=data.reduce(function(a,c){return a+c;},0), avg=data.length?tot/data.length:0;
-  rptStats([['Total',money(tot)],['Per '+r.gran,money(avg)],['Highest',money(Math.max.apply(null,data.concat(0)))],['Buckets',String(data.length)]]);
-}
+
+/* ---- CSV export (current report, current filters) ---- */
 function rptExport(){
   var r=state.report, d=state.reportData; if(!d){ toast('Nothing to export yet.'); return; }
-  var rows=[];
+  var rng=rptRange(), rows=[];
   if(r.id==='areas'){ rows.push(['Category','Group','Spent']); (d.rows||[]).forEach(function(x){ rows.push([x.name,x.group,x.spent]); }); }
   else if(r.id==='worth'){ rows.push(['Period','Net worth']); (d.buckets||[]).forEach(function(x){ rows.push([x.label,x.nw]); }); }
   else if(r.id==='inout'){ rows.push(['Period','Income','Spending','Net']); (d.buckets||[]).forEach(function(x){ rows.push([x.label,x.income,x.spend,Math.round((x.income-x.spend)*100)/100]); }); }
+  else if(r.id==='tags'&&r.tagDetail&&d.detail){ rows.push(['Date','Description','Envelopes','Account','Amount']);
+    (d.detail.txns||[]).forEach(function(t){ rows.push([t.date,t.desc,(t.envelopes||[]).join('; '),t.account,t.amount]); }); }
+  else if(r.id==='tags'){ rows.push(['Tag','First','Last','Transactions','Period total','All-time total']);
+    (d.rows||[]).forEach(function(x){ rows.push([x.tag,x.first,x.last,x.count,x.periodTotal,x.total]); }); }
+  else if(r.id==='txns'){ rows.push(['Date','Description','Envelopes','Account','Tags','Amount']);
+    (d.rows||[]).forEach(function(t){ rows.push([t.date,t.desc,(t.envelopes||[]).join('; '),t.account,(t.tags||[]).join('; '),t.amount]); }); }
+  else if(r.id==='summary'){ rows.push(['Metric','Value']);
+    rows.push(['Income',d.stats.totalIncome]); rows.push(['Spending',d.stats.totalSpend]); rows.push(['Net',d.stats.net]); rows.push(['Transactions',d.stats.txns]);
+    rows.push([]); rows.push(['Top envelope','Spent']); (d.topEnvelopes||[]).forEach(function(e0){ rows.push([e0.name,e0.spent]); }); }
   else { rows.push(['Period','Spending']); (d.buckets||[]).forEach(function(x){ rows.push([x.label,x.spend]); }); }
   var csv=rows.map(function(row){ return row.map(function(c){ var s=String(c==null?'':c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(','); }).join('\n');
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8'}), url=URL.createObjectURL(blob);
-  var a=document.createElement('a'); a.href=url; a.download='sbc-'+r.id+'-'+r.from+'-to-'+r.to+'.csv';
+  var a=document.createElement('a'); a.href=url; a.download='sbc-'+r.id+'-'+rng.from+'-to-'+rng.to+'.csv';
   document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },120);
 }
 
@@ -5525,7 +5804,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
-    '<p style="margin:0 0 6px">• <b>Reports</b> — where the money actually goes, by month, envelope, or account.</p>'+
+    '<p style="margin:0 0 6px">• <b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
     '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report in the new Reports page.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
@@ -5757,14 +6036,39 @@ document.addEventListener('click', function(ev){
         toast('⚠ Birthday not saved: '+(e2 && e2.message || e2));
       });
     })(); break;
-    case 'goreport': state.report.id=arg; rptSave(); go('reports'); break;
-    case 'rpt-select': state.report.id=arg; rptSave(); renderReports(); break;
-    case 'rpt-preset': rptApplyPreset(arg==='ytd'?'ytd':Number(arg)); rptSave(); renderReports(); break;
-    case 'rpt-gran': if(!el.disabled){ state.report.gran=arg; rptSave(); renderReports(); } break;
-    case 'rpt-ctl': state.report[p[0]]=isNaN(p[1])?p[1]:Number(p[1]); rptSave(); renderReports(); break;
-    case 'rpt-fgroup': (function(){ var i=state.report.groups.indexOf(arg); if(i===-1) state.report.groups.push(arg); else state.report.groups.splice(i,1); rptSave(); renderReports(); })(); break;
-    case 'rpt-facct': (function(){ var i=state.report.accounts.indexOf(arg); if(i===-1) state.report.accounts.push(arg); else state.report.accounts.splice(i,1); rptSave(); renderReports(); })(); break;
-    case 'rpt-fclear': state.report.groups=[]; state.report.accounts=[]; state.report.envelopeIds=[]; rptSave(); renderReports(); break;
+    case 'goreport': state.report.id=(RPT_META[arg]?arg:'summary'); state.report.tagDetail=null; rptSave(); go('reports'); break;
+    // v3.59 Reports v2
+    case 'rpt-select': state.report.id=arg; state.report.tagDetail=null; state.report.openFilter=null; rptSave(); renderReports(); break;
+    case 'rpt-ptype': (function(){ var r=state.report;
+      if(arg==='custom'&&r.ptype!=='custom'){ var rng=rptRange(); r.custFrom=rng.from; r.custTo=rng.to; }
+      r.ptype=arg; rptSave(); renderReports(); })(); break;
+    case 'rpt-step': if(!el.disabled){ rptStep(Number(arg)); rptSave(); renderReports(); } break;
+    case 'rpt-now': state.report.anchor=rptISO(rptToday()); rptSave(); renderReports(); break;
+    case 'rpt-filter': state.report.openFilter=(state.report.openFilter===arg?null:arg); renderReports(); break;
+    case 'rpt-facct': (function(){ var r=state.report, i=r.accounts.indexOf(arg); if(i===-1) r.accounts.push(arg); else r.accounts.splice(i,1); rptSave(); renderReports(); })(); break;
+    case 'rpt-fgroup': (function(){ var r=state.report, i=r.groups.indexOf(arg); if(i===-1) r.groups.push(arg); else r.groups.splice(i,1); rptSave(); renderReports(); })(); break;
+    case 'rpt-fenv': (function(){ var r=state.report, i=r.envelopeIds.indexOf(arg); if(i===-1) r.envelopeIds.push(arg); else r.envelopeIds.splice(i,1); rptSave(); renderReports(); })(); break;
+    case 'rpt-ftag': (function(){ var r=state.report, i=r.tags.indexOf(arg); if(i===-1) r.tags.push(arg); else r.tags.splice(i,1); rptSave(); renderReports(); })(); break;
+    case 'rpt-fclear': (function(){ var r=state.report; r.accounts=[]; r.groups=[]; r.envelopeIds=[]; r.tags=[]; r.openFilter=null; rptSave(); renderReports(); })(); break;
+    case 'rpt-scope-manage': state.report.manageScope=!state.report.manageScope; renderReports(); break;
+    case 'rpt-scope-flag': (function(){
+      var d=state.reportData, meta=(d&&d.meta)||{}, list=meta.spendingAccounts||[];
+      var on=list.indexOf(arg)!==-1;
+      if(on) meta.spendingAccounts=list.filter(function(a){return a!==arg;});
+      else meta.spendingAccounts=list.concat([arg]).sort();
+      renderReports(); // optimistic; the save + refetch follow
+      run('apiSetSpendingAccount',{account:arg, spending:!on}).then(function(res){
+        if(state.reportData&&state.reportData.meta&&res&&res.spendingAccounts) state.reportData.meta.spendingAccounts=res.spendingAccounts;
+        if(state.reportData) state.reportData._sig=null; // scope changed → numbers must refetch
+        if(state.view==='reports') renderReports();
+        toast((!on?'Flagged':'Unflagged')+' spending: '+arg+' \u2713');
+      }).catch(function(e){ toast('Flag failed: '+((e&&e.message)||e));
+        if(state.reportData) state.reportData._sig=null; if(state.view==='reports') renderReports(); });
+    })(); break;
+    case 'rpt-ctl': (function(){ var r=state.report; r[p[0]]=isNaN(p[1])?p[1]:p[1]; rptSave(); renderReports(); })(); break;
+    case 'rpt-tagopen': (function(){ var d=state.reportData, rows=(d&&d.rows)||[]; var row=rows[Number(arg)];
+      if(row){ state.report.tagDetail=row.tag; rptSave(); renderReports(); } })(); break;
+    case 'rpt-tagback': state.report.tagDetail=null; rptSave(); renderReports(); break;
     case 'rpt-export': rptExport(); break;
     case 'rpt-retry': state.reportErr=null; state.reportErrSig=null; renderReports(); break; // v3.22
     case 'home-customize': state.homeCustomize=!state.homeCustomize; renderDash(); break;
