@@ -933,7 +933,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.57.2';
+var FE_VERSION = 'v3.57.3';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1330,13 +1330,6 @@ function prewarm(){
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
     state.boot=b;
-    // v3.57.2: the bootstrap carries the account's birthday (the mirror-served
-    // apiBoot doesn't know it) — adopt it so every device agrees.
-    if(typeof b.birthday === 'string'){
-      state.birthday = b.birthday;
-      try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){}
-      applySeason();
-    }
     // v3.32: while mirror-approved rows await their write-back, Apps Script's
     // inboxCount is stale-high — trust the filtered local inbox instead.
     // v3.49: that correction lived HERE, on the badge only, while the Home
@@ -1350,6 +1343,16 @@ function refreshBoot(){
     // reads state.boot.inboxCount at RENDER time; refreshing state without a
     // render is invisible.
     if(state.view==='dash') renderDash();
+    // v3.57.2/.3: the bootstrap carries the account's birthday (the mirror-served
+    // apiBoot doesn't know it) — adopt it so every device agrees. Kept BELOW the
+    // badge/dash lines: two test invariants anchor on their distance from the
+    // top of this function.
+    if(typeof b.birthday === 'string'){
+      state.birthday = b.birthday;
+      try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){}
+      applySeason();
+      if(state.view==='personal') renderPersonal();   // no invisible refresh
+    }
     // v3.39: a mirror-served boot has version=null, so About renders
     // "Server (checking…)". This reconcile is what supplies the real version —
     // re-render if the user is sitting on that screen, or the placeholder looks
@@ -1523,7 +1526,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -1540,6 +1543,7 @@ function render(){
   else if(state.view==='removetxn') renderRemoveTxn();
   else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
+  else if(state.view==='personal') renderPersonal();     // v3.57.3
   else if(state.view==='obligations') renderObligations();
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
@@ -4814,24 +4818,36 @@ function bdayPretty_(v){
   var d = new Date(Number(v.slice(0,4)), Number(v.slice(5,7))-1, Number(v.slice(8,10)));
   return d.toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'});
 }
-function personalControl(){
+/* v3.57.3 (Scott): Personal information is its own page you click into. Once a
+   birthday is set it shows as a value with an Edit button; while editing (or
+   never set) it's the date input with a GREEN Save. */
+function renderPersonal(){
   var b = String(state.birthday||'');
   var saved = bdayPretty_(b);
-  return settingsSectionLabel('PERSONAL INFORMATION')+
-    '<div class="card" style="padding:12px">'+
-    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-    '<label for="bdayInp" style="font-weight:600;font-size:13.5px">Birthday</label>'+
-    '<input type="date" id="bdayInp" value="'+esc(b)+'" style="padding:6px 9px;border:1.5px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font-size:16px">'+
-    '<button class="btn ghost" data-act="bday-save">Save</button>'+
-    '<span style="font-size:12px;color:'+(saved?'var(--green)':'var(--ink-3)')+'">'+
-      (saved ? '✓ Saved: '+esc(saved) : 'Not saved yet')+'</span></div>'+
-    '</div>';
+  var editing = state.bdayEdit || !saved;
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Personal information</h2>'+
+    '<div class="card" style="padding:14px 16px">';
+  if(editing){
+    h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<label for="bdayInp" style="font-weight:600">Birthday</label>'+
+      '<input type="date" id="bdayInp" value="'+esc(b)+'" style="padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font-size:16px">'+
+      '<button class="btn sm" style="background:var(--green)" data-act="bday-save">Save</button>'+
+      (saved ? '<button class="btn ghost sm" data-act="bday-cancel">Cancel</button>' : '')+
+      '</div>';
+  } else {
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+      '<span style="font-weight:600">Birthday</span>'+
+      '<span>'+esc(saved)+'</span>'+
+      '<button class="btn ghost sm" data-act="bday-edit">Edit</button></div>';
+  }
+  h += '</div>';
+  $('#shell').innerHTML = h;
 }
 function renderSettings(){
   var desktop = window.innerWidth >= 900;
   var h = '<h2 class="viewtitle">Settings</h2>';
   h += densityControl();
-  h += personalControl();   // v3.57.2 — birthday (PERSONAL INFORMATION)
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
@@ -4844,7 +4860,9 @@ function renderSettings(){
     ['healthset','Health settings'],['obligations','💳 Obligations & autopay'],['history','History & undo'],
     ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],
     ['activity','Sign-ins & activity']]);
-  h += mainList.slice(0, -'</div>'.length) + seasonControl() +
+  h += mainList.slice(0, -'</div>'.length) +
+    '<div class="envrow" data-act="goview" data-arg="personal"><span class="nm">👤 Personal information</span><span>›</span></div>' +
+    seasonControl() +
     '<div class="envrow" data-act="goview" data-arg="about"><span class="nm">About</span><span>›</span></div>' +
     '</div>';
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
@@ -5574,18 +5592,22 @@ document.addEventListener('click', function(ev){
       applySeason(); setGreeting_();
       if(state.view==='settings' || state.view==='more') renderSettings();
     })(); break;
+    case 'bday-edit': state.bdayEdit = true; renderPersonal(); break;   // v3.57.3
+    case 'bday-cancel': state.bdayEdit = false; renderPersonal(); break; // v3.57.3
     case 'bday-save': (function(){ // v3.57 — save full DOB to the account
       var inp = $('#bdayInp');
       var v = inp ? String(inp.value||'').trim() : '';
       if(v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ toast('Pick a full date'); return; }
-      run('apiSetBirthday', {value:v}).then(function(r){
-        state.birthday = String(r && r.value || '');
+      run('apiSetBirthday', {value:v}).then(function(){
+        // v3.57.3: trust the value WE sent (the server threw if it was bad).
+        // The round-tripped read once came back date-mangled by Sheets and
+        // painted "Not saved yet" over a successful save.
+        state.birthday = v;
+        state.bdayEdit = false;
         try{ localStorage.setItem('sbcBday', state.birthday); }catch(e2){}
         toast(v ? 'Birthday saved' : 'Birthday cleared');
         applySeason(); setGreeting_();
-        // v3.57.2: repaint so the card's "Saved:" line reflects it — a save
-        // that changes nothing on screen looks broken.
-        if(state.view==='settings' || state.view==='more') renderSettings();
+        if(state.view==='personal') renderPersonal();
       }).catch(function(e2){
         // v3.57.2: fail() replaces the WHOLE Settings view with the error —
         // for an inline save, keep the page and say what went wrong.
