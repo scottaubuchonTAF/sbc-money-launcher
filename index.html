@@ -11,7 +11,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SBC Money">
 <meta name="theme-color" content="#0f766e">
-<script src="https://accounts.google.com/gsi/client" onload="gsiReady()" onerror="gsiFailed()" async defer></script>
+<!-- v3.57.1: this script is async — on a fast (cached) load its onload can fire
+     BEFORE the app's inline script defines gsiReady/gsiFailed, the handler throws,
+     and the sign-in button never renders. The attributes record the early signal;
+     start() replays it once the real handlers exist. -->
+<script src="https://accounts.google.com/gsi/client" onload="window._gsiEarly='ok';if(window.gsiReady)gsiReady()" onerror="window._gsiEarly='fail';if(window.gsiFailed)gsiFailed()" async defer></script>
 <!-- v2a: Chart.js for dashboard chart widgets. If it fails to load (offline/CDN),
      chart widgets show a graceful "chart unavailable" message; the rest of the app
      is unaffected (typeof Chart is guarded everywhere it's used). -->
@@ -929,7 +933,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.57.0';
+var FE_VERSION = 'v3.57.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4739,24 +4743,18 @@ function seasonBrandSvg_(prefix, width){
 function applySeason(){
   try{
     var brand = document.querySelector('aside.side .brand');
-    var signName = document.querySelector('#signin .sname');
-    var sign = document.getElementById('signSeason');
-    if(!sign && signName){
-      sign = document.createElement('div');
-      sign.id = 'signSeason'; sign.style.marginTop = '2px';
-      signName.parentNode.insertBefore(sign, signName.nextSibling);
-    }
+    // v3.57.1: the sign-in splash is NOT themed — it already shows the icon +
+    // name, and the themed brand carries its own wordmark, so theming it put
+    // "SBC Money" on screen twice (Scott, 8/28).
     if(!seasonOn()){
       if(brand) brand.innerHTML = '<svg width="158" height="42" viewBox="0 0 220 60" aria-label="SBC Money">'+seasonBase_()+'</svg>';
       document.documentElement.style.removeProperty('--side-bg');
-      if(sign) sign.innerHTML = '';
       return;
     }
     var t = SEASON_THEMES[new Date().getMonth()];
     if(brand) brand.innerHTML = seasonBrandSvg_('sb');
     document.documentElement.style.setProperty('--side-bg',
       'linear-gradient(180deg,'+t[3]+' 0%, var(--teal-900) 230px)');
-    if(sign) sign.innerHTML = seasonBrandSvg_('si', 190);
   }catch(e){ console.warn('applySeason:', e && e.message || e); }
 }
 
@@ -5822,7 +5820,13 @@ document.addEventListener('change', function(ev){
      bar; GSI auto-select (gsiReady → onCredential) refreshes the token and boots
    - nothing cached and no valid token → the sign-in screen, as before */
 (function start(){
-  applySeason();   // v3.57: dress the brand (sidebar + sign-in) before anything paints
+  // v3.57.1: if Google's script loaded before this script finished parsing, its
+  // onload attribute recorded the signal without calling anything (gsiReady did
+  // not exist yet) — replay it now that the real handlers exist. gsiUp guards
+  // against any double-init.
+  if(window._gsiEarly === 'ok' && !gsiUp) gsiReady();
+  else if(window._gsiEarly === 'fail' && !gsiUp) gsiFailed();
+  applySeason();   // v3.57: dress the sidebar brand before anything paints
   var hydrated = hydrateSnapshot_();
   if(hydrated){
     setGreeting_();
