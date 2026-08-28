@@ -861,9 +861,12 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
 var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
   apiResplit:1, apiUnapprove:1, apiRemoveTxn:1, apiUndo:1,
   apiFundFromPool:1, // v3.34 slice 3: funding (journal batch)
-  apiMove:1 };       // v3.50: envelope moves (journal batch) — was the last
+  apiMove:1,         // v3.50: envelope moves (journal batch) — was the last
                      // journal write still doing a full 5-20s Apps Script
                      // round trip that the UI WAITED on
+  apiSetTxnTags:1, apiAddTagBatch:1 }; // v3.58.1: tags mirror-first — apiRegister
+                     // is mirror-served, so a refresh before the hourly sync
+                     // must still show the tag that was just saved
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -947,7 +950,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.58.0';
+var FE_VERSION = 'v3.58.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
