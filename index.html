@@ -62,6 +62,8 @@ nav.tabs .badge{
 }
 aside.side{display:none}
 .topbar{display:none}
+/* v3.57: phones have no topbar, so the seasonal greeting rides the Home header */
+.sgreet{font-size:12.5px;font-weight:700;color:var(--ink-2);align-self:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media(min-width:900px){
   body{padding-bottom:0}
@@ -69,7 +71,7 @@ aside.side{display:none}
   .app{display:flex;min-height:100vh}
   aside.side{
     display:flex;flex-direction:column;gap:2px;width:236px;flex-shrink:0;
-    background:var(--teal-900);padding:22px 14px 18px;position:sticky;top:0;height:100vh;
+    background:var(--side-bg,var(--teal-900));padding:22px 14px 18px;position:sticky;top:0;height:100vh;
   }
   aside.side .brand{padding:2px 10px 20px}
   aside.side .navlbl{color:#5d837d;font-size:10.5px;font-weight:700;letter-spacing:.1em;
@@ -92,6 +94,7 @@ aside.side{display:none}
   .shell.narrow{max-width:860px}
   .topbar{display:flex;align-items:baseline;justify-content:space-between;
     max-width:1240px;padding:26px 40px 0;color:var(--ink-3);font-size:13px}
+  .sgreet{display:none}
 }
 
 /* ================= dashboard ================= */
@@ -903,7 +906,7 @@ var state = {
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, envTxnSeq:{}, confirmRes:null, importing:false, // v3.50.1: per-envelope fetch seq
 
-  dashLayout:null, homeCustomize:false, density:'mid',
+  dashLayout:null, homeCustomize:false, density:'mid', birthday:'',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null
 };
@@ -920,12 +923,13 @@ try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array
    apiBoot confirms/overrides it a moment later). Falls back to the 'mid' default
    already on <body data-d="mid">. */
 try{ var _dn=localStorage.getItem('sbcDensity'); if(['comfortable','mid','compact'].indexOf(_dn)>-1){ state.density=_dn; document.body.setAttribute('data-d',_dn); } }catch(e){}
+try{ state.birthday = localStorage.getItem('sbcBday') || ''; }catch(e){} // v3.57: birthday for the theme engine, cached like density
 function $(s){ return document.querySelector(s); }
 function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.56.18';
+var FE_VERSION = 'v3.57.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1231,8 +1235,10 @@ function bootApply_(res){
     // hidden set applies (the server default is the OLD grid's starter set).
     if(res.dashLayout && Array.isArray(res.dashLayout.layout) && !res.dashLayout.isDefault) state.dashLayout = res.dashLayout.layout;
     if(res.density && res.density.value) applyDensity(res.density.value, false); // v3.28: per-user density
+    if(res.birthday){ state.birthday = String(res.birthday.value||''); try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){} } // v3.57
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
+    applySeason();                         // v3.57: dress for the season/birthday
     saveSnapshot_();                       // v3.28: persist for the next instant open
     render();
     if(state.view!=='dash') setRefreshing_(false); // dash clears when its data lands (dashFetchDash)
@@ -1279,7 +1285,14 @@ function setGreeting_(){
   var h = new Date().getHours();
   var nm = String(auth.email || state.boot.user || '').split('@')[0];
   nm = nm ? nm.charAt(0).toUpperCase()+nm.slice(1) : '';
-  var g=$('#greet'); if(g) g.textContent = (h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(nm?', '+nm:'');
+  // v3.57: on the user's birthday the greeting itself celebrates (this is text,
+  // so it works even with the theme toggle off); otherwise seasonal emoji ride along.
+  var bd = seasonBday_();
+  var greetTxt = (bd && bd.day)
+    ? 'Happy Birthday'+(nm?', '+nm:'')+'! \uD83C\uDF82'
+    : (h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(nm?', '+nm:'')+seasonGreetEmoji_(bd);
+  var g=$('#greet'); if(g) g.textContent = greetTxt;
+  var dg=$('#dashGreet'); if(dg) dg.textContent = greetTxt;
   var t=$('#todayLbl'); if(t) t.textContent = new Date().toLocaleDateString(undefined,
     {weekday:'long', month:'long', day:'numeric'});
 }
@@ -2144,7 +2157,7 @@ function renderDash(){
   var st = homeState();
   var stats = HOME_CARDS.filter(function(c){ return c.slot==='stats' && st.visible[c.id] && DASH_WIDGETS[c.id]; }).map(function(c){return c.id;});
   var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
-  var h='<div class="htop"><span class="sp"></span>'+
+  var h='<div class="htop"><span class="sgreet" id="dashGreet"></span><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
   h += freezeBanner_();          // v3.55 — above everything; it explains the health card
   if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
@@ -2152,6 +2165,7 @@ function renderDash(){
   if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
   if(state.homeCustomize) h+=homeCustHtml(st);
   $('#shell').innerHTML = h;
+  setGreeting_();                // v3.57 — fills #dashGreet (phone Home greeting)
   freezeReval_();                // v3.55 — after paint, never blocking
   // Chart cards: instantiate now that their canvases are in the DOM.
   if(typeof Chart!=='undefined'){
@@ -4448,6 +4462,304 @@ function sheetUrl(id){
   id = String(id||'').trim();
   return id ? 'https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit' : '';
 }
+/* ============================ seasonal themes (v3.57) ============================
+   Monthly dress-up of the brand + desktop sidebar, per Scott's approved 8/28/26
+   mockups. All logo/sidebar art is DRAWN gradient SVG — never emoji (emoji are
+   fine on the greeting line only). Art JOINS the brand (snow piled on the card,
+   lights strung across the wordmark); the sport mark floats top-right of the
+   wordmark. Birthday (Settings, full DOB — the YEAR is kept for future age-tied
+   reports): balloon + confetti the whole birthday month, cake for the final 7
+   days, "Happy Birthday" greeting on the day. Toggle: localStorage sbcSeasonal
+   ('off' disables, per device). Pure client — applySeason NEVER fetches.
+   GOTCHA (learned in preview): a gradient stroke on a vertical line renders
+   invisible (zero-width bounding box) — rays/lines use solid colors. */
+var SEASON_KEY = 'sbcSeasonal';
+function seasonOn(){ try{ return localStorage.getItem(SEASON_KEY)!=='off'; }catch(e){ return true; } }
+/* -- tiny gradient builders (unique ids per render site via prefix) -- */
+function sLg_(id,stops){ return '<linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'+stops.map(function(s){return '<stop offset="'+s[0]+'" stop-color="'+s[1]+'"/>';}).join('')+'</linearGradient>'; }
+function sRg_(id,stops,cx,cy){ return '<radialGradient id="'+id+'" cx="'+(cx||0.35)+'" cy="'+(cy||0.3)+'" r="0.95">'+stops.map(function(s){return '<stop offset="'+s[0]+'" stop-color="'+s[1]+'"/>';}).join('')+'</radialGradient>'; }
+/* -- sport marks (shaded, drawn) -- */
+var SEASON_BALLS = {
+  football: function(id,x,y,s){ return { defs: sLg_(id+'f',[[0,'#b3550e'],[0.45,'#8a3d0a'],[1,'#571f06']]),
+    art: '<g transform="translate('+x+','+y+') scale('+s+') rotate(-16)">'+
+    '<ellipse rx="10.5" ry="6.4" fill="url(#'+id+'f)"/><ellipse rx="10.5" ry="6.4" fill="none" stroke="#3f1704" stroke-width="0.5"/>'+
+    '<path d="M-7.6,-3.9 Q-8.6,0 -7.6,3.9 M7.6,-3.9 Q8.6,0 7.6,3.9" stroke="#f8fafc" stroke-width="1.15" fill="none"/>'+
+    '<path d="M-4.2,0 H4.2" stroke="#f8fafc" stroke-width="1.15" stroke-linecap="round"/>'+
+    '<path d="M-3.1,-1.7 V1.7 M-1.55,-1.7 V1.7 M0,-1.7 V1.7 M1.55,-1.7 V1.7 M3.1,-1.7 V1.7" stroke="#f8fafc" stroke-width="0.95"/>'+
+    '<ellipse cx="-3.2" cy="-3.1" rx="5" ry="1.7" fill="#fff" opacity="0.16" transform="rotate(-10)"/></g>' }; },
+  basketball: function(id,x,y,s){ return { defs: sRg_(id+'k',[[0,'#fdba74'],[0.4,'#f97316'],[0.8,'#d45708'],[1,'#a13a08']]),
+    art: '<g transform="translate('+x+','+y+') scale('+s+')"><circle r="9" fill="url(#'+id+'k)"/>'+
+    '<circle r="9" fill="none" stroke="#6d2a06" stroke-width="0.5"/>'+
+    '<path d="M-9,0 H9 M0,-9 C2.9,-5 2.9,5 0,9 M-6.4,-6.35 C-1.6,-2.6 -1.6,2.6 -6.4,6.35 M6.4,-6.35 C1.6,-2.6 1.6,2.6 6.4,6.35" stroke="#6d2a06" stroke-width="1.05" fill="none"/>'+
+    '<ellipse cx="-3.1" cy="-4" rx="3.6" ry="2" fill="#fff" opacity="0.22" transform="rotate(-28)"/></g>' }; },
+  baseball: function(id,x,y,s){ return { defs: sRg_(id+'s',[[0,'#ffffff'],[0.55,'#f1f5f9'],[1,'#aebbcb']]),
+    art: '<g transform="translate('+x+','+y+') scale('+s+')"><circle r="8.6" fill="url(#'+id+'s)" stroke="#8a99ac" stroke-width="0.55"/>'+
+    '<path d="M-7.4,-4.2 Q-3.1,0 -7.4,4.2 M7.4,-4.2 Q3.1,0 7.4,4.2" stroke="#c92c2c" stroke-width="1.2" fill="none"/>'+
+    '<path d="M-6.7,-3 l1.7,-0.7 M-6.3,-0.9 l1.8,-0.2 M-6.3,0.9 l1.8,0.2 M-6.7,3 l1.7,0.7 M6.7,-3 l-1.7,-0.7 M6.3,-0.9 l-1.8,-0.2 M6.3,0.9 l-1.8,0.2 M6.7,3 l-1.7,0.7" stroke="#c92c2c" stroke-width="0.75"/>'+
+    '<ellipse cx="-2.8" cy="-3.6" rx="3.4" ry="1.9" fill="#fff" opacity="0.7" transform="rotate(-25)"/></g>' }; },
+  /* Kentucky Derby: full gallop + jockey. A horse HEAD reads as a squirrel at
+     this size (tried twice) — the racing silhouette is what works. */
+  horse: function(id,x,y,s){ var dk='#4a2708';
+    return { defs: sLg_(id+'h',[[0,'#8a5426'],[0.55,'#6b3d15'],[1,'#43230a']]),
+    art: '<g transform="translate('+x+','+y+') scale('+s+')">'+
+    '<g stroke="url(#'+id+'h)" stroke-width="1.5" stroke-linecap="round" fill="none">'+
+    '<path d="M4.8,0.6 L9.2,2.8 L13.2,6"/><path d="M5.2,1 L7.4,4.6"/>'+
+    '<path d="M-7.2,0.8 L-10.6,2.8 L-14.4,5.2"/><path d="M-6.6,1.2 L-8.8,4.6"/></g>'+
+    '<path d="M-8.6,-2 Q-11.8,-3.6 -14.6,-3" stroke="'+dk+'" stroke-width="1.7" stroke-linecap="round" fill="none"/>'+
+    '<path d="M13.8,-3.6 Q11.8,-5.6 9.9,-5.3 L9.4,-6.8 L8.4,-5.1 Q6.2,-4.7 4.9,-3.1 Q1.4,-4.4 -2.8,-4.1 Q-6.9,-3.7 -8.3,-1.7 Q-9.2,0.3 -7.9,1.7 Q-4.9,3.2 -0.9,3 Q3.1,2.7 5.3,1.2 Q6.2,-0.8 8.5,-2.3 Q10.6,-1.7 12.2,-2.4 Q13.9,-2.9 13.8,-3.6 Z" fill="url(#'+id+'h)"/>'+
+    '<path d="M8.3,-5 Q6.6,-4.2 5.4,-3" stroke="'+dk+'" stroke-width="1" stroke-linecap="round" fill="none"/>'+
+    '<circle cx="11" cy="-4.2" r="0.5" fill="#1c1917"/>'+
+    '<path d="M0.6,-3.9 Q1.6,-7.2 4.6,-6.4 Q5.8,-6 5.4,-4.6 Q3.4,-5 2.6,-3.7 Z" fill="#dc2626"/>'+
+    '<path d="M2.4,-3.9 Q1.8,-2.2 3.4,-1.5" stroke="#dc2626" stroke-width="1.1" stroke-linecap="round" fill="none"/>'+
+    '<path d="M4.9,-5.4 L7.8,-4" stroke="#b91c1c" stroke-width="0.9" stroke-linecap="round"/>'+
+    '<circle cx="4.9" cy="-7.1" r="1.15" fill="#f8fafc"/>'+
+    '<path d="M5.9,-7.4 L7,-7" stroke="#f8fafc" stroke-width="0.7" stroke-linecap="round"/></g>' }; }
+};
+/* -- seasonal artwork, drawn into the brand -- */
+var SEASON_DECO = {
+  snow: function(id){ return { defs: sLg_(id+'w',[[0,'#ffffff'],[1,'#c9dff2']]),
+    art: '<path d="M11,7 Q12.5,0.5 19,2.6 Q25.5,-2.6 33.5,1.4 Q41,-2.2 49,1.8 Q56,-1.8 63.5,2.2 Q71.5,-1.4 78.5,4.6 L79,8.5 Q60,10.5 45,9 Q26,10.6 11.5,8.6 Z" fill="url(#'+id+'w)"/>'+
+    '<path d="M30.5,9.4 q1.6,3.6 0.1,5.2 q-1.7,-1.8 -1.6,-5.2 Z" fill="#e7f2fb"/>'+
+    '<path d="M58,9 q1.3,2.8 0,4.1 q-1.4,-1.4 -1.3,-4.1 Z" fill="#e7f2fb"/>'+
+    '<g fill="#eaf4fd"><circle cx="96" cy="6" r="1.25"/><circle cx="118" cy="14" r="0.9"/><circle cx="141" cy="4" r="1.35"/>'+
+    '<circle cx="163" cy="12" r="1"/><circle cx="188" cy="5" r="1.2"/><circle cx="205" cy="13" r="0.85"/>'+
+    '<circle cx="108" cy="-3" r="1"/><circle cx="176" cy="-4" r="1.1"/></g>' }; },
+  hearts: function(id){
+    var h='M0,7 C-7,1 -8,-4 -4.5,-6 C-2,-7.4 0,-5.5 0,-3.8 C0,-5.5 2,-7.4 4.5,-6 C8,-4 7,1 0,7 Z';
+    return { defs: sLg_(id+'h1',[[0,'#fda4af'],[0.5,'#f4526f'],[1,'#be123c']]),
+    art: '<g transform="translate(74,3) scale(1.15) rotate(6)"><path d="'+h+'" fill="url(#'+id+'h1)"/>'+
+      '<ellipse cx="-2.8" cy="-3.4" rx="1.9" ry="1.1" fill="#fff" opacity="0.5" transform="rotate(-32)"/></g>'+
+    '<g transform="translate(89,13) scale(0.68) rotate(-12)"><path d="'+h+'" fill="url(#'+id+'h1)"/>'+
+      '<ellipse cx="-2.8" cy="-3.4" rx="1.9" ry="1.1" fill="#fff" opacity="0.5" transform="rotate(-32)"/></g>'+
+    '<g transform="translate(62,-2) scale(0.45) rotate(-22)"><path d="'+h+'" fill="url(#'+id+'h1)"/></g>' }; },
+  shamrock: function(id){
+    var leaf='M0,2.2 C-3.4,-0.6 -3.9,-3.6 -2.2,-4.9 C-1,-5.8 0,-4.8 0,-3.6 C0,-4.8 1,-5.8 2.2,-4.9 C3.9,-3.6 3.4,-0.6 0,2.2 Z';
+    function shp(x,y,s,r){ return '<g transform="translate('+x+','+y+') scale('+s+') rotate('+(r||0)+')">'+
+      '<g fill="url(#'+id+'g)"><g transform="translate(0,-3.6)"><path d="'+leaf+'"/></g>'+
+      '<g transform="rotate(120) translate(0,-3.6)"><path d="'+leaf+'"/></g>'+
+      '<g transform="rotate(240) translate(0,-3.6)"><path d="'+leaf+'"/></g></g>'+
+      '<path d="M0.3,2 Q2,6 0.6,9.4" stroke="#15803d" stroke-width="1.3" fill="none" stroke-linecap="round"/>'+
+      '<circle cx="-1.6" cy="-4.6" r="1" fill="#d9f9e5" opacity="0.75"/></g>'; }
+    return { defs: sLg_(id+'g',[[0,'#6ee7a0'],[0.55,'#2fc46c'],[1,'#15803d']]), art: shp(72,4,1.18,8)+shp(88,12,0.72,-14) }; },
+  golf: function(id){ return {
+    defs: sLg_(id+'gf',[[0,'#fb7185'],[0.4,'#ef4444'],[1,'#b91c1c']])+sRg_(id+'gb',[[0,'#ffffff'],[0.7,'#f1f5f9'],[1,'#c4cfdc']]),
+    art: '<g transform="translate(66,-1)"><path d="M0,-4 V14" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round"/>'+
+      '<path d="M0,-4 V14" stroke="#7d8b9d" stroke-width="0.55" stroke-linecap="round" transform="translate(0.45,0)"/>'+
+      '<path d="M0.8,-4.6 L11.5,-1.2 Q12.3,-0.9 11.5,-0.5 L0.8,2.6 Z" fill="url(#'+id+'gf)"/>'+
+      '<path d="M0.8,-4.6 L11.5,-1.2 Q12.3,-0.9 11.5,-0.5 L0.8,2.6" fill="none" stroke="#7f1d1d" stroke-width="0.4"/>'+
+      '<circle cx="0" cy="-4.6" r="1" fill="#e2e8f0"/></g>'+
+    '<g transform="translate(84,9)"><circle r="3.1" fill="url(#'+id+'gb)" stroke="#9aa8b8" stroke-width="0.4"/>'+
+      '<g fill="#94a3b8" opacity="0.75"><circle cx="-0.9" cy="-0.6" r="0.34"/><circle cx="0.6" cy="0.2" r="0.34"/>'+
+      '<circle cx="-0.3" cy="1.1" r="0.34"/><circle cx="1.1" cy="-1.1" r="0.34"/></g></g>' }; },
+  blossoms: function(id){
+    function fl(x,y,s){ var p=''; for(var i=0;i<5;i++) p+='<ellipse rx="2.6" ry="3.9" cy="-3.4" fill="url(#'+id+'p)" transform="rotate('+(i*72)+')"/>';
+      return '<g transform="translate('+x+','+y+') scale('+s+')">'+p+'<circle r="1.6" fill="#fbbf24"/>'+
+      '<g fill="#b45309"><circle cx="0" cy="-2.5" r="0.4"/><circle cx="2.4" cy="-0.8" r="0.4"/><circle cx="1.5" cy="2" r="0.4"/><circle cx="-1.5" cy="2" r="0.4"/><circle cx="-2.4" cy="-0.8" r="0.4"/></g></g>'; }
+    return { defs: sLg_(id+'p',[[0,'#fff1f6'],[0.6,'#f9a8d4'],[1,'#ec6bb0']])+sLg_(id+'br',[[0,'#8a5a36'],[1,'#5f3a1e']]),
+      art: '<path d="M9,7 Q30,-1.5 56,2.5 Q70,4.5 80,8" stroke="url(#'+id+'br)" stroke-width="2" fill="none" stroke-linecap="round"/>'+
+      '<path d="M34,1 q4,-4.5 9,-5 M60,3 q3,-4 7.5,-4.5" stroke="#6b4226" stroke-width="1.1" fill="none" stroke-linecap="round"/>'+
+      fl(26,2.4,0.95)+fl(48,0.8,1.15)+fl(70,4.8,0.8)+
+      '<circle cx="43" cy="-4" r="1.7" fill="#f472b6"/><circle cx="67.5" cy="-1.5" r="1.4" fill="#f9a8d4"/>' }; },
+  sun: function(id){
+    var rays=''; for(var i=0;i<8;i++){ var L=(i%2===0)?5.2:3.4;
+      rays+='<path d="M0,-8.2 L1.5,-8.2 L0.75,'+(-8.2-L)+' Z" transform="rotate('+(i*45)+') translate(-0.75,0)" fill="#f59e0b"/>'; }
+    return { defs: sRg_(id+'sd',[[0,'#fef3c0'],[0.55,'#fbbf24'],[1,'#ea9106']],0.4,0.35),
+      art: '<g transform="translate(93,10)">'+rays+'<circle r="7.2" fill="url(#'+id+'sd)"/>'+
+      '<circle r="7.2" fill="none" stroke="#d97b06" stroke-width="0.45"/>'+
+      '<ellipse cx="-2.2" cy="-2.6" rx="3" ry="1.7" fill="#fff" opacity="0.32" transform="rotate(-20)"/></g>' }; },
+  fireworks: function(id){
+    function burst(x,y,s,cols){ var lines=''; for(var i=0;i<12;i++){ var c=cols[i%cols.length];
+      lines+='<g transform="rotate('+(i*30)+')"><path d="M0,-2.6 L0,-8.2" stroke="'+c+'" stroke-width="1.35" stroke-linecap="round"/><circle cy="-9.9" r="1" fill="'+c+'"/></g>'; }
+      return '<g transform="translate('+x+','+y+') scale('+s+')">'+lines+'<circle r="1.9" fill="#fef9c3"/></g>'; }
+    var sp='M0,-3.4 Q0.85,-0.85 3.4,0 Q0.85,0.85 0,3.4 Q-0.85,0.85 -3.4,0 Q-0.85,-0.85 0,-3.4 Z';
+    return { defs:'', art: burst(150,9,1.15,['#fbbf24','#f87171','#93c5fd'])+burst(191,3,0.62,['#93c5fd','#fda4af','#fde047'])+
+      '<path d="'+sp+'" transform="translate(120,4) scale(0.8)" fill="#fef9c3"/>'+
+      '<path d="'+sp+'" transform="translate(207,14) scale(0.6)" fill="#fecdd3"/>' }; },
+  umbrella: function(id){ return { defs: sLg_(id+'u',[[0,'#fb8f9f'],[0.5,'#f4526f'],[1,'#d92646']]),
+    art: '<g transform="translate(72,-1) rotate(9)"><path d="M0,10.5 V-8" stroke="#b8895a" stroke-width="1.4" stroke-linecap="round"/>'+
+      '<path d="M-12,3 A12.2,11.4 0 0 1 12,3 A4,3.3 0 0 1 4,3 A4,3.3 0 0 1 -4,3 A4,3.3 0 0 1 -12,3 Z" fill="url(#'+id+'u)"/>'+
+      '<path d="M-5.4,2.6 Q-2.9,-5.6 0,-8.3 Q-0.6,-3.4 -1.3,2.7 Z M5.4,2.6 Q2.9,-5.6 0,-8.3 Q0.6,-3.4 1.3,2.7 Z" fill="#fdf6f7"/>'+
+      '<path d="M-12,3 A12.2,11.4 0 0 1 12,3" fill="none" stroke="#a11732" stroke-width="0.5"/>'+
+      '<path d="M0,-8.3 V-10.6" stroke="#e2e8f0" stroke-width="1.2" stroke-linecap="round"/></g>'+
+    '<path d="M84,12 q4,-2.6 8,0 q4,2.6 8,0" stroke="#7dd3fc" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.85"/>' }; },
+  apple: function(id){ return {
+    defs: sRg_(id+'a',[[0,'#fb9b9b'],[0.4,'#ef4444'],[1,'#9f1220']],0.38,0.3)+sLg_(id+'al',[[0,'#86efac'],[1,'#16a34a']]),
+    art: '<g transform="translate(74,3) scale(1.12)">'+
+      '<path d="M-0.3,-4.3 Q-1.4,-6.8 -3.1,-7.8" stroke="#713f12" stroke-width="1.35" fill="none" stroke-linecap="round"/>'+
+      '<path d="M0.3,-5 Q3.6,-8.2 6.1,-6 Q3.7,-3.6 0.5,-4.4 Z" fill="url(#'+id+'al)"/>'+
+      '<path d="M1.4,-5.2 Q3.4,-6.4 5.2,-5.9" stroke="#14532d" stroke-width="0.4" fill="none"/>'+
+      '<path d="M-0.2,-3.6 C-5.6,-6.1 -8.7,1.5 -4.5,6 C-2.7,8 -1,7.6 0,7 C1,7.6 2.7,8 4.5,6 C8.7,1.5 5.6,-6.1 -0.2,-3.6 Z" fill="url(#'+id+'a)"/>'+
+      '<ellipse cx="-2.9" cy="-1" rx="1.6" ry="2.6" fill="#fff" opacity="0.4" transform="rotate(18)"/></g>' }; },
+  pumpkin: function(id){ return {
+    defs: sLg_(id+'pl',[[0,'#fb923c'],[0.5,'#ea700c'],[1,'#b45309']])+sLg_(id+'pc',[[0,'#fdba74'],[0.55,'#f97316'],[1,'#c2570a']]),
+    art: '<g transform="translate(73,3.6) scale(1.08)">'+
+      '<path d="M-0.8,-6 Q-1.6,-8.6 0.6,-9.2 L1.7,-8.8 Q0.7,-7.4 1,-5.7 Z" fill="#4d7c0f"/>'+
+      '<path d="M2.6,-7.6 q3.2,-2.6 5,-0.8 q1.4,1.4 -0.6,2.4 q-1.6,0.8 -2.4,-0.6" stroke="#65a30d" stroke-width="1" fill="none" stroke-linecap="round"/>'+
+      '<ellipse cx="-4.4" cy="0.7" rx="4.4" ry="6.3" fill="url(#'+id+'pl)"/>'+
+      '<ellipse cx="4.4" cy="0.7" rx="4.4" ry="6.3" fill="url(#'+id+'pl)"/>'+
+      '<ellipse cx="0" cy="0.7" rx="4.9" ry="6.6" fill="url(#'+id+'pc)"/>'+
+      '<path d="M-1.9,-5.5 Q-3.3,0.7 -1.9,6.7 M1.9,-5.5 Q3.3,0.7 1.9,6.7" stroke="#b45309" stroke-width="0.5" fill="none" opacity="0.7"/>'+
+      '<ellipse cx="-1.6" cy="-2.6" rx="1.7" ry="2.4" fill="#fff" opacity="0.25" transform="rotate(12)"/></g>' }; },
+  turkey: function(id){
+    var feather='M0,0.5 C-2.3,-2.6 -2.3,-7.6 0,-10 C2.3,-7.6 2.3,-2.6 0,0.5 Z';
+    function f(rot,grad){ return '<g transform="rotate('+rot+')"><path d="'+feather+'" fill="url(#'+id+grad+')" stroke="#6d3410" stroke-width="0.3"/></g>'; }
+    return { defs: sLg_(id+'t1',[[0,'#d97706'],[1,'#92400e']])+sLg_(id+'t2',[[0,'#fbbf24'],[1,'#b45309']])+
+      sRg_(id+'tb',[[0,'#a05a1f'],[0.6,'#78350f'],[1,'#4a1d07']],0.4,0.3),
+    art: '<g transform="translate(73,5) scale(1.12)">'+f(-64,'t1')+f(-32,'t2')+f(0,'t1')+f(32,'t2')+f(64,'t1')+
+      '<circle cx="0" cy="2.8" r="4.7" fill="url(#'+id+'tb)"/>'+
+      '<path d="M-3.4,3.4 Q-0.5,5.6 2.8,4" stroke="#5c2708" stroke-width="0.8" fill="none" opacity="0.8"/>'+
+      '<circle cx="3.6" cy="-0.6" r="1.9" fill="#92400e"/>'+
+      '<path d="M5.3,-0.6 L7,-0.1 L5.3,0.5 Z" fill="#f59e0b"/>'+
+      '<path d="M5,0.2 Q5.8,1.7 4.8,2.4" stroke="#dc2626" stroke-width="0.9" fill="none" stroke-linecap="round"/>'+
+      '<circle cx="4.1" cy="-1.1" r="0.5" fill="#fff"/><circle cx="4.25" cy="-1.05" r="0.25" fill="#1c1917"/></g>' }; },
+  lights: function(id){
+    var cols=['#f87171','#fbbf24','#60a5fa','#4ade80','#f472b6'];
+    var pts=[[22,8.6],[54,9.8],[86,7.4],[118,11.8],[150,11.2],[180,7.4],[206,7.4]];
+    var bulbs=''; pts.forEach(function(p,i){ var c=cols[i%cols.length];
+      bulbs+='<g transform="translate('+p[0]+','+p[1]+')"><circle r="4.6" fill="'+c+'" opacity="0.22"/>'+
+      '<rect x="-1.1" y="-0.6" width="2.2" height="1.7" rx="0.4" fill="#64748b"/>'+
+      '<path d="M-1.7,1 A1.9,2.4 0 1 0 1.7,1 Q0.9,0.6 0,0.7 Q-0.9,0.6 -1.7,1 Z" fill="'+c+'" transform="translate(0,1.2)"/>'+
+      '<circle cx="-0.6" cy="2.6" r="0.6" fill="#fff" opacity="0.55"/></g>'; });
+    return { defs:'', art:'<path d="M4,3.5 Q38,13.5 80,4.5 Q122,15.5 162,5.5 Q190,12 216,3.5" stroke="#86c7ae" stroke-width="1.1" fill="none" opacity="0.6"/>'+bulbs }; }
+};
+/* -- birthday extras -- */
+function seasonBalloon_(id,x,y,s,c1,c2,sway){
+  return { defs: sRg_(id,[[0,c1],[0.65,c2],[1,c2]],0.35,0.28),
+    art: '<g transform="translate('+x+','+y+') scale('+s+') rotate('+(sway||0)+')">'+
+    '<path d="M0,5.2 Q3.2,9.5 1.5,13.5" stroke="#cbd5e1" stroke-width="0.7" fill="none"/>'+
+    '<ellipse rx="4.6" ry="5.4" fill="url(#'+id+')"/>'+
+    '<path d="M-1.3,5 L0,6.9 L1.3,5 Z" fill="'+c2+'"/>'+
+    '<ellipse cx="-1.6" cy="-2" rx="1.5" ry="2.2" fill="#fff" opacity="0.45" transform="rotate(18)"/></g>' };
+}
+function seasonCake_(id,x,y,s){
+  return { defs: sLg_(id+'cb',[[0,'#f9a8d4'],[0.45,'#ec4899'],[1,'#be185d']])+
+    sLg_(id+'ct',[[0,'#fdf6fb'],[0.5,'#f5d0e6'],[1,'#e8a8cc']])+
+    sLg_(id+'cf',[[0,'#fef9c3'],[0.5,'#fbbf24'],[1,'#ea700c']]),
+    art: '<g transform="translate('+x+','+y+') scale('+s+')">'+
+    '<ellipse cx="0" cy="7.6" rx="9.6" ry="1.7" fill="#0f172a" opacity="0.18"/>'+
+    '<path d="M-8,2 H8 V6.4 Q8,7.6 6.8,7.6 H-6.8 Q-8,7.6 -8,6.4 Z" fill="url(#'+id+'cb)"/>'+
+    '<path d="M-8,2 Q-6.7,4.6 -5.3,2 Q-4,4.6 -2.7,2 Q-1.3,4.6 0,2 Q1.3,4.6 2.7,2 Q4,4.6 5.3,2 Q6.7,4.6 8,2" fill="#fdf6fb"/>'+
+    '<path d="M-5.5,-3 H5.5 V2 H-5.5 Z" fill="url(#'+id+'ct)"/>'+
+    '<path d="M-5.5,-3 Q-4.6,-1.2 -3.7,-3 Q-2.8,-1.2 -1.9,-3 Q-1,-1.2 0,-3 Q1,-1.2 1.9,-3 Q2.8,-1.2 3.7,-3 Q4.6,-1.2 5.5,-3" fill="#fff"/>'+
+    '<g fill="#e11d48"><circle cx="-3.4" cy="0" r="0.45"/><circle cx="2.9" cy="0.6" r="0.45"/></g>'+
+    '<g fill="#2563eb"><circle cx="-0.4" cy="0.9" r="0.45"/><circle cx="4.6" cy="-0.6" r="0.45"/></g>'+
+    '<g fill="#16a34a"><circle cx="-5.2" cy="4.9" r="0.5"/><circle cx="1.2" cy="5.6" r="0.5"/><circle cx="5.6" cy="4.6" r="0.5"/></g>'+
+    '<g fill="#fbbf24"><circle cx="-2" cy="5.9" r="0.5"/><circle cx="3.8" cy="5.2" r="0.5"/></g>'+
+    '<rect x="-0.8" y="-7.8" width="1.6" height="4.8" rx="0.5" fill="#60a5fa"/>'+
+    '<rect x="-0.8" y="-6.6" width="1.6" height="1" fill="#fff" opacity="0.85"/>'+
+    '<rect x="-0.8" y="-4.6" width="1.6" height="1" fill="#fff" opacity="0.85"/>'+
+    '<circle cx="0" cy="-9.4" r="2.6" fill="#fbbf24" opacity="0.22"/>'+
+    '<path d="M0,-11.5 Q1.5,-9.6 0,-7.9 Q-1.5,-9.6 0,-11.5 Z" fill="url(#'+id+'cf)"/></g>' };
+}
+function seasonConfetti_(){
+  var cols=['#f87171','#fbbf24','#60a5fa','#4ade80','#f472b6','#fef08a'];
+  var pieces='', pts=[[92,-7,20],[103,9,-30],[116,-2,45],[128,12,10],[142,-8,-20],[156,4,60],[168,-4,-45],[178,12,25],[190,-8,-10],[200,7,40],[212,-2,-25],[98,14,50],[136,3,-55],[184,2,15]];
+  pts.forEach(function(p,i){ var c=cols[i%cols.length];
+    pieces += (i%3===2)
+      ? '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="1.1" fill="'+c+'"/>'
+      : '<rect x="'+p[0]+'" y="'+p[1]+'" width="2.6" height="1.5" rx="0.4" fill="'+c+'" transform="rotate('+p[2]+' '+p[0]+' '+p[1]+')"/>'; });
+  return pieces;
+}
+/* month index 0-11 -> [theme name, deco key, ball key|null, sidebar tint, greeting emoji] */
+var SEASON_THEMES = [
+  ['Deep Winter · NFL Playoffs','snow','football','#274b63','❄️ 🏈'],
+  ["Valentine's",'hearts',null,'#5d2440','💝'],
+  ['Shamrock · March Madness','shamrock','basketball','#1f5c2d','☘️ 🏀'],
+  ['The Masters · Opening Day','golf','baseball','#2f6b3a','⛳ ⚾'],
+  ['Full Bloom · Kentucky Derby','blossoms','horse','#6b2f4e','🌸 🏇'],
+  ['First of Summer','sun',null,'#7a5410','☀️'],
+  ['Fourth of July','fireworks',null,'#26325f','🎆'],
+  ['Beach Days','umbrella',null,'#0e5a72','🏖️'],
+  ['Apple Season · Kickoff','apple','football','#6e2222','🍎 🏈'],
+  ['Pumpkin Patch · World Series','pumpkin','baseball','#7c3a0d','🎃 ⚾'],
+  ['Thanksgiving Football','turkey','football','#6b4a1f','🦃 🏈'],
+  ['Holiday Lights','lights',null,'#5f1e1e','🎄']
+];
+/* Birthday tiers from state.birthday ('YYYY-MM-DD'). Returns null when unset.
+ * month = the calendar birthday month (balloon + confetti);
+ * week  = the 7 days up to AND including the birthday (cake joins) — computed
+ *         against the NEXT occurrence so a Jan 3rd birthday lights up from
+ *         Dec 28th; day = the birthday itself (greeting celebrates).
+ * `now` is injectable for tests only. */
+function seasonBday_(now){
+  var v = String(state.birthday||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  var m=Number(v.slice(5,7)), d=Number(v.slice(8,10));
+  if(!(m>=1&&m<=12&&d>=1&&d<=31)) return null;
+  now = now || new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var bd = new Date(today.getFullYear(), m-1, d);
+  if(bd < today) bd = new Date(today.getFullYear()+1, m-1, d);
+  var diff = Math.round((bd - today)/86400000);
+  return { month:(today.getMonth()+1)===m, week:diff<7, day:diff===0 };
+}
+/* Emoji tail for the greeting line (the ONLY place emoji are allowed). */
+function seasonGreetEmoji_(bd){
+  if(!seasonOn()) return '';
+  var t = SEASON_THEMES[new Date().getMonth()];
+  var s = '  '+t[4];
+  bd = (bd===undefined) ? seasonBday_() : bd;
+  if(bd && bd.month) s += ' 🎈';
+  return s;
+}
+/* The brand's shared inner markup (card stack + letters + wordmark) — must stay
+ * identical to the static SVG in the <aside> so toggling off restores exactly it. */
+function seasonBase_(){
+  return '<rect x="10" y="1" width="70" height="42" rx="8" fill="#0a5e55"/>'+
+    '<rect x="6" y="5" width="70" height="42" rx="8" fill="#0c7c70"/>'+
+    '<rect x="2" y="9" width="70" height="42" rx="8" fill="#0d9488"/>'+
+    '<rect x="8" y="15" width="58" height="30" rx="5" fill="none" stroke="#5eead4" stroke-width="1.6"/>'+
+    '<rect x="23.8" y="21.6" width="1.4" height="3.6" rx="0.7" fill="#ffffff"/>'+
+    '<rect x="23.8" y="35.5" width="1.4" height="3.6" rx="0.7" fill="#ffffff"/>'+
+    '<rect x="49.9" y="21.6" width="1.4" height="3.6" rx="0.7" fill="#ffffff"/>'+
+    '<rect x="49.9" y="35.5" width="1.4" height="3.6" rx="0.7" fill="#ffffff"/>'+
+    '<text x="24.5" y="36.5" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff" font-family="inherit">S</text>'+
+    '<text x="37" y="36.5" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff" font-family="inherit">B</text>'+
+    '<text x="49.5" y="36.5" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff" font-family="inherit">C</text>'+
+    '<text x="88" y="38" font-size="22" font-weight="800" fill="#ffffff" letter-spacing="-0.3" font-family="inherit">SBC <tspan fill="#5eead4">Money</tspan></text>';
+}
+/* Themed brand SVG. prefix keeps gradient ids unique when the same month is
+ * rendered twice on one page (sidebar + sign-in). */
+function seasonBrandSvg_(prefix, width){
+  var mi = new Date().getMonth(), t = SEASON_THEMES[mi], id = prefix+mi;
+  var d = SEASON_DECO[t[1]](id);
+  var b = t[2] ? (t[2]==='horse' ? SEASON_BALLS.horse(id,203,-1,1) : SEASON_BALLS[t[2]](id,207,0,1)) : null;
+  var defs = d.defs + (b?b.defs:''), art = d.art + (b?b.art:'');
+  var bd = seasonBday_();
+  if(bd && bd.month){
+    var b1 = seasonBalloon_(id+'b1',180,-2,1,'#fda4af','#e11d48',-6);
+    defs += b1.defs; art += b1.art + seasonConfetti_();
+    if(bd.week){ var ck = seasonCake_(id,138,1,1.05); defs += ck.defs; art += ck.art; }
+  }
+  var w = width||158, hgt = Math.round(w*68/220);
+  return '<svg width="'+w+'" height="'+hgt+'" viewBox="0 -12 220 68" aria-label="SBC Money">'+
+    '<defs>'+defs+'</defs>'+seasonBase_()+art+'</svg>';
+}
+/* Apply (or remove) the month's dress-up. Pure DOM/CSS — never fetches. */
+function applySeason(){
+  try{
+    var brand = document.querySelector('aside.side .brand');
+    var signName = document.querySelector('#signin .sname');
+    var sign = document.getElementById('signSeason');
+    if(!sign && signName){
+      sign = document.createElement('div');
+      sign.id = 'signSeason'; sign.style.marginTop = '2px';
+      signName.parentNode.insertBefore(sign, signName.nextSibling);
+    }
+    if(!seasonOn()){
+      if(brand) brand.innerHTML = '<svg width="158" height="42" viewBox="0 0 220 60" aria-label="SBC Money">'+seasonBase_()+'</svg>';
+      document.documentElement.style.removeProperty('--side-bg');
+      if(sign) sign.innerHTML = '';
+      return;
+    }
+    var t = SEASON_THEMES[new Date().getMonth()];
+    if(brand) brand.innerHTML = seasonBrandSvg_('sb');
+    document.documentElement.style.setProperty('--side-bg',
+      'linear-gradient(180deg,'+t[3]+' 0%, var(--teal-900) 230px)');
+    if(sign) sign.innerHTML = seasonBrandSvg_('si', 190);
+  }catch(e){ console.warn('applySeason:', e && e.message || e); }
+}
+
 /* ============================ display density (v3.28) ============================
    Per-user UI density, synced via apiGet/SetDensity (Settings key "Density <email>",
    mirrors the Dashboard Layout pattern). localStorage 'sbcDensity' for instant paint.
@@ -4476,10 +4788,29 @@ function densityControl(){
     '<div class="empty" style="padding:8px 2px 0;font-size:11.5px;text-align:left">How tightly information is packed on screen. Midpoint is the default; Compact fits the most at once. Saved to your account.</div>'+
     '</div>';
 }
+/* v3.57: Settings card for the seasonal dress-up + birthday. The date input is
+   16px so iOS doesn't zoom (see sbc-mobile rules). Toggle is per device. */
+function seasonControl(){
+  var on = seasonOn();
+  var b = String(state.birthday||'');
+  return settingsSectionLabel('SEASONAL THEMES')+
+    '<div class="card" style="padding:12px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
+    '<span style="font-weight:600">Monthly dress-up</span>'+
+    '<button class="dwbtn'+(on?' on':'')+'" data-act="season-toggle">'+(on?'On':'Off')+'</button></div>'+
+    '<div class="empty" style="padding:6px 2px 0;font-size:11.5px;text-align:left">The logo and sidebar dress for the season — snow in January, fireworks in July, a Derby horse in May. Decoration only; this switch is per device.</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">'+
+    '<label for="bdayInp" style="font-weight:600;font-size:13.5px">Birthday</label>'+
+    '<input type="date" id="bdayInp" value="'+esc(b)+'" style="padding:6px 9px;border:1.5px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font-size:16px">'+
+    '<button class="btn ghost" data-act="bday-save">Save</button></div>'+
+    '<div class="empty" style="padding:6px 2px 0;font-size:11.5px;text-align:left">Balloons and confetti for your whole birthday month, cake for the last week, and a proper greeting on the day. Saved to your account; the full date also feeds future age-based reports.</div>'+
+    '</div>';
+}
 function renderSettings(){
   var desktop = window.innerWidth >= 900;
   var h = '<h2 class="viewtitle">Settings</h2>';
   h += densityControl();
+  h += seasonControl();     // v3.57 — seasonal themes + birthday
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
@@ -5014,6 +5345,11 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
     '<p style="margin:0">• <b>Settings → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
 
+  h += S('🎨','Seasonal themes & birthdays',
+    '<p style="margin:0 0 8px">The logo and sidebar dress for the season — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
+    '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Seasonal themes) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
+    '<p style="margin:0">Not your thing? The <b>Seasonal themes</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
+
   h += S('↩️','Made a mistake? Nothing is permanent',
     '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
     '<p style="margin:0">You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can’t break your money.</p>');
@@ -5208,6 +5544,22 @@ document.addEventListener('click', function(ev){
   switch(act){
     case 'goview': go(arg); break;
     case 'density': applyDensity(arg, true); break;
+    case 'season-toggle': (function(){ // v3.57 — per device, instant
+      try{ localStorage.setItem(SEASON_KEY, seasonOn()?'off':'on'); }catch(e2){}
+      applySeason(); setGreeting_();
+      if(state.view==='settings' || state.view==='more') renderSettings();
+    })(); break;
+    case 'bday-save': (function(){ // v3.57 — save full DOB to the account
+      var inp = $('#bdayInp');
+      var v = inp ? String(inp.value||'').trim() : '';
+      if(v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ toast('Pick a full date'); return; }
+      run('apiSetBirthday', {value:v}).then(function(r){
+        state.birthday = String(r && r.value || '');
+        try{ localStorage.setItem('sbcBday', state.birthday); }catch(e2){}
+        toast(v ? 'Birthday saved' : 'Birthday cleared');
+        applySeason(); setGreeting_();
+      }).catch(fail);
+    })(); break;
     case 'goreport': state.report.id=arg; rptSave(); go('reports'); break;
     case 'rpt-select': state.report.id=arg; rptSave(); renderReports(); break;
     case 'rpt-preset': rptApplyPreset(arg==='ytd'?'ytd':Number(arg)); rptSave(); renderReports(); break;
@@ -5470,6 +5822,7 @@ document.addEventListener('change', function(ev){
      bar; GSI auto-select (gsiReady → onCredential) refreshes the token and boots
    - nothing cached and no valid token → the sign-in screen, as before */
 (function start(){
+  applySeason();   // v3.57: dress the brand (sidebar + sign-in) before anything paints
   var hydrated = hydrateSnapshot_();
   if(hydrated){
     setGreeting_();
