@@ -328,6 +328,19 @@ aside.side{display:none}
 .reglinks{display:flex;gap:14px;margin-top:8px}
 .reglinks button{color:var(--teal-700);font-weight:700;font-size:12.5px}
 .reglinks button.warn{color:var(--red)}
+/* v3.58 tags */
+.tagchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.tagchip{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px dashed var(--teal-300);color:var(--teal-700);font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;white-space:nowrap}
+.tagchip .tx{color:var(--teal-600);font-weight:800;cursor:pointer;padding:0 2px}
+.tagadd{border:1.5px dashed var(--line);background:transparent;color:var(--ink-3);font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;cursor:pointer}
+.regtable .rc-env .tagchip{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.tagedit{background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:8px}
+.tagedit .trow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tagedit input{flex:1;min-width:170px;max-width:340px;padding:8px 11px;border:1.5px solid var(--line);border-radius:10px;font-size:16px}
+.bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));z-index:40;background:var(--teal-800);color:#fff;border-radius:14px;padding:10px 14px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:13px;font-weight:600;flex-wrap:wrap;max-width:94vw}
+.bulkbar input{padding:8px 10px;border:none;border-radius:9px;font-size:16px;min-width:160px}
+@media(max-width:900px){ .bulkbar{bottom:calc(76px + env(safe-area-inset-bottom))} }
+.selbox{width:17px;height:17px;accent-color:var(--teal-600);flex:none;margin-right:8px;vertical-align:-3px}
 
 /* v3.28.1: single-line register (desktop, mid/compact density). Everything on one
    row: date · description · account · envelope(s) · ⋮ menu · amount. Comfortable and
@@ -912,7 +925,8 @@ var state = {
 
   dashLayout:null, homeCustomize:false, density:'mid', birthday:'',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
-  report:null, reportData:null, reportLoading:false, reportErr:null
+  report:null, reportData:null, reportLoading:false, reportErr:null,
+  tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{} // v3.58 tags UI
 };
 /* Reports section (v3.21) — current selection + controls, persisted per browser. */
 var RPT_DEFAULTS = { id:'spend', gran:'month', from:null, to:null, chartType:'area',
@@ -933,7 +947,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.57.3';
+var FE_VERSION = 'v3.58.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3255,6 +3269,108 @@ function renderTxns(keepList){
     if(state.view==='txns' && (!cached || (changed && !userBusy()))) drawTxns();
   }).catch(function(e){ if(!cached) fail(e); });
 }
+/* ---------------- v3.58: tags UI ---------------- */
+/* Chips render in three modes: 'plain' (chips only — one-line rows), 'add'
+   (chips + a "+ tag" opener — stacked cards), 'edit' (chips with x removers —
+   inside the open editor). Tags ride apiRegister items; mirror-served items
+   that predate the mirror's tags column simply have none (t.tags||[]). */
+function tagChipsHtml(t, mode){
+  var tags = t.tags || [];
+  var h = tags.map(function(x){
+    return '<span class="tagchip">\ud83c\udff7 '+esc(x)+
+      (mode==='edit' ? '<span class="tx" data-act="tag-rm" data-arg="'+esc(t.txnId)+'|'+esc(x)+'">\u00d7</span>' : '')+
+    '</span>';
+  }).join('');
+  if(mode==='add') h += '<button class="tagadd" data-act="tag-edit-on" data-arg="'+esc(t.txnId)+'">+ tag</button>';
+  return h;
+}
+function selBoxHtml(t){
+  return '<input type="checkbox" class="selbox" data-act="tag-sel" data-arg="'+esc(t.txnId)+'"'+
+    (state.tagSelIds[t.txnId]?' checked':'')+'>';
+}
+function tagDatalistHtml(){
+  var opts = {};
+  (state.tagsList||[]).forEach(function(r){ opts[r.tag]=1; });
+  (state.register.items||[]).forEach(function(t){ (t.tags||[]).forEach(function(x){ opts[x]=1; }); });
+  return '<datalist id="tagOpts">'+Object.keys(opts).sort().map(function(x){
+    return '<option value="'+esc(x)+'">'; }).join('')+'</datalist>';
+}
+function tagEditorHtml(t){
+  return '<div class="tagedit"><div class="trow">'+
+    '<input list="tagOpts" data-txn="'+esc(t.txnId)+'" placeholder="Add a tag\u2026 e.g. 2026 Myrtle Beach Vacation" autocomplete="off">'+
+    '<button class="btn sm" data-act="tag-add" data-arg="'+esc(t.txnId)+'">Add</button>'+
+    '<button class="btn ghost sm" data-act="tag-edit-off" data-arg="'+esc(t.txnId)+'">Done</button>'+
+  '</div></div>';
+}
+/* Lazy tag catalog for the picker datalist — fetched the first time an editor
+   opens this session, NEVER from Home. */
+function fetchTags(){
+  if(state.tagsList !== null) return;
+  state.tagsList = [];
+  run('apiTags').then(function(r){
+    state.tagsList = (r && r.tags) || [];
+    if(state.view==='txns') drawTxns();
+  }).catch(function(){ /* picker just has no history yet */ });
+}
+/* Optimistic save of a txn's full tag list (v3.27 pattern: patch now, rollback
+   on failure). No invalidateData — tags move no balances. */
+function saveTags(t, prevTags){
+  if(state.view==='txns') drawTxns();
+  run('apiSetTxnTags', { txnId:t.txnId, key:t.key||'', tags:t.tags||[] })
+  .then(function(res){
+    t.tags = (res && res.tags) || t.tags;
+    if(state.tagsList){ (t.tags||[]).forEach(function(x){
+      if(!state.tagsList.some(function(r){ return r.tag.toLowerCase()===x.toLowerCase(); }))
+        state.tagsList.push({ tag:x, count:1 });
+    }); }
+    toast('Tags saved \u2713');
+    if(state.view==='txns') drawTxns();
+  }).catch(function(e){
+    t.tags = prevTags;
+    if(state.view==='txns') drawTxns();
+    toast('Tags failed: '+((e&&e.message)||e));
+  });
+}
+function tagAdd(txnId){
+  var inp = document.querySelector('.tagedit input[data-txn]');
+  var val = inp ? String(inp.value||'').trim() : '';
+  if(!val) return;
+  var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
+  if(!t) return;
+  var prev = (t.tags||[]).slice(0);
+  t.tags = t.tags || [];
+  if(!t.tags.some(function(x){ return x.toLowerCase()===val.toLowerCase(); })) t.tags.push(val);
+  saveTags(t, prev);
+  setTimeout(function(){ var i2=document.querySelector('.tagedit input[data-txn]'); if(i2) i2.focus(); }, 0);
+}
+function tagBulkGo(){
+  var inp = $('#bulkTag');
+  var tag = inp ? String(inp.value||'').trim() : '';
+  var ids = Object.keys(state.tagSelIds);
+  if(!tag){ toast('Type a tag first'); return; }
+  if(!ids.length){ toast('Tick some transactions first'); return; }
+  var items = [], touched = [];
+  ids.forEach(function(id){
+    var t = (state.register.items||[]).find(function(x){ return x.txnId===id; });
+    items.push({ txnId:id, key:(t&&t.key)||'' });
+    if(t){ t.tags = t.tags||[];
+      if(!t.tags.some(function(x){ return x.toLowerCase()===tag.toLowerCase(); })){ t.tags.push(tag); touched.push(t); } }
+  });
+  state.tagSel = false; state.tagSelIds = {};
+  drawTxns();
+  toast('Tagging '+items.length+'\u2026');
+  run('apiAddTagBatch', { items:items, tag:tag })
+  .then(function(r){
+    toast('Tagged '+r.count+' transaction'+(r.count===1?'':'s')+' \u2713');
+    if(state.tagsList && !state.tagsList.some(function(x){ return x.tag.toLowerCase()===tag.toLowerCase(); }))
+      state.tagsList.push({ tag:tag, count:r.count });
+  })
+  .catch(function(e){
+    touched.forEach(function(t){ t.tags = t.tags.filter(function(x){ return x!==tag; }); });
+    if(state.view==='txns') drawTxns();
+    toast('Bulk tag failed: '+((e&&e.message)||e));
+  });
+}
 /* v3.28.1: one transaction as a single-line register row (desktop mid/compact).
    Uses the same data-act buttons as the card layout, so approve/split/unapprove
    behave identically; actions live in a native <details> ⋮ menu. When a row is in
@@ -3264,13 +3380,14 @@ function txnRowOneLine(t){
     return '<span class="legchip">'+esc(l.envelopeName)+(t.legs.length>1?' '+money(l.amount):'')+'</span>';
   }).join('');
   var h = '<div class="rrow">'+
-    '<span class="rc rc-date">'+esc(t.date)+'</span>'+
+    '<span class="rc rc-date">'+(state.tagSel?selBoxHtml(t):'')+esc(t.date)+'</span>'+
     '<span class="rc rc-desc" title="'+esc(t.description)+'">'+esc(t.description)+'</span>'+
     '<span class="rc rc-acct"><span class="acctchip">'+esc(t.account)+'</span></span>'+
-    '<span class="rc rc-env">'+envs+'</span>'+
+    '<span class="rc rc-env">'+envs+tagChipsHtml(t,'plain')+'</span>'+
     '<span class="rc rc-menu"><details class="rmenu"><summary aria-label="Actions">⋮</summary>'+
       '<div class="rmenu-p">'+
         '<button data-act="resplit-on" data-arg="'+esc(t.txnId)+'">'+(t.legs.length>1?'Edit split':'Split / move')+'</button>'+
+        '<button data-act="tag-edit-on" data-arg="'+esc(t.txnId)+'">Tags\u2026</button>'+
         '<button class="warn" data-act="unapprove" data-arg="'+esc(t.txnId)+'">Un-approve</button>'+
       '</div></details></span>'+
     '<span class="rc rc-amt amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span>'+
@@ -3284,17 +3401,22 @@ function txnRowOneLine(t){
       '<button class="btn ghost sm" data-act="resplit-cancel" data-arg="'+esc(t.txnId)+'">Cancel</button></div>'+
     '</div>';
   }
+  if(state.tagEdit[t.txnId]){ // v3.58: tag editor expands full-width, like the split editor
+    h += '<div class="rexpand"><div class="tagchips">'+tagChipsHtml(t,'edit')+'</div>'+tagEditorHtml(t)+'</div>';
+  }
   return h;
 }
 /* v3.29.1: one stacked-card register row (extracted from drawTxns so chunked
    rendering can reuse it). */
 function txnRowCard(t){
-  var h = '<div class="regrow"><div class="l1"><span class="desc">'+esc(t.description)+'</span>'+
+  var h = '<div class="regrow"><div class="l1">'+(state.tagSel?selBoxHtml(t):'')+'<span class="desc">'+esc(t.description)+'</span>'+
     '<span class="amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span></div>'+
     '<div class="meta">'+esc(t.date)+' · <span class="acctchip">'+esc(t.account)+'</span></div>'+
     '<div class="legchips">'+t.legs.map(function(l){
       return '<span class="legchip">'+esc(l.envelopeName)+(t.legs.length>1?' '+money(l.amount):'')+'</span>';
-    }).join('')+'</div>';
+    }).join('')+'</div>'+
+    '<div class="tagchips">'+tagChipsHtml(t, state.tagEdit[t.txnId]?'edit':'add')+'</div>'+
+    (state.tagEdit[t.txnId]?tagEditorHtml(t):'');
   if(state.resplit[t.txnId]){
     h += splitEditorHtml(t.txnId, t.amount, state.resplit[t.txnId], 'resplit');
     h += '<div class="actions" style="margin-top:10px">'+
@@ -3333,6 +3455,8 @@ function drawTxns(){
       : '<button class="pill" data-act="open-picker" data-arg="regenv|x|0">Filter by envelope…</button>')+
     '<button class="pill'+(r.includeHidden?' sel':'')+'" data-act="reg-hidden">'+
       (r.includeHidden?'Hidden shown ✕':'Show hidden')+'</button>'+
+    '<button class="pill'+(state.tagSel?' sel':'')+'" data-act="tag-sel-toggle">'+
+      (state.tagSel?'Selecting ✕':'🏷 Tag many')+'</button>'+
     ((r.q||r.account||r.envelope)?'<button class="pill" data-act="reg-clear">Clear all</button>':'')+
     '</div>';
   var items = r.items || [];
@@ -3368,6 +3492,13 @@ function drawTxns(){
       ' transaction'+(items.length===1?'':'s')+'</div>';
     h += '</div>';
   }
+  h += tagDatalistHtml(); // v3.58: one shared datalist for every tag input
+  if(state.tagSel && items.length){
+    h += '<div class="bulkbar" id="bulkBar"><span id="bulkCount">'+Object.keys(state.tagSelIds).length+' selected</span>'+
+      '<input id="bulkTag" list="tagOpts" placeholder="Tag to add\u2026">'+
+      '<button class="btn sm" data-act="tag-bulk-go">Add tag</button>'+
+      '<button class="btn ghost sm" data-act="tag-sel-toggle">Cancel</button></div>';
+  }
   $('#shell').innerHTML = h;
   // stream the rest in chunks (only kicks in past RENDER_CHUNK rows)
   if(items.length > firstN){
@@ -3392,6 +3523,14 @@ function drawTxns(){
   if(q) q.addEventListener('keydown', function(ev){
     if(ev.key==='Enter'){ state.register.q=q.value; renderTxns(); }
   });
+  // v3.58: Enter adds the typed tag (editor + bulk bar)
+  var tIn = document.querySelector('.tagedit input[data-txn]');
+  if(tIn){ tIn.addEventListener('keydown', function(ev){
+    if(ev.key==='Enter'){ ev.preventDefault(); tagAdd(tIn.getAttribute('data-txn')); } });
+    tIn.focus(); }
+  var bIn = $('#bulkTag');
+  if(bIn) bIn.addEventListener('keydown', function(ev){
+    if(ev.key==='Enter'){ ev.preventDefault(); tagBulkGo(); } });
 }
 function resplitGo(txnId){
   var lines = state.resplit[txnId];
@@ -5384,6 +5523,7 @@ function renderHowTo(){
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
     '<p style="margin:0 0 6px">• <b>Reports</b> — where the money actually goes, by month, envelope, or account.</p>'+
+    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report in the new Reports page.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
     '<p style="margin:0">• <b>Settings → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
@@ -5801,6 +5941,24 @@ document.addEventListener('click', function(ev){
     case 'resplit-cancel': delete state.resplit[arg]; drawTxns(); break;
     case 'resplit-go': resplitGo(arg); break;
     case 'unapprove': unapprove(arg); break;
+    // v3.58 — tags
+    case 'tag-edit-on': state.tagEdit = {}; state.tagEdit[arg] = true; fetchTags(); drawTxns(); break;
+    case 'tag-edit-off': delete state.tagEdit[arg]; drawTxns(); break;
+    case 'tag-add': tagAdd(arg); break;
+    case 'tag-rm': (function(){
+      var t = (state.register.items||[]).find(function(x){ return x.txnId===p[0]; });
+      if(!t) return;
+      var tag = p.slice(1).join('|');
+      var prev = (t.tags||[]).slice(0);
+      t.tags = (t.tags||[]).filter(function(x){ return x!==tag; });
+      saveTags(t, prev);
+    })(); break;
+    case 'tag-sel-toggle': state.tagSel = !state.tagSel; state.tagSelIds = {}; drawTxns(); break;
+    case 'tag-sel':
+      if(el.checked) state.tagSelIds[arg] = true; else delete state.tagSelIds[arg];
+      var bc = $('#bulkCount'); if(bc) bc.textContent = Object.keys(state.tagSelIds).length+' selected';
+      break;
+    case 'tag-bulk-go': tagBulkGo(); break;
     case 'undo': doUndo(arg); break;
   }
 });
