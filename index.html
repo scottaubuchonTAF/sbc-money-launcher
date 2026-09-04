@@ -883,6 +883,18 @@ function mirrorDirty_(){
     return true;
   }catch(e){ return false; }
 }
+/* v3.62: did a requested refresh actually land? Every companion table must
+   report refreshed / cached / no-tab. A missing _refresh (older server) counts
+   as unconfirmed — keep asking rather than assume. */
+function refreshConfirmed_(r){
+  if(!r || typeof r!=='object') return false;
+  var keys = Object.keys(r); if(!keys.length) return false;
+  for(var i=0;i<keys.length;i++){
+    var v = r[keys[i]];
+    if(v!=='refreshed' && v!=='cached' && v!=='no-tab') return false;
+  }
+  return true;
+}
 /* Returns args with {refreshMirror:true} merged into args[0] for the two Home
    reads while the flag is set; the ORIGINAL array otherwise (callers use
    identity to tell whether a refresh was requested). Apps Script ignores the
@@ -945,7 +957,7 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    Apps Script has never heard of it). A definitive mirror error must NOT fall
    back to Apps Script — it would just answer "unknown function" after a slow
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
-var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1 };
+var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1 }; // v3.62: +apiRefreshMirror
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -957,7 +969,13 @@ function supaCall_(fn, args){
   // mirror answers in ms, but a "Show all" payload (9k+ txns, a few MB) needs
   // download time — don't abort it into a pointless (slower) Apps Script retry.
   var big = args && args[0] && Number(args[0].limit) > 2000;
-  var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, big ? 30000 : 8000);
+  // v3.62 (Finding 8): a read carrying refreshMirror re-reads four sheet tabs
+  // (Transactions ~11k rows) BEFORE answering — 8 s aborted it into a fallback
+  // and a strike, while the server finished the refresh anyway. Same for the
+  // explicit refresh button, which gets a full minute.
+  var refreshing = !!(args && args[0] && args[0].refreshMirror);
+  var ms = fn === 'apiRefreshMirror' ? 60000 : (big || refreshing) ? 30000 : 8000;
+  var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, ms);
   return fetch(SUPA_API, { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
       signal: ctrl ? ctrl.signal : undefined })
@@ -1032,7 +1050,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.61.0';
+var FE_VERSION = 'v3.62.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1208,10 +1226,16 @@ function apiCall_(fn, args, retry, mutating){
       // tables (envelopes/inbox/transactions/journal), so the other Home read —
       // milliseconds behind — already sees fresh data, and the edge function's
       // own 10s memo makes a second request free anyway.
-      if(asked) clearMirrorDirty_();
+      // v3.62 (Finding 4): …but only when the server CONFIRMS it. The result
+      // carries _refresh = {table: why}; 'error' / 'pending-write' / 'no-sheet'
+      // keep the flag so the next Home read asks again. Clearing on request was
+      // how a Sheets 503 left the mirror stale until :07 with no sign of it.
+      if(asked && refreshConfirmed_(r && r._refresh)) clearMirrorDirty_();
       return r;
     }).catch(function(err){
-      supaFails_++;
+      // v3.62 (Finding 8): an aborted REFRESHING read isn't the mirror failing —
+      // the server is still finishing the re-read. No strike for those.
+      if(!asked) supaFails_++;
       try{ console.info('SBC mirror fallback for '+fn+': '+(err && err.message || err)); }catch(e){}
       return legacyCall_(fn, args, retry, mutating);
     });
@@ -4171,22 +4195,34 @@ function oblRemove(id){
    it can NOT pull bank balances forward, because those come from the Tiller
    workbook via the hourly sync; that is what "↻ Refresh from Tiller" on Balances
    is for. Two buttons, two sources, deliberately not merged. */
+/* v3.62 (Findings 3+4+8): this used to set the dirty flag and call refreshBoot()
+   — an Apps Script apiBootstrap (30 s abort, cold start) that never refreshed
+   the mirror at all; the mirror only caught up later as a side effect of a Home
+   read, and the ✓ toast described the Apps Script answer, not the mirror. Now it
+   calls the mirror's own apiRefreshMirror (60 s, no fallback), shows the
+   server's verdict verbatim, and only THEN reconciles via refreshBoot. */
 function mirrorRefreshFromSheet(){
   if(state.mirrorRefreshing) return;
   state.mirrorRefreshing = true;
   actBusy('mirror-refresh', true, 'Refreshing…');
   var done = function(){ state.mirrorRefreshing = false; actBusy('mirror-refresh', false); };
-  markMirrorDirty_();                 // the next Home read asks for the re-read
   toast('Re-reading your sheet…');
+  var verdict = null;
   mutationsIdle_().then(function(){   // never re-read ahead of a queued write
-    return refreshBoot();
+    return run('apiRefreshMirror');
+  }).then(function(r){
+    verdict = r || {};
+    if(verdict.ok) clearMirrorDirty_();   // confirmed — nothing left to ask for
+    else markMirrorDirty_();              // not confirmed — the next Home read asks again
+    return refreshBoot().catch(function(){});   // Apps Script reconcile (version, inbox count); best-effort
   }).then(function(){
     done();
     invalidateData();                 // Home tiles + snapshot follow
     if(state.view==='settings') renderSettings();
-    toast('App data refreshed from your sheet ✓');
+    toast((verdict && verdict.ok ? '' : '⚠ ') + ((verdict && verdict.why) || 'Refresh finished.'));
   }).catch(function(e){
     done();
+    markMirrorDirty_();
     toast('⚠ Refresh failed: '+(e.message||e));
   });
 }
@@ -5372,7 +5408,7 @@ function renderSettings(){
     '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // v3.54: see mirrorRefreshFromSheet.
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="mirror-refresh">↻ Refresh app data from sheet</button></div>'+
-    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour.</div>';
+    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>';
   // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
   // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
   // Corey and Brady land on their own sheets.
@@ -5907,6 +5943,10 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">SBC Money now <b>retries on its own</b> every time you open the app, and if it still can\u2019t land, a red <b>"save never reached your sheet"</b> banner appears at the top of the Dashboard saying exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.</p>'+
     '<p style="margin:0 0 8px">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>'+
     '<p style="margin:0"><b>Approve all</b> used to take up to a minute and a half for a big batch (it saved each transaction one at a time), which is exactly what made those writes time out. It now saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>"Apps Script was busy"</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.</p>');
+
+  h += S('🔄','Making the app re-read your sheet',
+    '<p style="margin:0 0 8px">Settings → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (the sheet would only put the old numbers back — fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.</p>'+
+    '<p style="margin:0">You rarely need it: the app catches up on its own within the hour, and after a save that had to go the slow way it re-reads before the next Home screen automatically. Reach for it after a repair made directly in the sheet or the Apps Script editor. It cannot pull bank balances forward — that\u2019s <b>↻ Refresh from Tiller</b> on Balances.</p>');
 
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
