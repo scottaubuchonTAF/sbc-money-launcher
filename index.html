@@ -1032,7 +1032,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.60.0';
+var FE_VERSION = 'v3.61.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -5905,7 +5905,8 @@ function renderHowTo(){
   h += S('📮','When a save doesn\u2019t reach your sheet',
     '<p style="margin:0 0 8px">When you approve, move, or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes. Nearly always that takes a few seconds. Once in a while Google doesn\u2019t answer, and the write fails.</p>'+
     '<p style="margin:0 0 8px">SBC Money now <b>retries on its own</b> every time you open the app, and if it still can\u2019t land, a red <b>"save never reached your sheet"</b> banner appears at the top of the Dashboard saying exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.</p>'+
-    '<p style="margin:0">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>');
+    '<p style="margin:0 0 8px">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>'+
+    '<p style="margin:0"><b>Approve all</b> used to take up to a minute and a half for a big batch (it saved each transaction one at a time), which is exactly what made those writes time out. It now saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>"Apps Script was busy"</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.</p>');
 
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
