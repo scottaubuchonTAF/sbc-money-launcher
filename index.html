@@ -919,7 +919,8 @@ function mirrorBypass_(fn){ return !!MIRROR_BYPASS_FNS[fn] && tillerBalFresh_();
 var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, apiBoot:1,
   apiBalances:1, apiAccounts:1, // v3.36 Phase 3 slice 2: account/balance read cuts
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
-  apiGetInbox:1 }; // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
+  apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
+  apiWriteBackStatus:1 }; // v3.60: failed write-backs (mirror-only)
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
    user's Apps Script backend in the background (we send backendUrl() along as
@@ -936,9 +937,15 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
   apiMove:1,         // v3.50: envelope moves (journal batch) — was the last
                      // journal write still doing a full 5-20s Apps Script
                      // round trip that the UI WAITED on
-  apiSetTxnTags:1, apiAddTagBatch:1 }; // v3.58.1: tags mirror-first — apiRegister
+  apiSetTxnTags:1, apiAddTagBatch:1, // v3.58.1: tags mirror-first — apiRegister
                      // is mirror-served, so a refresh before the hourly sync
                      // must still show the tag that was just saved
+  apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: act on the mirror's outbox
+/* v3.60: calls that exist ONLY on the mirror (the outbox is the mirror's ledger;
+   Apps Script has never heard of it). A definitive mirror error must NOT fall
+   back to Apps Script — it would just answer "unknown function" after a slow
+   round trip — and it must never set the dirty flag (nothing in the sheet moved). */
+var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1 };
 var supaFails_ = 0;
 function supaOn_(){
   if(!SUPA_API || supaFails_ >= 3) return false;
@@ -1025,7 +1032,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.59.0';
+var FE_VERSION = 'v3.60.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1111,7 +1118,8 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
-  apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1 };
+  apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1,
+  apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
 /* v3.49: mutations QUEUE instead of being rejected.
    v3.16 blocked a second mutation outright, which is right for a double-click
    but wrong for deliberate back-to-back work: a Tiller write runs 10-15s
@@ -1184,6 +1192,11 @@ function run(fn){
   });
 }
 function apiCall_(fn, args, retry, mutating){
+  if(MIRROR_ONLY[fn]){
+    // v3.60: no fallback, no dirty flag, no 3-strikes — the mirror is the only
+    // place this can be answered, and its errors are the real answer.
+    return (mutating ? supaWriteCall_(fn, args) : supaCall_(fn, args));
+  }
   // v3.29 Phase 1: reads the Supabase mirror serves go there first; any
   // failure (network, auth, unsupported, empty mirror) silently falls back
   // to the Apps Script backend below.
@@ -1334,6 +1347,11 @@ function bootApply_(res){
     var bdv = (res.boot && typeof res.boot.birthday==='string') ? res.boot.birthday
             : (res.birthday ? String(res.birthday.value||'') : null);   // v3.57.2: bootstrap first, apiBoot top-level second
     if(bdv !== null){ state.birthday = bdv; try{ localStorage.setItem('sbcBday', state.birthday); }catch(e){} }
+    // v3.60: failed write-backs ride the MIRROR boot only (Apps Script can't know
+    // them). Keep it OUTSIDE state.boot — refreshBoot() replaces state.boot with
+    // the Apps Script bootstrap, which would silently drop it (the v3.55 freeze
+    // banner lives in state.freeze for the same reason).
+    if(res.writeBack !== undefined) state.writeBack = res.writeBack;
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
     applySeason();                         // v3.57: dress for the season/birthday
@@ -2268,6 +2286,7 @@ function renderDash(){
   var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
   var h='<div class="htop"><span class="sgreet" id="dashGreet"></span><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
+  h += writeBackBanner_();       // v3.60 — first: "the app said ✓ but your sheet never got it"
   h += freezeBanner_();          // v3.55 — above everything; it explains the health card
   if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
   h+='<div class="hbody">'+body.map(tile_).join('')+'</div>';
@@ -2869,7 +2888,11 @@ function approveAll(){
         .map(function(x){ var m=null; items.forEach(function(it){ if(it.txnId===x.txnId) m=it; }); return m; })
         .filter(Boolean);
       if(!(usedMirror && failedItems.length)) return r;
-      // retry the failed subset straight on Apps Script; merge the outcomes
+      // retry the failed subset straight on Apps Script; merge the outcomes.
+      // v3.60: this bypasses apiCall_, so it must set the dirty flag itself —
+      // the sheet is about to move and the mirror won't know (9/4/26: Regular
+      // Pay read $0 on Home until the :07 sync for exactly this reason).
+      markMirrorDirty_();
       return legacyCall_('apiApproveBatch', [failedItems], true, true).then(function(r2){
         return {
           approved: (r.approved||0) + (r2.approved||0),
@@ -4179,6 +4202,65 @@ function mirrorRefreshFromSheet(){
    the hourly pulse so it is a cheap round trip. */
 /* v3.56.1: same as oblRows_ — the pulse scans, boot carries it, we paint it.
    This used to fetch on every unreconciled Home load. */
+/* ---- v3.60: "a save never reached your sheet" banner ----------------------
+   9/2/26: an approval was applied to the mirror ("Approved ✓"), the background
+   write to the sheet failed (HTTP 404 from Apps Script), nothing retried it, and
+   the 17:07 sync reverted the mirror — Regular Pay went back to $0 for two days
+   with no message anywhere. The record existed the whole time, in sbc.outbox,
+   which no screen read. This is that screen. Data = state.writeBack (rides the
+   mirror apiBoot, refetched after Retry/Discard). Retries also happen on their
+   own now (server-side, on every Home read) — the banner is for what the loop
+   couldn't fix, and it says exactly why. */
+function wbWhen_(iso){
+  var d = new Date(iso); if(isNaN(d)) return '';
+  return d.toLocaleDateString(undefined,{month:'numeric',day:'numeric'})+' '+
+         d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+}
+function wbStatusText_(it){
+  if(it.status==='rejected') return 'your sheet refused it';
+  if(it.status==='dead') return 'gave up after '+it.attempts+' attempts';
+  if(it.status==='expired') return 'the save never finished';
+  return 'failed once, will retry when you open the app';
+}
+function writeBackBanner_(){
+  var w = state.writeBack;
+  if(!w || !w.anyStuck || !w.items || !w.items.length) return '';
+  var rows = w.items.slice(0,6).map(function(it){
+    return '<div class="dkv" style="align-items:flex-start;margin-top:6px"><span class="k">'+
+      '<b>'+esc(it.summary)+'</b> — saved here '+esc(wbWhen_(it.created))+', but '+wbStatusText_(it)+'.'+
+      (it.error ? '<div class="dsub" style="color:var(--ink-3)">'+esc(it.error)+'</div>' : '')+
+      '</span><span class="v" style="white-space:nowrap">'+
+      '<button class="btn ghost sm" data-act="wb-retry" data-arg="'+esc(it.id)+'">Retry</button> '+
+      '<button class="btn ghost sm" data-act="wb-discard" data-arg="'+esc(it.id)+'">Discard</button></span></div>';
+  }).join('');
+  var more = w.items.length>6 ? '<div class="dsub" style="margin-top:6px">+'+(w.items.length-6)+' more</div>' : '';
+  return '<div class="dtile" style="border-color:var(--red);margin-bottom:10px">'+
+    '<div class="dlbl" style="color:var(--red)">⚠ '+w.items.length+' save'+(w.items.length===1?'':'s')+' never reached your sheet</div>'+
+    '<div class="dsub">The app showed ✓, but the write to your Google Sheet failed. Until it lands, the hourly sync will keep showing the sheet\u2019s version — an approved paycheck can look like $0 again. <b>Retry</b> sends it now; <b>Discard</b> if you already redid it by hand.</div>'+
+    rows+more+'</div>';
+}
+function wbRefresh_(){
+  return run('apiWriteBackStatus').then(function(w){
+    state.writeBack = w;
+    if(state.view==='dash') renderDash();   // never refresh state without a render
+  }).catch(function(){});
+}
+function wbRetry(id){
+  actBusy('wb-retry', true, 'Sending…');
+  toast('Sending it to your sheet…');
+  run('apiRetryWriteBack', {id:id}).then(function(r){
+    actBusy('wb-retry', false);
+    if(r && r.status==='ok'){ toast('Landed in your sheet ✓'); markMirrorDirty_(); invalidateData(); }
+    else toast('⚠ Still not there: '+((r && r.error) || (r && r.status) || 'unknown'));
+    return wbRefresh_().then(function(){ if(r && r.status==='ok') return refreshBoot(); });
+  }).catch(function(e){ actBusy('wb-retry', false); toast('⚠ '+(e.message||e)); });
+}
+function wbDiscard(id){
+  run('apiDiscardWriteBack', {id:id}).then(function(){
+    toast('Discarded — the sheet\u2019s version stands');
+    return wbRefresh_();
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
 function freezeReval_(){
   var f = state.boot && state.boot.attention && state.boot.attention.freeze;
   if(f && f.anyStuck) state.freeze = f;
@@ -5742,7 +5824,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
     '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
     '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
-    '<p style="margin:0"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>');
+    '<p style="margin:0 0 6px"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>'+
+    '<p style="margin:0"><b>Write-back</b> — every save you make here is also written to your Google Sheet in the background (that\u2019s the "syncing in background" toast). The sheet is the record; the app is the fast view of it.</p>');
 
   h += S('💵','Payday — the routine that matters most',
     '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
@@ -5818,6 +5901,11 @@ function renderHowTo(){
   h += S('↩️','Made a mistake? Nothing is permanent',
     '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
     '<p style="margin:0">You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can’t break your money.</p>');
+
+  h += S('📮','When a save doesn\u2019t reach your sheet',
+    '<p style="margin:0 0 8px">When you approve, move, or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes. Nearly always that takes a few seconds. Once in a while Google doesn\u2019t answer, and the write fails.</p>'+
+    '<p style="margin:0 0 8px">SBC Money now <b>retries on its own</b> every time you open the app, and if it still can\u2019t land, a red <b>"save never reached your sheet"</b> banner appears at the top of the Dashboard saying exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.</p>'+
+    '<p style="margin:0">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>');
 
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
@@ -6207,6 +6295,8 @@ document.addEventListener('click', function(ev){
     case 'obl-remove': oblRemove(arg); break;
     case 'obl-check': oblCheckNow(); break;
     case 'obl-snooze': oblSnooze(arg); break;
+    case 'wb-retry': wbRetry(arg); break;         // v3.60
+    case 'wb-discard': wbDiscard(arg); break;     // v3.60
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
     case 'acct-toggle': acctToggle(arg); break;
