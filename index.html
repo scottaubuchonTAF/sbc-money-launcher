@@ -19,7 +19,7 @@
 <!-- v2a: Chart.js for dashboard chart widgets. If it fails to load (offline/CDN),
      chart widgets show a graceful "chart unavailable" message; the rest of the app
      is unaffected (typeof Chart is guarded everywhere it's used). -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer onload="if(window.state&&window.renderDash&&state.view==='dash')try{renderDash()}catch(e){}"></script>
 <style>
 :root{
   --teal-900:#0d3b36; --teal-800:#11514a; --teal-700:#0f766e; --teal-600:#0d9488;
@@ -430,6 +430,11 @@ body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px
   width:100%;padding:10px 13px;border:1.5px solid var(--line);border-radius:11px;background:var(--card);
 }
 .formrow input:focus,.formrow select:focus{outline:none;border-color:var(--teal-500)}
+/* v3.64 (9/8 review U11): inputs/selects with class="amt" outside a .formrow (Obligations
+   form, Balances ✎ edit, Reconcile edit, Access email, Remove-txn search) rendered as
+   browser defaults. One rule, nine sites. */
+input.amt,select.amt{padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);font-variant-numeric:tabular-nums}
+input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
 .plform .splitline input{width:88px}
 .plform .splitline input.pct{width:64px}
 .remchk{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-2);white-space:nowrap}
@@ -512,7 +517,7 @@ body[data-d="compact"] .regtable .rc-env .legchip{font-size:11px;padding:2px 7px
   border-radius:50%;animation:sp 1s linear infinite;margin:48px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toast{
-  position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:80;
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:80; /* v3.64: clear the home indicator like .bulkbar does */
   background:var(--ink);color:#fff;border-radius:12px;padding:11px 18px;font-size:14px;
   font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;
   pointer-events:none;max-width:90vw;
@@ -1050,7 +1055,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.63.0';
+var FE_VERSION = 'v3.64.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1137,7 +1142,19 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
   apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1,
+  // v3.64 (9/8 review F1): these are WRITES but were missing here, so run()
+  // treated them as reads — no mirror-first path (the v3.58.1 tags fix never
+  // actually ran), a 30 s client abort on a write (v3.22 rule), no dirty flag,
+  // no double-click dedupe.
+  apiSetTxnTags:1, apiAddTagBatch:1, apiSaveObligation:1, apiRemoveObligation:1,
+  apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1,
   apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
+// v3.64: the routing tables must agree — a mirror-first write that isn't MUTATING
+// silently takes the read path. Loud in the console; pinned by tests/wiring_test.js.
+(function(){ try{
+  Object.keys(SUPA_WRITES).forEach(function(f){ if(!MUTATING[f]) console.error('SBC routing: SUPA_WRITES fn not in MUTATING:', f); });
+  Object.keys(MIRROR_ONLY).forEach(function(f){ if(!MUTATING[f] && !SUPA_READS[f]) console.error('SBC routing: MIRROR_ONLY fn is neither MUTATING nor SUPA_READ:', f); });
+}catch(e){} })();
 /* v3.49: mutations QUEUE instead of being rejected.
    v3.16 blocked a second mutation outright, which is right for a double-click
    but wrong for deliberate back-to-back work: a Tiller write runs 10-15s
@@ -3990,7 +4007,8 @@ function oblModeLabel_(m){
 }
 function drawObligations(){
   var o = state.oblConfig, ed = state.oblEdit;
-  var h = '<h2 class="viewtitle">Obligations</h2>'+
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Obligations</h2>'+
     '<div class="empty" style="padding:4px 0 14px;text-align:left">Tell SBC when each card or loan gets paid '+
     'and which account it comes out of, and it will warn you before the money isn\'t there. '+
     'Set it once — the amount is read from your balance history each month, so there\'s nothing to keep updating.</div>';
@@ -4392,7 +4410,8 @@ function drawSync(){
   var s = state.sync;
   var totalIssues = s.counts.bankEdits + s.counts.deleted + s.counts.drift +
     s.counts.splitOnlyInSBC + s.missingCatsCount;
-  var h = '<div class="viewhead"><h2>Tiller sync</h2>'+
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<div class="viewhead"><h2>Tiller sync</h2>'+
     '<button class="btn ghost sm" data-act="sync-refresh">↻ Re-check</button></div>'+
     '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
     'Nothing changes unless you tap a ✎ Write or ✓ Accept button — every write is audited and undoable. '+
@@ -5443,7 +5462,7 @@ function drawAdmin(){
     h += '<div class="envrow"><span class="nm">'+esc(em)+
       (isAdm?' <span class="bal" style="opacity:.6">· admin</span>':'')+
       (isMe?' <span class="bal" style="opacity:.6">· you</span>':'')+'</span>'+
-      (a.isAdmin && !isAdm ? '<button class="btn ghost sm warn" data-act="admin-remove" data-arg="'+esc(em)+'">Remove</button>'
+      (a.isAdmin && !isAdm ? '<button class="btn danger sm" data-act="admin-remove" data-arg="'+esc(em)+'">Remove</button>'
         : '<span style="opacity:.3">—</span>')+
       '</div>';
   });
@@ -5525,7 +5544,7 @@ function renderRemoveTxn(){
         h += '<div class="oprow"><div class="what">'+
           '<div class="note">'+esc(t.description)+' · '+money(t.amount)+'</div>'+
           '<div class="sub">'+esc(t.date)+' · '+esc(t.account||'')+(legs?' · '+esc(legs):'')+'</div></div>'+
-          '<button class="btn ghost sm warn" data-act="rmtxn-go" data-arg="'+esc(t.txnId)+'">Remove</button></div>';
+          '<button class="btn danger sm" data-act="rmtxn-go" data-arg="'+esc(t.txnId)+'">Remove</button></div>';
       });
       h += '</div>';
     }
@@ -5646,7 +5665,8 @@ function drawReconcile(){
   var manual  = (r.accounts||[]).filter(function(a){ return a.manual && !a.dormant; });
   var auto    = (r.accounts||[]).filter(function(a){ return !a.manual && !a.dormant; });
   var dormant = (r.accounts||[]).filter(function(a){ return a.dormant; });
-  var h = '<h2 class="viewtitle">Reconcile accounts</h2>'+
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Reconcile accounts</h2>'+
     '<div class="empty" style="padding:2px 0 12px;text-align:left">Check each account against your bank. '+
     '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
     'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
@@ -5754,7 +5774,8 @@ function renderHealthSettings(){
 }
 function drawHealthSettings(){
   var hs = state.healthset;
-  var h = '<h2 class="viewtitle">Health settings</h2>';
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Health settings</h2>';
   h += '<div class="empty" style="padding:4px 0 14px">The health check compares on-budget envelope money '+
     'against bank cash (cash groups − debt groups). Changes apply on the next dashboard load.</div>';
 
@@ -5780,7 +5801,7 @@ function drawHealthSettings(){
   h += '</div></div>';
 
   h += '<div class="actions"><button class="btn" data-act="hs-save">Save</button>'+
-    '<button class="btn ghost" data-act="goview" data-arg="dash">Cancel</button></div>';
+    '<button class="btn ghost" data-act="goview" data-arg="settings">Cancel</button></div>'; // v3.64: back to where you came from, not Home
   $('#shell').innerHTML = h;
 }
 function hsSave(){
@@ -5798,7 +5819,8 @@ function hsSave(){
 /* ============================ about ============================ */
 function renderAbout(){
   var b = state.boot;
-  var h = '<div class="aboutwrap">'+
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<div class="aboutwrap">'+
     '<svg width="260" height="156" viewBox="0 0 192 116" aria-label="SBC Money logo">'+
     '<rect x="38" y="0" width="140" height="80" rx="12" fill="#0a6b60"/>'+
     '<rect x="32" y="7" width="140" height="80" rx="12" fill="#0c8074"/>'+
@@ -5918,21 +5940,21 @@ function renderHowTo(){
     '<p style="margin:0">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>');
 
   h += S('📊','Checking on yourself',
-    '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Customize the widgets with the ✏️.</p>'+
+    '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Tap <b>Customize</b> at the top of Home to show, hide or reorder the cards.</p>'+
     '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history.</p>'+
     '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
     '<p style="margin:0 0 6px">• <b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
-    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report in the new Reports page.</p>'+
-    '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances, straight from the bank feeds.</p>'+
+    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
+    '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances from the bank feeds. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a row sets a balance by hand (feed-less accounts); <b>Reorder</b> arranges groups and accounts.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
     '<p style="margin:0">• <b>Settings → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
 
   h += S('🎨','Seasonal themes & birthdays',
-    '<p style="margin:0 0 8px">The logo and sidebar dress for the season — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
+    '<p style="margin:0 0 8px">On a computer, the logo and sidebar dress for the season (on a phone it’s the little emoji in the Home greeting) — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
     '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Personal information) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
-    '<p style="margin:0">Not your thing? The <b>Seasonal themes</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
+    '<p style="margin:0">Not your thing? The <b>Monthly dress-up</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
 
   h += S('↩️','Made a mistake? Nothing is permanent',
     '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
@@ -6000,7 +6022,8 @@ function renderHistory(){
   $('#shell').innerHTML = '<h2 class="viewtitle">History</h2><div class="spin"></div>';
   run('apiHistory', 50).then(function(ops){
     state.history = ops;
-    var h = '<h2 class="viewtitle">History</h2>';
+    var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+      '<h2 class="viewtitle">History</h2>';
     if(!ops.length){ h += '<div class="empty">No activity yet.</div>'; $('#shell').innerHTML=h; return; }
     h += '<div class="card">';
     ops.forEach(function(op){
