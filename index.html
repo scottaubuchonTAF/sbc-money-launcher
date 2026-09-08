@@ -27,6 +27,7 @@
   --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
   --bg:#f6f8fa; --card:#ffffff; --line:#e2e8f0;
   --red:#dc2626; --red-bg:#fef2f2; --green:#059669; --amber:#d97706;
+  --amber-600:#b45309; --teal-400:#2dd4bf; /* v3.65: tokens two var() fallbacks already referenced (review U15) */
   --radius:16px; --shadow:0 1px 3px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.05);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1055,7 +1056,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.64.0';
+var FE_VERSION = 'v3.65.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4278,7 +4279,19 @@ function wbStatusText_(it){
 }
 function writeBackBanner_(){
   var w = state.writeBack;
-  if(!w || !w.anyStuck || !w.items || !w.items.length) return '';
+  if(!w) return '';
+  // v3.65 (review A18): a SQL migration this app version depends on was never
+  // applied (phase1b sat dark for a month). Same banner slot as failed saves —
+  // it's the same kind of silent failure. Admin-only wording; it names the file.
+  var mig = '';
+  if(w.missingMigrations && w.missingMigrations.length){
+    mig = '<div class="dtile" style="border-color:var(--amber-600,#b45309);margin-bottom:10px">'+
+      '<div class="dlbl" style="color:var(--amber-600,#b45309)">⚠ Database update needed</div>'+
+      '<div class="dsub">This version of SBC Money expects the SQL file'+(w.missingMigrations.length>1?'s':'')+' <b>'+
+      w.missingMigrations.map(function(m){ return esc('supabase/'+m+'.sql'); }).join('</b>, <b>')+
+      '</b> to have been run in the Supabase SQL editor. Until then, some features run in their old mode. (Scott: paste the file, click Run.)</div></div>';
+  }
+  if(!w.anyStuck || !w.items || !w.items.length) return mig;
   var rows = w.items.slice(0,6).map(function(it){
     return '<div class="dkv" style="align-items:flex-start;margin-top:6px"><span class="k">'+
       '<b>'+esc(it.summary)+'</b> — saved here '+esc(wbWhen_(it.created))+', but '+wbStatusText_(it)+'.'+
@@ -4288,7 +4301,7 @@ function writeBackBanner_(){
       '<button class="btn ghost sm" data-act="wb-discard" data-arg="'+esc(it.id)+'">Discard</button></span></div>';
   }).join('');
   var more = w.items.length>6 ? '<div class="dsub" style="margin-top:6px">+'+(w.items.length-6)+' more</div>' : '';
-  return '<div class="dtile" style="border-color:var(--red);margin-bottom:10px">'+
+  return mig + '<div class="dtile" style="border-color:var(--red);margin-bottom:10px">'+
     '<div class="dlbl" style="color:var(--red)">⚠ '+w.items.length+' save'+(w.items.length===1?'':'s')+' never reached your sheet</div>'+
     '<div class="dsub">The app showed ✓, but the write to your Google Sheet failed. Until it lands, the hourly sync will keep showing the sheet\u2019s version — an approved paycheck can look like $0 again. <b>Retry</b> sends it now; <b>Discard</b> if you already redid it by hand.</div>'+
     rows+more+'</div>';
@@ -4305,6 +4318,7 @@ function wbRetry(id){
   run('apiRetryWriteBack', {id:id}).then(function(r){
     actBusy('wb-retry', false);
     if(r && r.status==='ok'){ toast('Landed in your sheet ✓'); markMirrorDirty_(); invalidateData(); }
+    else if(r && r.status==='busy') toast('⏳ '+(r.error || 'Already being sent — check again in a minute.'));   // v3.65: a forward holds the lease
     else toast('⚠ Still not there: '+((r && r.error) || (r && r.status) || 'unknown'));
     return wbRefresh_().then(function(){ if(r && r.status==='ok') return refreshBoot(); });
   }).catch(function(e){ actBusy('wb-retry', false); toast('⚠ '+(e.message||e)); });
@@ -5964,6 +5978,7 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">When you approve, move, or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes. Nearly always that takes a few seconds. Once in a while Google doesn\u2019t answer, and the write fails.</p>'+
     '<p style="margin:0 0 8px">SBC Money now <b>retries on its own</b> every time you open the app, and if it still can\u2019t land, a red <b>"save never reached your sheet"</b> banner appears at the top of the Dashboard saying exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.</p>'+
     '<p style="margin:0 0 8px">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>'+
+    '<p style="margin:0 0 8px">Since v3.65 a save and its "send to the sheet" ticket are written together — one can\u2019t exist without the other — and each ticket is sent <b>exactly once</b>: if two parts of the app try to send the same one, the sheet recognises the duplicate and answers with the first result instead of moving money twice. If Retry says <b>"already being sent"</b>, another send is in progress; give it a minute.</p>'+
     '<p style="margin:0"><b>Approve all</b> used to take up to a minute and a half for a big batch (it saved each transaction one at a time), which is exactly what made those writes time out. It now saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>"Apps Script was busy"</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.</p>');
 
   h += S('🔄','Making the app re-read your sheet',
