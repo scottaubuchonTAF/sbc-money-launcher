@@ -502,6 +502,7 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
    holds an Unhide button, so the whole row can't be one). .click alone only
    styles .envrow.click / .stat.click, so it needed its own rule. */
 .envrow .nm.click{cursor:pointer;color:var(--teal-700)}
+.regrow .desc .click{cursor:pointer;color:var(--teal-700);font-weight:600} /* v3.66: counterparty envelope link in Activity */
 .balrow .bal{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13.5px}
 .balrow .baledit{flex:none;cursor:pointer;border:none;background:none;color:var(--teal-700);font-size:13px;padding:0 2px;line-height:1}
 .balrow.stale .nm,.balrow.stale .bal{color:var(--ink-3);font-style:italic}
@@ -1056,7 +1057,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.65.0';
+var FE_VERSION = 'v3.66.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2643,9 +2644,19 @@ function renderEnvDetail(){
         ? '<span class="legchip">'+esc({allocation:'funded',income:'income',move:'moved',
             adjustment:'adjustment',cover:'cover',undo:'undo'}[t.type]||t.type)+'</span>'
         : '<span class="acctchip">'+esc(t.account)+'</span>';
-      h += '<div class="regrow"><div class="l1"><span class="desc">'+esc(t.description)+'</span>'+
+      // v3.66: journal rows name the other envelope ("Moved to Groceries"); the
+      // name is a link into that envelope. Optimistic (pending) rows already said
+      // this since v3.50.1 — now the real rows match them. The row note, if any,
+      // moves to the meta line so it isn't lost.
+      var descHtml = (isJ && t.cpName)
+        ? esc(t.cpPrefix||'') + (t.cpId
+            ? '<span class="click nm" data-act="env-open" data-arg="'+esc(t.cpId)+'">'+esc(t.cpName)+'</span>'
+            : esc(t.cpName))
+        : esc(t.description);
+      var noteMeta = (isJ && t.cpName && t.note) ? ' · '+esc(t.note) : '';
+      h += '<div class="regrow"><div class="l1"><span class="desc">'+descHtml+'</span>'+
         '<span class="amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span></div>'+
-        '<div class="meta">'+esc(t.date)+' · '+chip+'</div></div>';
+        '<div class="meta">'+esc(t.date)+' · '+chip+noteMeta+'</div></div>';
     });
   }
   h += '</div></div>';
@@ -5897,6 +5908,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
     '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
     '<p style="margin:0 0 6px"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>'+
+    '<p style="margin:0 0 6px"><b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there. (Before v3.66 these rows just said "Money moved".)</p>'+
     '<p style="margin:0"><b>Write-back</b> — every save you make here is also written to your Google Sheet in the background (that\u2019s the "syncing in background" toast). The sheet is the record; the app is the fast view of it.</p>');
 
   h += S('💵','Payday — the routine that matters most',
