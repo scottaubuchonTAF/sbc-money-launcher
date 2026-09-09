@@ -812,16 +812,21 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
 
 <script>
 /* ============================ config (v3 standalone) ============================ */
-/* ⬇️ 1. Apps Script web app URL — plain /macros/s/ form, NOT /a/macros/ ⬇️ */
-var EXEC_URL = 'https://script.google.com/macros/s/AKfycbyzvzQEx27XIohQybzhTj8jQE-x-TfjfnfEALjZ7DKpILJkVOl7DJNC-t-sBnbLkhxBcA/exec';
+/* ⬇️ 1. v3.67: the ONLY Apps Script endpoint the app talks to is the bridge
+        (BRIDGE_URL below). Scott's old bound web app is kept here for the
+        record and for rollback — nothing references it any more. Plain
+        /macros/s/ form, NOT /a/macros/. ⬇️ */
+var LEGACY_SCOTT_EXEC_URL = 'https://script.google.com/macros/s/AKfycbyzvzQEx27XIohQybzhTj8jQE-x-TfjfnfEALjZ7DKpILJkVOl7DJNC-t-sBnbLkhxBcA/exec';
 /* ⬇️ 2. OAuth Web client ID from Google Cloud console (must match
         CFG.OAUTH_CLIENT_ID in Config.gs) ⬇️ */
 var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleusercontent.com';
 /* ⬇️ 3. v3.24 multi-user: ONE frontend serves the whole family — API calls
         route to the signed-in user's OWN Apps Script backend by email.
-        To onboard someone: deploy their web app, paste the /exec URL here.
-        Emails must be lowercase. Anyone not in this map falls back to
-        EXEC_URL (where the allowlist will reject non-family accounts). ⬇️ */
+        v3.67: every entry is BRIDGE_URL and so is the fallback — an email not
+        in this map reaches the bridge, which refuses it with "No SBC stack
+        registered for …" (fail-closed bridgeUser_). To onboard someone: the
+        Brady checklist (SBC_BRIDGE_USERS + sbc.users row + a line here).
+        Emails must be lowercase. ⬇️ */
 /* v3.39 Phase 3 slice 3a-2: THE BRIDGE. One standalone Apps Script (not bound to
    any sheet), run as scott@theaubuchonfamily.com, that resolves each caller's own
    companion sheet from its SBC_BRIDGE_USERS property. Verified 7/25:
@@ -845,7 +850,9 @@ var BACKENDS = {
 };
 function backendUrl(){
   var u = BACKENDS[String(auth.email||'').trim().toLowerCase()];
-  return (u && /^https:\/\//.test(u)) ? u : EXEC_URL;
+  // v3.67: unknown email → the bridge (fail-closed there), not a retired bound
+  // web app whose code would drift the moment it stopped being redeployed.
+  return (u && /^https:\/\//.test(u)) ? u : BRIDGE_URL;
 }
 /* ⬇️ 4. v3.29 Phase 1 read cutover — Register + Reports are answered by the
         Supabase mirror's `api` Edge Function (same {token, fn, args} protocol,
@@ -1060,7 +1067,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.66.2';
+var FE_VERSION = 'v3.67.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
