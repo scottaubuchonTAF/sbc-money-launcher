@@ -92,6 +92,8 @@ aside.side{display:none}
     font-size:11px;font-weight:700;border-radius:99px;padding:1px 7px}
   aside.side .beta{margin-left:auto;background:rgba(255,255,255,.13);color:#a9cdc7;
     font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:2px 6px}
+  .beta.inline{background:var(--teal-700);color:#fff;font-size:9px;font-weight:800;letter-spacing:.08em;
+    border-radius:5px;padding:2px 6px;vertical-align:middle;margin-left:6px}
   aside.side .foot{margin-top:auto;color:#6e958f;font-size:11px;padding:0 12px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main{flex:1;min-width:0}
@@ -1058,7 +1060,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.66.1';
+var FE_VERSION = 'v3.66.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1342,7 +1344,7 @@ $all('aside.side button.nav').forEach(function(b){
   var v=b.dataset.v;
   b.innerHTML = icon(v)+'<span>'+NAV_LABELS[v]+'</span>'+
     (v==='inbox'?'<span class="badge" id="sideBadge" style="display:none"></span>':'')+
-    ''; // v3.26: Reports is being revamped
+    (v==='reports'?'<span class="beta">BETA</span>':''); // v3.66.2 (Scott 9/8): Reports stay BETA until he loves them
   b.addEventListener('click', function(){ go(v); });
 });
 $all('nav.tabs button').forEach(function(b){
@@ -4996,7 +4998,7 @@ function renderReports(){
     else if(r.id==='worth') body=rptBodyWorth(d);
     else body=rptBodyFlows(d,false);
   }
-  var h='<h2 class="viewtitle">Reports</h2><div class="rptlayout">'+side+'<div class="rptpanel">'+
+  var h='<h2 class="viewtitle">Reports <span class="beta inline">BETA</span></h2><div class="rptlayout">'+side+'<div class="rptpanel">'+
     '<div class="rpthead"><div><h2>'+meta.title+'</h2><div class="desc">'+meta.desc+'</div></div>'+
     '<button class="exp" data-act="rpt-export">⤓ Export CSV</button></div>'+
     rptPeriodBarHtml(rng)+rptFilterBarHtml()+body+'</div></div>';
@@ -5436,7 +5438,7 @@ function renderSettings(){
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
     h += settingsSectionLabel('MONEY')+settingsList([
-      ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports']]);
+      ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports <span class="beta inline">BETA</span>']]);
     h += settingsSectionLabel('SETTINGS');
   }
   // v3.57.2 (Scott): Monthly dress-up rides the main list as a row above About.
@@ -5972,7 +5974,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
-    '<p style="margin:0 0 6px">• <b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
+    '<p style="margin:0 0 6px">• <b>Reports</b> <i>(BETA — still being shaped; tell Scott what you want to see)</i> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
     '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances from the bank feeds. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a row sets a balance by hand (feed-less accounts); <b>Reorder</b> arranges groups and accounts.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
