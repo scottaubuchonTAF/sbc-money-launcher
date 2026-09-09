@@ -28,6 +28,7 @@
   --bg:#f6f8fa; --card:#ffffff; --line:#e2e8f0;
   --red:#dc2626; --red-bg:#fef2f2; --green:#059669; --amber:#d97706;
   --amber-600:#b45309; --teal-400:#2dd4bf; /* v3.65: tokens two var() fallbacks already referenced (review U15) */
+  --chart-tick:#94a3b8; --chart-grid:#e8edf2; /* v3.69.0 U15: the chart axes read these via cssVar_() instead of hex in JS */
   --radius:16px; --shadow:0 1px 3px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.05);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -517,6 +518,7 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
 .oprow .sub{color:var(--ink-3);font-size:12px;margin-top:1px}
 .oprow .undone{color:var(--ink-3);font-size:12px;font-style:italic}
 .empty{color:var(--ink-3);text-align:center;padding:48px 16px;font-size:14.5px}
+.note{color:var(--ink-2);font-size:12.5px;text-align:left;line-height:1.55} /* v3.69.0 U10: instructional text at AA contrast; .empty stays for true empty states */
 .spin{width:26px;height:26px;border:3px solid var(--teal-100);border-top-color:var(--teal-600);
   border-radius:50%;animation:sp 1s linear infinite;margin:48px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -527,6 +529,8 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
   pointer-events:none;max-width:90vw;
 }
 .toast.show{opacity:1;pointer-events:auto;cursor:pointer} /* v3.68.0 U6: tap to dismiss */
+.toast:has(.tact){display:flex;align-items:center;gap:12px;text-align:left;width:max-content;max-width:min(90vw,420px)} /* v3.69.0 U5: message + button side by side */
+.toast .tact{flex:none;margin-left:2px;padding:6px 12px;min-height:32px;border:none;border-radius:8px;background:var(--teal-400,#2dd4bf);color:#0f172a;font:inherit;font-weight:800;cursor:pointer} /* v3.69.0 U5: action on the toast */
 @media(min-width:900px){.toast{bottom:32px}}
 h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px 16px}
 .viewhead{display:flex;justify-content:space-between;align-items:center;margin:2px 4px 16px}
@@ -744,6 +748,12 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
   .pill{display:inline-flex;align-items:center;min-height:42px;padding:9px 15px;font-size:14px}
   .btn{padding:12px 22px}
   .btn.sm{padding:8px 14px}
+  /* v3.69.0 U12: the Reports controls and the two tiny glyph buttons were 13-31px on a phone */
+  .rptpnav button{width:44px;height:44px;font-size:16px}
+  .rptseg2 button{min-height:44px;padding:9px 13px;font-size:13px}
+  .balrow .baledit{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+  .tagchip .tx{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;font-size:15px}
+  .toast .tact{min-height:44px;padding:8px 16px}
   .txncard .desc{overflow-wrap:anywhere}
   .txncard .top{align-items:flex-start}
   .splitline{gap:7px}
@@ -949,7 +959,8 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiBalances:1, apiAccounts:1, // v3.36 Phase 3 slice 2: account/balance read cuts
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
   apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
-  apiWriteBackStatus:1 }; // v3.60: failed write-backs (mirror-only)
+  apiWriteBackStatus:1, // v3.60: failed write-backs (mirror-only)
+  apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
    user's Apps Script backend in the background (we send backendUrl() along as
@@ -975,9 +986,22 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    back to Apps Script — it would just answer "unknown function" after a slow
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
 var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1 }; // v3.62: +apiRefreshMirror
-var supaFails_ = 0;
+/* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
+   went to Apps Script at 5-20 s a call, silently, after one bad second. And the
+   8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
+   burn all three on a single network blip. Now three strikes = a 60 s cool-down,
+   then the mirror is tried again; an auth answer is not a strike at all. */
+var supaFails_ = 0, supaDownUntil_ = 0, SUPA_COOLDOWN_MS = 60000;
+function supaStrike_(why){
+  supaFails_++;
+  if(supaFails_ >= 3){
+    supaFails_ = 0; supaDownUntil_ = Date.now() + SUPA_COOLDOWN_MS;
+    try{ console.info('SBC mirror: 3 strikes ('+(why||'')+') — cooling down for 60 s'); }catch(e){}
+  }
+}
 function supaOn_(){
-  if(!SUPA_API || supaFails_ >= 3) return false;
+  if(!SUPA_API) return false;
+  if(Date.now() < supaDownUntil_) return false;
   try{ if(localStorage.getItem('sbcSupa')==='off') return false; }catch(e){}
   return true;
 }
@@ -1002,7 +1026,9 @@ function supaCall_(fn, args){
   }, function(err){ clearTimeout(timer); throw err; })
   .then(function(res){
     if(res && res.ok){ supaFails_ = 0; return res.result; }
-    throw new Error((res && res.error) || 'mirror error');
+    var e = new Error((res && res.error) || 'mirror error');
+    if(res && res.auth) e.auth = true;   // v3.69.0 (F4): the token is the problem, not the mirror
+    throw e;
   });
 }
 /* v3.32: mirror WRITE call. Differences from reads: sends exec (write-back
@@ -1023,7 +1049,7 @@ function supaWriteCall_(fn, args){
     if(res && res.ok){ supaFails_ = 0; return res.result; }
     var e = new Error((res && res.error) || 'mirror error');
     e.definitive = true;             // mirror answered: nothing was applied
-    if(res && res.auth) e.definitive = true;
+    if(res && res.auth){ e.definitive = true; e.auth = true; }   // v3.69.0 (F4): not a strike
     // v3.33: apiUndo of a not-yet-mirrored / non-txn op — a routine fall-through
     // to Apps Script, NOT a mirror failure (don't count it toward 3-strikes).
     if(res && res.notServed) e.notServed = true;
@@ -1067,12 +1093,15 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.68.0';
+var FE_VERSION = 'v3.69.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
-function esc(s){ var d=document.createElement('div'); d.textContent=String(s==null?'':s);
-  return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+/* v3.69.0 (review F13): a DOM node per call — createElement + innerHTML, ~9× per
+   row — and "Show all" streams 11k rows. Same output contract as the DOM version
+   (&, <, >, ", ' escaped; null/undefined → ''), no nodes. */
+var ESC_MAP_ = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ESC_MAP_[c]; }); }
 function money(n){
   var v = Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
   return (n<0?'-$':'$')+v;
@@ -1092,13 +1121,51 @@ function toastMs(msg){
   if(/⚠/.test(s)) ms = Math.max(ms, TOAST_WARN_MIN_MS);
   return Math.min(ms, TOAST_MAX_MS);
 }
-function toast(msg){
+/* v3.69.0 (U5): toast(msg, {label:'Undo', fn}) puts the action ON the toast.
+   Approve, move and fund all return an opId, but the only Undo lived in
+   Settings → History — three or four taps from the mistake. A toast with an
+   action is held at least TOAST_ACTION_MIN_MS; tapping the message still
+   dismisses it, tapping the button runs fn once and dismisses. */
+var TOAST_ACTION_MIN_MS = 6000;
+function toast(msg, opts){
   var t=$('#toast'); t.textContent=msg; t.classList.add('show');
-  clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');}, toastMs(msg));
+  var ms = toastMs(msg);
+  var act = opts && typeof opts.fn==='function' ? opts : null;
+  if(act){
+    ms = Math.max(ms, TOAST_ACTION_MIN_MS);
+    var b=document.createElement('button'); b.type='button'; b.className='tact'; b.textContent=act.label||'Undo';
+    b.onclick=function(ev){ ev.stopPropagation(); clearTimeout(t._h); t.classList.remove('show'); b.disabled=true; try{ act.fn(); }catch(e){ console.warn('toast action:', e && e.message || e); } };
+    t.appendChild(b);
+  }
+  clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');}, ms);
   t.onclick=function(){ clearTimeout(t._h); t.classList.remove('show'); };
 }
+/* v3.69.0 (U5): the shared "undo this opId right now" used by the toasts.
+   Same refresh set as doUndo() in History, minus the confirm — the toast IS
+   the confirmation window. If the write that produced opId hasn't landed on
+   the sheet yet, apiUndo on the mirror reverses the mirror's copy and queues
+   its own write-back (v3.33), so this is safe seconds after the action. */
+function undoNow_(opId, what){
+  if(!opId){ toast('⚠ Nothing to undo — open Settings → History & undo'); return; }
+  toast('Undoing'+(what?' '+what:'')+'…');
+  run('apiUndo', opId).then(function(){
+    toast('Undone ✓');
+    state.inbox=null; state.history=null;
+    invalidateData();
+    refreshBoot().catch(function(){});
+    if(state.view==='inbox') renderInbox();
+    else if(state.view==='envdetail'){ state.envDetail && delete state.envTxnCache[state.envDetail.id]; renderEnvDetail(); }
+    else if(state.view==='envelopes') renderEnvelopes();
+    else if(state.view==='fund') renderFund();
+    else if(state.view==='history') renderHistory();
+  }).catch(function(e){ toast('⚠ Undo didn\u2019t save — '+(e.message||e)+' (Settings → History & undo)'); });
+}
+/* v3.69.0 (U7): a failed page load used to replace the page with the error and
+   nothing else — the only way out was another tab tap. "Try again" re-runs
+   render() for the current view. */
 function fail(e){
-  $('#shell').innerHTML = '<div class="empty">⚠ '+esc(e && e.message || e)+'</div>';
+  $('#shell').innerHTML = '<div class="empty">⚠ '+esc(e && e.message || e)+
+    '<div class="actions" style="justify-content:center;margin-top:16px"><button class="btn" data-act="retry-view">Try again</button></div></div>';
 }
 /* v3.6: approve/fund responses carry a tillerWrite status — reflect it in
    the success toast. An error here never blocked the approval (backend
@@ -1136,7 +1203,33 @@ function gsiReady(){
   var b = $('#gsiBtn');
   if(b) google.accounts.id.renderButton(b, { theme:'outline', size:'large', shape:'pill', text:'signin_with' });
   /* silent one-tap refresh for returning users */
-  if(!authValid()) google.accounts.id.prompt();
+  if(!authValid()) gsiPrompt_();
+}
+/* v3.69.0 (review F3): the token expires hourly, so "returning user with a
+   cached view and an expired token" is a DAILY path — and it relied on One Tap
+   silently appearing. One Tap is frequently NOT displayed (cooldown after a
+   dismissal, third-party-cookie rules, iOS standalone), and then the app sat on
+   "refreshing…" with no sign-in button. The moment callback and a 5 s timer
+   both fall through to ensureAuth(), which shows the sign-in screen. */
+var GSI_PROMPT_FALLBACK_MS = 5000;
+function gsiPrompt_(){
+  var shown = false;
+  var fallback = function(why){
+    if(shown || authValid()) return; shown = true;
+    try{ console.info('SBC sign-in: One Tap '+why+' — showing the sign-in button'); }catch(e){}
+    setRefreshing_(false);
+    ensureAuth();
+  };
+  var t = setTimeout(function(){ fallback('gave no answer in 5 s'); }, GSI_PROMPT_FALLBACK_MS);
+  try{
+    google.accounts.id.prompt(function(n){
+      if(!n) return;
+      var notShown = (n.isNotDisplayed && n.isNotDisplayed()) || (n.isSkippedMoment && n.isSkippedMoment()) ||
+                     (n.isDismissedMoment && n.isDismissedMoment() && n.getDismissedReason && n.getDismissedReason()!=='credential_returned');
+      if(notShown){ clearTimeout(t); fallback(n.getNotDisplayedReason ? (n.getNotDisplayedReason()||n.getSkippedReason&&n.getSkippedReason()||'not displayed') : 'not displayed'); }
+      else if(n.isDisplayed && n.isDisplayed()) clearTimeout(t);   // it is on screen; let the person answer it
+    });
+  }catch(e){ clearTimeout(t); fallback('threw'); }
 }
 function onCredential(resp){
   try{
@@ -1146,13 +1239,14 @@ function onCredential(resp){
   }catch(e){ return; }
   $('#signin').style.display = 'none';
   $('#signinErr').textContent = '';
+  ensureAuth._prompted = false;   // v3.69.0 (F3): next expiry may prompt again
   authWaiters.splice(0).forEach(function(r){ r(); });
   if(!state._booted) boot(); // v3.28: _booted (not state.boot) — a hydrated cache sets state.boot
 }
 function ensureAuth(){
   if(authValid()) return Promise.resolve();
   $('#signin').style.display = 'flex';
-  if(gsiUp) google.accounts.id.prompt();
+  if(gsiUp && !ensureAuth._prompted){ ensureAuth._prompted = true; try{ google.accounts.id.prompt(); }catch(e){} }   // v3.69.0 (F3): the button is already on screen; One Tap is a bonus, asked once
   return new Promise(function(res){ authWaiters.push(res); });
 }
 /* Transport: POST {token, fn, args} as text/plain (no preflight) to the
@@ -1219,14 +1313,28 @@ function mutationsMaybeIdle_(){
   if(mutationDepth_() !== 0) return;
   mutationIdleWaiters_.splice(0).forEach(function(r){ r(); });
 }
+/* v3.69.0 (review F2): one hung write used to wedge the queue for the whole
+   session — supaWriteCall_ has no timeout by design (never abort a mutation),
+   and the queue only advanced when the promise settled, so every later save
+   AND both refresh buttons (they await mutationsIdle_) sat behind it forever.
+   The request stays alive (the write may still land); after MUTATION_WATCHDOG_MS
+   the QUEUE is released and the caller is told the truth. A late settle is a
+   no-op (done() runs once). */
+var MUTATION_WATCHDOG_MS = 120000;
 function pumpMutations_(){
   if(mutationInFlight !== null || !mutationQueue_.length){ mutationsMaybeIdle_(); return; }
   var job = mutationQueue_.shift();
   mutationInFlight = job.sig;
-  var done = function(){ mutationInFlight = null; pumpMutations_(); };
+  var settled = false, wd = null;
+  var done = function(){ if(settled) return false; settled = true; clearTimeout(wd); mutationInFlight = null; pumpMutations_(); return true; };
+  wd = setTimeout(function(){
+    if(!done()) return;
+    try{ console.warn('SBC mutation watchdog released the queue: '+job.fn); }catch(e){}
+    job.reject(new Error('That save is taking unusually long \u2014 it may still land. Check before retrying.'));
+  }, MUTATION_WATCHDOG_MS);
   apiCall_(job.fn, job.args, true, true)
-    .then(function(r){ done(); job.resolve(r); },
-          function(e){ done(); job.reject(e); });
+    .then(function(r){ if(done()) job.resolve(r); },
+          function(e){ if(done()) job.reject(e); });
 }
 function run(fn){
   var args = Array.prototype.slice.call(arguments,1);
@@ -1279,7 +1387,7 @@ function apiCall_(fn, args, retry, mutating){
     }).catch(function(err){
       // v3.62 (Finding 8): an aborted REFRESHING read isn't the mirror failing —
       // the server is still finishing the re-read. No strike for those.
-      if(!asked) supaFails_++;
+      if(!asked && !(err && err.auth)) supaStrike_(fn+': '+(err && err.message || err));   // v3.69.0 (F4)
       try{ console.info('SBC mirror fallback for '+fn+': '+(err && err.message || err)); }catch(e){}
       return legacyCall_(fn, args, retry, mutating);
     });
@@ -1289,7 +1397,7 @@ function apiCall_(fn, args, retry, mutating){
   // ambiguity must never be retried (double-approve risk — v3.22 lesson).
   if(mutating && SUPA_WRITES[fn] && supaOn_()){
     return supaWriteCall_(fn, args).catch(function(err){
-      if(!(err && err.notServed)) supaFails_++;  // v3.33: notServed = routine, no penalty
+      if(!(err && (err.notServed || err.auth))) supaStrike_(fn+': '+(err && err.message || err));  // v3.33: notServed = routine, no penalty; v3.69.0: nor auth
       if(err && (err.definitive || err.notServed)){
         try{ console.info('SBC mirror write fallback for '+fn+': '+(err.message||err)); }catch(e){}
         markMirrorDirty_();   // v3.48: the mirror did NOT apply this write
@@ -1375,12 +1483,40 @@ $all('nav.tabs button').forEach(function(b){
     '<span>'+(v==='dash'?'Home':NAV_LABELS[v])+'</span>';
   b.addEventListener('click', function(){ go(v); });
 });
+/* v3.69.0 (U3): every view change is a history entry, so the phone's back
+   gesture / Android back / desktop Back go Envelope detail → Envelopes instead
+   of leaving the app. `go()` PUSHES; the popstate listener REPLAYS without
+   pushing (goHistoryReplay_) so back never grows the stack it is unwinding.
+   Envelope detail also records the envelope id — state.envDetail is what
+   renderEnvDetail needs, and it is null again after a real navigation. */
+var goReplaying_ = false;
+function goPushHistory_(view){
+  if(goReplaying_) return;
+  try{
+    var st = { v:view, env:(view==='envdetail' && state.envDetail) ? state.envDetail.id : null };
+    var cur = history.state;
+    if(cur && cur.v===st.v && cur.env===st.env) return;           // same page twice = one entry
+    if(!cur) history.replaceState(st, '', '#'+view);               // first paint claims the entry we're on
+    else history.pushState(st, '', '#'+view);
+  }catch(e){}
+}
+function goHistoryReplay_(st){
+  if(!st || !st.v || !state.boot) return;
+  if(st.v==='envdetail'){
+    if(!st.env || !findEnv(st.env)){ st = { v:'envelopes' }; }
+    else if(!state.envDetail || state.envDetail.id!==st.env){ state.envDetail = { id:st.env, txns:null, filter:'all' }; state.move=null; }
+  }
+  goReplaying_ = true;
+  try{ go(st.v); } finally { goReplaying_ = false; }
+}
+window.addEventListener('popstate', function(ev){ goHistoryReplay_(ev.state); });
 function go(view){
   state.view = view;
+  goPushHistory_(view);
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity','obligations'].indexOf(view)!==-1));
+      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity','obligations','personal'].indexOf(view)!==-1));
   });
   render();
 }
@@ -1439,6 +1575,57 @@ function bootApply_(res){
 /* v3.28: instant-open helpers. We cache the last successful boot + dashboard so the
    next open paints immediately instead of waiting on the cold apiBoot round trip. */
 function setRefreshing_(on){ try{ document.body.classList.toggle('refreshing', !!on); }catch(e){} }
+/* ---- v3.69.0 (U4 + F15): stale-shell detection and the service worker ------
+   The only version check used to be About, and the runbook's remedy was "hard
+   refresh" — which does not exist in an iOS home-screen app. Now:
+   • sw.js caches the shell (index.html, Chart.js, icons) cache-first, so a
+     home-screen open paints without re-downloading 409 KB — and the cache is
+     named after FE_VERSION, so a new deploy installs a fresh cache and drops
+     the old one on activate.
+   • refreshBoot() compares the server's APP_VERSION with FE_VERSION. Server
+     NEWER than UI = this shell is stale → a persistent Home banner, "Update
+     available — tap to reload". (UI newer than server is the other half of a
+     two-sided deploy still in flight — About already shows that; no banner.)
+   • appReload_() asks the worker to update first, then reloads, so the reload
+     actually fetches the new shell instead of the cached one. */
+function verParts_(v){ return String(v||'').replace(/^v/i,'').split('.').map(function(x){ return parseInt(x,10)||0; }); }
+function verNewer_(a, b){            // true when a > b (semver-ish, missing parts = 0)
+  var pa=verParts_(a), pb=verParts_(b), n=Math.max(pa.length,pb.length);
+  for(var i=0;i<n;i++){ var x=pa[i]||0, y=pb[i]||0; if(x!==y) return x>y; }
+  return false;
+}
+function updateCheck_(serverVersion){
+  if(!serverVersion) return;
+  var stale = verNewer_(serverVersion, FE_VERSION);
+  if(stale === !!state.updateAvail) return;
+  state.updateAvail = stale ? String(serverVersion) : null;
+  if(state.view==='dash') renderDash();
+}
+function updateBanner_(){
+  if(!state.updateAvail) return '';
+  return '<div class="dtile updbanner" data-act="app-reload" style="border:1.5px solid var(--teal-600);margin-bottom:10px;cursor:pointer">'+
+    '<div class="dlbl" style="color:var(--teal-700)">⬆ Update available — tap to reload</div>'+
+    '<div class="dsub">SBC Money '+esc(state.updateAvail)+' is out; this screen is still '+esc(FE_VERSION)+'. Nothing you have done is lost — reloading just fetches the new app.</div></div>';
+}
+function appReload_(){
+  toast('Updating…');
+  var reload = function(){ try{ location.reload(); }catch(e){} };
+  var t = setTimeout(reload, 4000);     // never hang on a worker that won't answer
+  var swp = (navigator.serviceWorker && navigator.serviceWorker.getRegistration)
+    ? navigator.serviceWorker.getRegistration().then(function(r){ return r ? r.update() : null; })
+    : Promise.resolve();
+  // update() resolves when the new sw.js has been fetched, not installed — give
+  // install a moment (the previous page load's background refresh already put
+  // the newest index.html in the cache anyway, so the reload is right either way).
+  swp.then(function(){ clearTimeout(t); setTimeout(reload, 1200); }, function(){ clearTimeout(t); reload(); });
+}
+function swRegister_(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    if(location.protocol!=='https:' && location.hostname!=='localhost') return;
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.info('sw:', e && e.message || e); });
+  }catch(e){}
+}
 function saveSnapshot_(){
   try{
     if(!state.boot) return;
@@ -1536,6 +1723,7 @@ function refreshBoot(){
     // re-render if the user is sitting on that screen, or the placeholder looks
     // like a failure forever (it did on Corey's stack).
     if(state.view==='about') renderAbout();
+    updateCheck_(b.version);   // v3.69.0 (U4): a newer server means this index.html is stale
     // v3.56.12: the same rule, third time. Obligation amounts and their
     // "where this came from" lines are read out of the boot payload at RENDER
     // time, so a save that refreshed boot without redrawing left the old
@@ -1617,7 +1805,9 @@ function homeReval_(tries){
     // pre-write. Wait it out (bounded) instead of silently keeping stale data.
     if(state.dashLoading && (tries||0) < 5){ homeReval_((tries||0)+1); return; }
     dashFetchDash(true);     // re-renders itself if the user is on Home
-    if(state.view==='dash') renderDash();
+    // v3.69.0 (F12): no paint here. state.dash is null at this point, so the
+    // paint showed "…" in every tile for the ~100 ms until the fetch landed —
+    // that was the flash after every write. dashFetchDash repaints on arrival.
   }, 400);
 }
 /* v3.32 Phase 2: a mirror-served approve vanishes from the UI instantly, but
@@ -2088,7 +2278,7 @@ var DASH_WIDGETS = {
         datasets:[{data:ta.map(function(x){return x.spent;}),
           backgroundColor:['#0f766e','#0d9488','#14b8a6','#5eead4','#99f6e4','#ccfbf1','#2dd4bf','#115e59'],borderWidth:0}]},
         options:{maintainAspectRatio:false,animation:false,cutout:'60%',
-          plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:11},color:'#94a3b8'}}}}});}},
+          plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:11},color:cssVar_('--chart-tick','#94a3b8')}}}}});}},
 
   inout:{title:'Income vs spending',icon:'⚖️',chart:true,report:'inout',render:function(sz){
     var ser=state.dashSeries;
@@ -2193,10 +2383,16 @@ var DASH_WIDGETS = {
     if(neg.length>8) rows+='<div class="dsub" style="margin-top:6px">+'+(neg.length-8)+' more →</div>';
     return head+'<div class="dscroll">'+oblHtml+rows+'</div>';}}
 };
-function dAxisOpts(legend){ return {maintainAspectRatio:false,animation:false,
-  plugins:{legend:legend?{position:'top',labels:{boxWidth:10,font:{size:11},color:'#94a3b8'}}:{display:false}},
-  scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8',maxRotation:0}},
-    y:{grid:{color:'#e8edf2'},ticks:{font:{size:10},color:'#94a3b8',callback:function(v){return '$'+Math.round(v/1000)+'k';}},beginAtZero:true}}}; }
+/* v3.69.0 (U15): chart chrome reads the theme tokens at call time, so a token
+   change (or a future dark theme) reaches the axes without touching JS. */
+function cssVar_(name, fallback){
+  try{ var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fallback; }catch(e){ return fallback; }
+}
+function dAxisOpts(legend){ var tick=cssVar_('--chart-tick','#94a3b8'), grid=cssVar_('--chart-grid','#e8edf2');
+  return {maintainAspectRatio:false,animation:false,
+  plugins:{legend:legend?{position:'top',labels:{boxWidth:10,font:{size:11},color:tick}}:{display:false}},
+  scales:{x:{grid:{display:false},ticks:{font:{size:10},color:tick,maxRotation:0}},
+    y:{grid:{color:grid},ticks:{font:{size:10},color:tick,callback:function(v){return '$'+Math.round(v/1000)+'k';}},beginAtZero:true}}}; }
 function dSparkOpts(){ return {maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},
   scales:{x:{display:false},y:{display:false}},elements:{point:{radius:0}}}; }
 var dashCharts={};  // v2a: live Chart.js instances, destroyed before each re-render
@@ -2347,13 +2543,28 @@ function tile_(id){
     (body || '<div class="dlbl">'+esc(c && CARD_TITLE_[id] || id)+'</div><div class="dwmiss">Nothing set up yet</div>')+'</div>';
 }
 var CARD_TITLE_ = {}; Object.keys(DASH_WIDGETS).forEach(function(k){ CARD_TITLE_[k]=DASH_WIDGETS[k].title||k; });
+/* v3.69.0 (review F12): Home was rebuilt 5-7× per cold start — 19 renderDash()
+   call sites (boot, prewarm, four fetch callbacks, refreshBoot, homeReval_…),
+   each destroying and re-creating every Chart. Every caller keeps its line;
+   renderDash() now coalesces them into ONE paint per animation frame, and only
+   if Home is still the view when the frame fires. */
 function renderDash(){
+  if(renderDash._raf) return;
+  var raf = (typeof requestAnimationFrame==='function') ? requestAnimationFrame : function(f){ return setTimeout(f, 16); };
+  renderDash._raf = raf(function(){
+    renderDash._raf = 0;
+    if(state.view!=='dash' || !state.boot) return;
+    renderDashNow_();
+  });
+}
+function renderDashNow_(){
   dashDestroyCharts();
   var st = homeState();
   var stats = HOME_CARDS.filter(function(c){ return c.slot==='stats' && st.visible[c.id] && DASH_WIDGETS[c.id]; }).map(function(c){return c.id;});
   var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
   var h='<div class="htop"><span class="sgreet" id="dashGreet"></span><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
+  h += updateBanner_();          // v3.69.0 (U4) — a stale shell explains every other oddity, so it goes first
   h += writeBackBanner_();       // v3.60 — first: "the app said ✓ but your sheet never got it"
   h += freezeBanner_();          // v3.55 — above everything; it explains the health card
   if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
@@ -2423,6 +2634,20 @@ function envRowHtml(e){
     '<span class="bal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</span>'+
     '<span class="chev">›</span></div>';
 }
+/* v3.69.0 (U9): live filter — re-render on input, debounced a touch so a fast
+   typist gets one paint per pause, and keep the caret where it was (a full
+   innerHTML swap would otherwise throw focus away on every keystroke). */
+function envSearchWire_(){
+  var el = $('#envQ'); if(!el) return;
+  if(state._envQFocus){ el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(e){} state._envQFocus=false; }
+  el.oninput = function(){
+    clearTimeout(envSearchWire_._t);
+    envSearchWire_._t = setTimeout(function(){
+      state.envQ = el.value; state._envQFocus = true;
+      if(state.view==='envelopes') renderEnvelopes();
+    }, 120);
+  };
+}
 function renderEnvelopes(){
   var b = state.boot;
   var income = [], groups = [];
@@ -2441,13 +2666,26 @@ function renderEnvelopes(){
   var h = '<div class="viewhead"><h2>Envelopes</h2>'+
     '<button class="btn sm" data-act="env-new">+ New envelope</button></div>';
   if(state.envNew){ h += envNewFormHtml(); }
+  // v3.69.0 (U9): 69 envelopes need a filter as much as the picker does. Same
+  // .searchbar as Transactions; matches envelope OR group name; a matching
+  // group is forced open so the hit is visible; empty query = the normal page.
+  var q = String(state.envQ||'').trim().toLowerCase();
+  h += '<div class="searchbar"><input id="envQ" placeholder="Find an envelope…" value="'+esc(state.envQ||'')+'" autocomplete="off">'+
+    (q ? '<button class="btn sm ghost" data-act="env-q-clear">Clear</button>' : '')+'</div>';
+  if(q){
+    var hit = function(e, gname){ return e.name.toLowerCase().indexOf(q)>-1 || gname.toLowerCase().indexOf(q)>-1; };
+    income = income.filter(function(e){ return hit(e, 'income'); });
+    groups = groups.map(function(g){ return { name:g.name, envs:g.envs.filter(function(e){ return hit(e, g.name); }), total:g.total }; })
+                   .filter(function(g){ return g.envs.length; });
+    if(!income.length && !groups.length) h += '<div class="note" style="padding:14px 4px">No envelope matches “'+esc(state.envQ)+'”.</div>';
+  }
   if(income.length){
     h += '<div class="grp"><h3>Income</h3><div class="card income">';
     income.forEach(function(e){ h += envRowHtml(e); });
     h += '</div></div>';
   }
   groups.forEach(function(g){
-    var open = state.envOpen[g.name] !== false; // default open
+    var open = q ? true : state.envOpen[g.name] !== false; // default open; a search opens every matching group
     h += '<div class="card grpcard">'+
       '<div class="ghead" data-act="grp-toggle" data-arg="'+esc(g.name)+'">'+
       '<span class="garrow'+(open?' open':'')+'">›</span>'+
@@ -2459,9 +2697,10 @@ function renderEnvelopes(){
     }
     h += '</div>';
   });
-  h += hiddenSectionHtml();   // v3.51
-  h += archivedSectionHtml();
+  if(!q){ h += hiddenSectionHtml();   // v3.51
+          h += archivedSectionHtml(); }
   $('#shell').innerHTML = h;
+  envSearchWire_();   // v3.69.0 (U9)
   // Lazy-load the archived list when that section is expanded.
   if(state.showArchived && !state.archived){
     run('apiArchivedEnvelopes').then(function(list){
@@ -2509,7 +2748,7 @@ function hiddenSectionHtml(){
     '<span class="chev">'+(open?'▾':'▸')+'</span>'+
     '<h3 class="sectitle">Hidden · '+list.length+'</h3><span class="grow"></span></div>';
   if(open){
-    h += '<div class="empty" style="padding:6px 2px;font-size:12px">Out of this list and out of '+
+    h += '<div class="note" style="padding:6px 2px">Out of this list and out of '+
       '<b>available to fund</b> — but still there in the picker when you categorize a transaction. '+
       'For money that lives outside your cash accounts (brokerage, stock transactions).</div>';
     list.forEach(function(e){
@@ -2639,7 +2878,7 @@ function renderEnvDetail(){
     var poolId = state.boot.incomePoolId;
     var canSweep = (e.type==='Income' && e.id!==poolId && e.balance>0);
     h += '<div class="actions" style="margin-top:14px;padding:0 16px 16px;flex-wrap:wrap">'+
-      (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move all to pool</button>' : '')+
+      (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move '+money(e.balance)+' to pool</button>' : '')+
       '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button>'+
       (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Edit name / group</button>')+
       (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="'+(e.hidden?'env-unhide':'env-hide')+
@@ -2794,8 +3033,9 @@ function startMove_(fromId, toId, amt, okMsg){
   else if(state.view==='envelopes') renderEnvelopes();
   toast('Moving '+money(amt)+'…');
   run('apiMove', { fromId:fromId, toId:toId, amount:amt })
-  .then(function(){
-    toast(okMsg);
+  .then(function(r){
+    var opId = r && r.opId;              // v3.69.0 (U5)
+    toast(okMsg, opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'move'); } } : null);
     // the mirror now holds the journal rows — swap the overlay for the real thing.
     // Fresh list FIRST, drop the overlay after, so there is no gap where the
     // move vanishes; the two renders share one paint (same microtask drain).
@@ -2838,11 +3078,10 @@ function sweepToPool(){
   if(e.id===poolId){ toast('That is the pool'); return; }
   var amt = e.balance;
   if(!(amt>0)){ toast('Nothing to move'); return; }
-  confirmUi('Move '+money(amt)+' from '+e.name+' into the Income Cash Pool?', 'Move to pool')
-  .then(function(ok){
-    if(!ok) return;
-    startMove_(e.id, poolId, amt, 'Moved '+money(amt)+' to pool ✓');
-  });
+  // v3.69.0 (U8): no confirm — the button already says the amount, and the
+  // success toast carries Undo (U5). A confirm on the documented payday step
+  // was a tax on the routine, not a safeguard.
+  startMove_(e.id, poolId, amt, 'Moved '+money(amt)+' to pool ✓');
 }
 
 /* ============================ inbox + splits ============================ */
@@ -3088,7 +3327,8 @@ function approveSplit(txnId){
 function afterApprove(txnId, key){
   return function(r){
     markPendingApproved([key || txnId]); // v3.32: hide from refetches until write-back lands
-    toast(tillerNote('Approved ✓', r));
+    var opId = r && r.opId;              // v3.69.0 (U5): one tap undo, right here
+    toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval'); } } : null);
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.sel[txnId]; delete state.split[txnId];
     bumpInboxCount_(-1);     // v3.49: Home's card moves now, not at the next boot
@@ -3204,8 +3444,9 @@ function fundGo(){
   busyButtons(true);
   run('apiFundFromPool', { amount: Number(f.amount), planId: f.planId||null,
     legs: f.legs.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(f.amount, l.amount)}; }) })
-  .then(function(){
-    toast('Funded ✓');
+  .then(function(r){
+    var opId = r && r.opId;              // v3.69.0 (U5)
+    toast('Funded ✓', opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'funding'); } } : null);
     delete state.fund['pool'];
     invalidateData();
     return refreshBoot();
@@ -3788,12 +4029,12 @@ function drawAccounts(){
   var hiddenN = rows.filter(function(a){ return a.hidden; }).length;
   var h = '<div class="viewhead"><h2>Accounts</h2></div>';
   if(dups.length){
-    h += '<div class="empty" style="padding:0 4px 10px;text-align:left;font-size:12.5px;color:var(--amber)">'+
+    h += '<div class="note" style="padding:0 4px 10px;color:var(--amber)">'+
       '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(dups.join(', '))+
       '. Delete the extras in Tiller to avoid surprises.</div>';
   }
   if(hiddenN){
-    h += '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
+    h += '<div class="note" style="padding:0 4px 14px">'+
       hiddenN+' hidden account'+(hiddenN>1?'s':'')+
       ' — transactions stay in your envelopes, they’re just filtered off the Transactions page.</div>';
   }
@@ -4050,13 +4291,13 @@ function drawObligations(){
   var o = state.oblConfig, ed = state.oblEdit;
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Obligations</h2>'+
-    '<div class="empty" style="padding:4px 0 14px;text-align:left">Tell SBC when each card or loan gets paid '+
+    '<div class="note" style="padding:4px 0 14px">Tell SBC when each card or loan gets paid '+
     'and which account it comes out of, and it will warn you before the money isn\'t there. '+
     'Set it once — the amount is read from your balance history each month, so there\'s nothing to keep updating.</div>';
 
   h += '<div class="card">';
   var live = (o.rows||[]).filter(function(r){ return r.active; });
-  if(!live.length) h += '<div class="empty" style="padding:12px;text-align:left">Nothing set up yet.</div>';
+  if(!live.length) h += '<div class="note" style="padding:12px">Nothing set up yet.</div>';
   // v3.56.9 — WHERE DID THAT NUMBER COME FROM?
   // Scott, 8/26: "why did it estimate my Citi Double Cash obligation as over
   // 8k?" There was no way to find out: the card showed an amount and nothing
@@ -4144,7 +4385,7 @@ function drawObligations(){
     h += '<div class="actions" style="margin-top:14px"><button class="btn" data-act="obl-add">+ Add an obligation</button>'+
       ((o.rows||[]).length ? '<button class="btn ghost" data-act="obl-check">Check now</button>' : '')+'</div>';
   }
-  h += '<div class="empty" style="padding-top:14px;font-size:12px;text-align:left">Warnings appear on Home under '+
+  h += '<div class="note" style="padding-top:14px;font-size:12px">Warnings appear on Home under '+
     '<b>Needs attention</b>. SBC never moves money — it tells you to, and the flag clears itself once the transfer lands.</div>';
   $('#shell').innerHTML = h;
   var ms = $('#obl_mode');
@@ -4231,6 +4472,13 @@ function oblCheckNow(){
   });
 }
 function oblRemove(id){
+  // v3.69.0 (U8): turning an obligation off drops its settings (account, closing
+  // day, lead time) — re-entering them is real work, so it confirms.
+  var o = ((state.oblConfig && state.oblConfig.rows)||[]).find(function(x){ return x.id===id; });
+  confirmUi('Turn off '+((o && o.name) ? '"'+o.name+'"' : 'this obligation')+'?\n\nIts settings are removed and its warnings stop. You can set it up again any time.', 'Turn off')
+  .then(function(ok){ if(ok) oblRemoveNow_(id); });
+}
+function oblRemoveNow_(id){
   run('apiRemoveObligation', { id:id }).then(function(){
     state.obligations=null; toast('Turned off ✓'); renderObligations();
     refreshBoot().catch(function(){});
@@ -4364,10 +4612,17 @@ function wbRetry(id){
   }).catch(function(e){ actBusy('wb-retry', false); toast('⚠ '+(e.message||e)); });
 }
 function wbDiscard(id){
-  run('apiDiscardWriteBack', {id:id}).then(function(){
-    toast('Discarded — the sheet\u2019s version stands');
-    return wbRefresh_();
-  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  // v3.69.0 (U8): this permanently drops a save that never reached the sheet —
+  // the one action on the banner that cannot be undone. It confirms; Retry doesn't.
+  var it = (state.writeBack && state.writeBack.items || []).find(function(x){ return x.id===id; });
+  confirmUi('Discard this save for good?\n\n"'+((it && it.summary)||id)+'"\n\nThe sheet\u2019s version stands and this change is gone. Only do this if you already redid it by hand.', 'Discard')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiDiscardWriteBack', {id:id}).then(function(){
+      toast('Discarded — the sheet\u2019s version stands');
+      return wbRefresh_();
+    }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+  });
 }
 function freezeReval_(){
   var f = state.boot && state.boot.attention && state.boot.attention.freeze;
@@ -4417,7 +4672,7 @@ function drawBalances(){
     '<button class="btn ghost sm" data-act="bal-reorder">'+
     (state.balReorder?'Done':'Reorder')+'</button></span></div>';
   if(b.dups && b.dups.length && !state.balReorder){
-    h += '<div class="empty" style="padding:0 4px 12px;text-align:left;font-size:12.5px;color:var(--amber)">'+
+    h += '<div class="note" style="padding:0 4px 12px;color:var(--amber)">'+
       '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(b.dups.join(', '))+'</div>';
   }
   h += '<div class="nwhero"><span class="lbl">Net worth</span>'+
@@ -4467,7 +4722,7 @@ function drawSync(){
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<div class="viewhead"><h2>Tiller sync</h2>'+
     '<button class="btn ghost sm" data-act="sync-refresh">↻ Re-check</button></div>'+
-    '<div class="empty" style="padding:0 4px 14px;text-align:left;font-size:12.5px">'+
+    '<div class="note" style="padding:0 4px 14px">'+
     'Nothing changes unless you tap a ✎ Write or ✓ Accept button — every write is audited and undoable. '+
     'Window: last '+s.days+' days · checked '+s.sbcTxnCount+' approved + '+s.inboxCount+
     ' inbox transactions · '+esc(s.generatedAt)+'</div>';
@@ -4572,7 +4827,7 @@ function drawSync(){
     h += '<div class="empty">No "Categories" tab found in the Tiller sheet — skipped that check.</div>';
   }
 
-  h += '<div class="empty" style="font-size:12.5px;padding-top:8px">Coming next: manual entries for '+
+  h += '<div class="note" style="padding-top:8px">Coming next: manual entries for '+
     'feed-less accounts, auto-categorize at approval, split mirroring, conflict resolver, and '+
     'Categories-tab upserts — all behind the Write Authorization gate.</div>';
   $('#shell').innerHTML = h;
@@ -5405,10 +5660,10 @@ function densityControl(){
   var btns = DENSITY_OPTS.map(function(o){
     return '<button class="densbtn'+(cur===o[0]?' on':'')+'" data-act="density" data-arg="'+o[0]+'">'+o[1]+'</button>';
   }).join('');
-  return settingsSectionLabel('DISPLAY DENSITY')+
+  return settingsSectionLabel('DISPLAY')+
     '<div class="card" style="padding:12px">'+
     '<div class="densgrp">'+btns+'</div>'+
-    '<div class="empty" style="padding:8px 2px 0;font-size:11.5px;text-align:left">How tightly information is packed on screen. Midpoint is the default; Compact fits the most at once. Saved to your account.</div>'+
+    '<div class="note" style="padding:8px 2px 0">How tightly information is packed on screen. Midpoint is the default; Compact fits the most at once. Saved to your account.</div>'+
     '</div>';
 }
 /* v3.57: Settings card for the seasonal dress-up + birthday. The date input is
@@ -5459,29 +5714,59 @@ function renderPersonal(){
 function renderSettings(){
   var desktop = window.innerWidth >= 900;
   var h = '<h2 class="viewtitle">Settings</h2>';
-  h += densityControl();
   // On phones the sidebar is hidden, so surface the Money pages here too.
   // On desktop they live in the sidebar's Money group, so we don't repeat them.
   if(!desktop){
     h += settingsSectionLabel('MONEY')+settingsList([
       ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports <span class="beta inline">BETA</span>']]);
-    h += settingsSectionLabel('SETTINGS');
   }
-  // v3.57.2 (Scott): Monthly dress-up rides the main list as a row above About.
-  var mainList = settingsList([['howto','📖 How to use SBC Money'],['sync','Tiller sync'],['reconcile','Reconcile accounts'],
-    ['healthset','Health settings'],['obligations','💳 Obligations & autopay'],['history','History & undo'],
-    ['removetxn','Remove a transaction'],['admin','Access (who can sign in)'],
-    ['activity','Sign-ins & activity']]);
-  h += mainList.slice(0, -'</div>'.length) +
-    '<div class="envrow" data-act="goview" data-arg="personal"><span class="nm">👤 Personal information</span><span>›</span></div>' +
+  /* v3.69.0 (U14): Settings was a 17-item mixed list — density first, "Back up
+     envelopes to Tiller" at the same level as "How to use", emoji on 3 of 12
+     rows. Now: the four things a person opens on purpose; a collapsed
+     MAINTENANCE group for the once-in-a-while tools; display choices last.
+     No icons anywhere (all or none — none). The dress-up row stays directly
+     above About (v3.57.2, pinned by seasonal_theme_test). */
+  h += settingsSectionLabel('SETTINGS')+settingsList([
+    ['howto','How to use SBC Money'],
+    ['obligations','Obligations & autopay'],
+    ['history','History & undo'],
+    ['personal','Personal information']]);
+  h += settingsMaintenance_();
+  h += densityControl();
+  h += '<div class="card morelist" style="margin-top:14px">'+
     seasonControl() +
     '<div class="envrow" data-act="goview" data-arg="about"><span class="nm">About</span><span>›</span></div>' +
     '</div>';
+  // Log out: on phones it lives here; on desktop it's in the sidebar footer.
+  if(!desktop){
+    h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
+  }
+  h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
+  $('#shell').innerHTML = h;
+}
+/* v3.69.0 (U14): the collapsed Maintenance group. Open state is per device
+   (localStorage) so someone who lives in here doesn't re-open it every visit. */
+function settingsMaintOpen_(){ try{ return localStorage.getItem('sbcMaintOpen')==='1'; }catch(e){ return false; } }
+function settingsMaintenance_(){
+  var open = settingsMaintOpen_();
+  var h = '<div class="card morelist" style="margin-top:14px">'+
+    '<div class="envrow" data-act="settings-maint" style="cursor:pointer"><span class="nm">Maintenance</span>'+
+    '<span class="note" style="flex:1;font-size:12px">sync, reconcile, health, access, backups</span>'+
+    '<span class="garrow'+(open?' open':'')+'" style="font-size:18px">›</span></div>';
+  if(!open) return h+'</div>';
+  h += '</div>';
+  h += settingsList([
+    ['sync','Tiller sync'],
+    ['reconcile','Reconcile accounts'],
+    ['healthset','Health settings'],
+    ['removetxn','Remove a transaction'],
+    ['admin','Access (who can sign in)'],
+    ['activity','Sign-ins & activity']]);
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
-    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
+    '<div class="note" style="padding:4px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // v3.54: see mirrorRefreshFromSheet.
   h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="mirror-refresh">↻ Refresh app data from sheet</button></div>'+
-    '<div class="empty" style="padding:4px 2px 0;font-size:11.5px;text-align:left">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>';
+    '<div class="note" style="padding:4px 2px 0">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>';
   // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
   // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
   // Corey and Brady land on their own sheets.
@@ -5490,12 +5775,7 @@ function renderSettings(){
     [sheetUrl(state.boot.tillerSheetId), 'Tiller Spreadsheet'],
     ['https://my.tiller.com', 'Tiller (my.tiller.com)']]);
   if(tillerLinks) h += settingsSectionLabel('TILLER')+tillerLinks;
-  // Log out: on phones it lives here; on desktop it's in the sidebar footer.
-  if(!desktop){
-    h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
-  }
-  h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
-  $('#shell').innerHTML = h;
+  return h;
 }
 
 /* ============================ access / admin (v3.8) ============================ */
@@ -5507,7 +5787,7 @@ function drawAdmin(){
   var a = state.access;
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Access</h2>';
-  h += '<div class="empty" style="padding:4px 0 14px">These '+esc('@'+a.domain)+' accounts can sign in to SBC Money. '+
+  h += '<div class="note" style="padding:4px 0 14px">These '+esc('@'+a.domain)+' accounts can sign in to SBC Money. '+
     (a.isAdmin?'Add a family member’s email to give them access.':'Only an admin can change this list.')+'</div>';
   h += '<div class="card">';
   a.allowed.forEach(function(em){
@@ -5581,7 +5861,7 @@ function signOut(){
 function renderRemoveTxn(){
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Remove a transaction</h2>';
-  h += '<div class="empty" style="padding:4px 0 12px;text-align:left">For removing a duplicate or '+
+  h += '<div class="note" style="padding:4px 0 12px">For removing a duplicate or '+
     'orphaned transaction — one that’s no longer in Tiller. Removals are logged and can be undone '+
     'from History. Anything Tiller still has is protected and can’t be removed here.</div>';
   h += '<div class="card" style="padding:12px">'+
@@ -5653,7 +5933,7 @@ function renderReconcile(){
 function feedLagPanel(){
   var f = state.feedlag; if(!f) return '';
   if(!f.anyLag){
-    return settingsSectionLabel('📡 FEED CHECK')+'<div class="card"><div class="empty" style="padding:12px;text-align:left">'+
+    return settingsSectionLabel('📡 FEED CHECK')+'<div class="card"><div class="note" style="padding:12px">'+
       '✓ All balance feeds are in sync with their transactions (last '+(f.windowDays||35)+' days).</div></div>';
   }
   // v3.51: the headline is a MAGNITUDE. totalLag is a signed sum, so it rendered
@@ -5675,11 +5955,11 @@ function feedLagPanel(){
   var title = lags.length ? '📡 FEED CHECK — '+money(Math.abs(f.totalLag))+' UNSETTLED'
                           : '📡 FEED CHECK — FROZEN FEED';
   var h = settingsSectionLabel(title)+'<div class="card">'+
-    (lags.length ? '<div class="empty" style="padding:2px 0 10px;text-align:left">These accounts’ <b>balance</b> moved by an amount their <b>transactions</b> don’t explain, '+
+    (lags.length ? '<div class="note" style="padding:2px 0 10px">These accounts’ <b>balance</b> moved by an amount their <b>transactions</b> don’t explain, '+
     'over the same span. Usually a charge that has posted to the balance but hasn’t arrived as a transaction yet — interest, a fee, or a purchase the feed is slow with. '+
     'Everything on this page still works — it’s the automatic <b>true-up to bank</b> that waits for the two to agree.</div>' : '');
   if(stales.length){
-    h += '<div class="empty" style="padding:2px 0 10px;text-align:left">🧊 <b>'+esc(stales.map(function(a){return a.account;}).join(', '))+
+    h += '<div class="note" style="padding:2px 0 10px">🧊 <b>'+esc(stales.map(function(a){return a.account;}).join(', '))+
       '</b> hasn’t reported a balance in '+(f.staleDays||3)+'+ days. That’s a frozen feed, not a slow one — refresh or re-link it at <b>my.tiller.com</b>. '+
       'The true-up waits for this too, because there is no balance worth truing to.</div>';
   }
@@ -5739,14 +6019,14 @@ function drawReconcile(){
   var dormant = (r.accounts||[]).filter(function(a){ return a.dormant; });
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Reconcile accounts</h2>'+
-    '<div class="empty" style="padding:2px 0 12px;text-align:left">Check each account against your bank. '+
+    '<div class="note" style="padding:2px 0 12px">Check each account against your bank. '+
     '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
     'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
     'No feed for over 6 months → Closed / Dormant.</div>';
   h += feedLagPanel();
   h += settingsSectionLabel('✋ MANUAL — UPDATE BY HAND')+'<div class="card">';
   if(manual.length) manual.forEach(function(a){ h += reconRow(a, rev); });
-  else h += '<div class="empty" style="padding:12px;text-align:left">None yet — tap “Mark manual” on a fed account below to move it here.</div>';
+  else h += '<div class="note" style="padding:12px">None yet — tap “Mark manual” on a fed account below to move it here.</div>';
   h += '</div>';
   h += settingsSectionLabel('🔄 AUTOMATIC — FED')+'<div class="card">';
   if(auto.length) auto.forEach(function(a){ h += reconRow(a, rev); });
@@ -5848,11 +6128,11 @@ function drawHealthSettings(){
   var hs = state.healthset;
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Health settings</h2>';
-  h += '<div class="empty" style="padding:4px 0 14px">The health check compares on-budget envelope money '+
+  h += '<div class="note" style="padding:4px 0 14px">The health check compares on-budget envelope money '+
     'against bank cash (cash groups − debt groups). Changes apply on the next dashboard load.</div>';
 
   h += '<div class="grp"><h3>Account groups (bank side)</h3><div class="card">';
-  h += '<div class="empty" style="padding:6px 0;font-size:12px">Tap a group to cycle: not counted → 💵 cash → 💳 debt</div>';
+  h += '<div class="note" style="padding:6px 0">Tap a group to cycle: not counted → 💵 cash → 💳 debt</div>';
   hs.accountGroups.forEach(function(g){
     var st = hs.cashGroups.indexOf(g)>-1 ? 'cash' : (hs.debtGroups.indexOf(g)>-1 ? 'debt' : '');
     h += '<div class="envrow click" data-act="hs-group" data-arg="'+esc(g)+'">'+
@@ -5862,7 +6142,7 @@ function drawHealthSettings(){
   h += '</div></div>';
 
   h += '<div class="grp"><h3>Envelopes (budget side)</h3><div class="card">';
-  h += '<div class="empty" style="padding:6px 0;font-size:12px">Off-budget = money that lives outside the cash accounts '+
+  h += '<div class="note" style="padding:6px 0">Off-budget = money that lives outside the cash accounts '+
     '(brokerage, REBA, rewards). Tap to toggle.</div>';
   hs.envelopes.forEach(function(n){
     var off = hs.offBudget.indexOf(n)>-1;
@@ -5935,7 +6215,7 @@ function renderHowTo(){
   };
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">How to use SBC Money</h2>'+
-    '<div class="empty" style="padding:2px 2px 14px;text-align:left">Five minutes here and the whole app makes sense. Start with the big idea, then learn the payday routine — everything else is detail.</div>';
+    '<div class="note" style="padding:2px 2px 14px">Five minutes here and the whole app makes sense. Start with the big idea, then learn the payday routine — everything else is detail.</div>';
 
   h += S('💡','The big idea (read this first)',
     '<p style="margin:0 0 8px">SBC Money is <b>envelope budgeting</b>. Picture cash envelopes with names on them: Rent, Groceries, Eating Out. Every dollar you have sits in exactly one envelope — that’s the dollar’s <b>job</b>.</p>'+
@@ -5956,12 +6236,13 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
     '<p style="margin:0 0 6px"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>'+
     '<p style="margin:0 0 6px"><b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there. (Before v3.66 these rows just said "Money moved".)</p>'+
+    '<p style="margin:0 0 6px"><b>Maintenance</b> — the folded row in Settings that holds the once-in-a-while tools: Tiller sync, Reconcile accounts, Health settings, Remove a transaction, Access, Sign-ins, the Tiller backup and links.</p>'+
     '<p style="margin:0"><b>Write-back</b> — every save you make here is also written to your Google Sheet in the background (that\u2019s the "syncing in background" toast). The sheet is the record; the app is the fast view of it.</p>');
 
   h += S('💵','Payday — the routine that matters most',
     '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
     '<p style="margin:0 0 6px"><b>1. Approve the paycheck.</b> Open <b>Inbox</b> — your deposit is waiting there. Approve it into your income envelope (Regular Pay 💵).</p>'+
-    '<p style="margin:0 0 6px"><b>2. Move it to the pool.</b> Open the Regular Pay envelope and tap <b>"→ Move all to pool"</b>. Now the money is on the loading dock, ready for jobs.</p>'+
+    '<p style="margin:0 0 6px"><b>2. Move it to the pool.</b> Open the Regular Pay envelope and tap <b>"→ Move $… to pool"</b> (the button shows the amount; no "are you sure" — the toast that follows has <b>Undo</b>). Now the money is on the loading dock, ready for jobs.</p>'+
     '<p style="margin:0 0 8px"><b>3. Fund your envelopes.</b> Go to <b>Fund</b>. The pool balance is at the top. Apply your funding plan (or split it by hand), review, confirm.</p>'+
     '<p style="margin:0">That’s it — every dollar of the paycheck now has a job. If money is left over, park it in a savings envelope; never leave dollars jobless in the pool for long.</p>');
 
@@ -5988,7 +6269,7 @@ function renderHowTo(){
 
   h += S('🏦','Autopay — will the cash be in the right account?',
     '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
-    '<p style="margin:0 0 8px">That’s what <b>Settings → 💳 Obligations</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
+    '<p style="margin:0 0 8px">That’s what <b>Settings → Obligations & autopay</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
     '<p style="margin:0 0 8px">The account pickers list every account your balance history reports on — cash accounts for <b>Paid from</b>, cards and loans for the balance to read — with live accounts first. An account marked <b>Hide</b> on the Tiller Accounts tab never appears here: hiding it means you’re done with it, everywhere.</p>'+
     '<p style="margin:0 0 6px">Three ways to decide the amount:</p>'+
     '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes. If the feed didn’t leave a balance right after your closing day, SBC works it back from what the card owes today, minus everything that posted since the close.</p>'+
@@ -6003,19 +6284,19 @@ function renderHowTo(){
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
     '<p style="margin:0 0 6px">• <b>"$X in flight — feeds catching up"</b> is normal and needs nothing from you. Your bank posted something the app hasn’t received yet (or the reverse). It clears itself, usually within a few hours.</p>'+
     '<p style="margin:0 0 6px">• <b>"$Y arriving in your inbox shortly"</b> means transactions are already on their way in — they’ll show up in the Inbox on the next hourly sync.</p>'+
-    '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open the <b>Reconcile accounts</b> page from Settings; it usually means a balance or an envelope needs a nudge.</p>'+
+    '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open <b>Settings → Maintenance → Reconcile accounts</b>; it usually means a balance or an envelope needs a nudge.</p>'+
     '<p style="margin:0">Money sitting in your <b>Inbox unapproved</b> also shows as a difference — the bank has spent it but no envelope has been told yet. Clearing the Inbox is the fix, and that’s another reason not to let it pile up.</p>');
 
   h += S('🧊','When a balance is frozen',
     '<p style="margin:0 0 8px">Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old. On 8/26/26 that hid a $1,061.54 gap for a week.</p>'+
     '<p style="margin:0 0 8px">SBC now watches for it: an account whose balance hasn’t changed in days <i>while transactions kept arriving</i> gets called out in a banner above the Dashboard, and you get one email a day until it’s sorted.</p>'+
-    '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Reconcile accounts</b>.</p>'+
+    '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Maintenance → Reconcile accounts</b>.</p>'+
     '<p style="margin:0 0 8px">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>'+
-    '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
+    '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Maintenance → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
 
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Tap <b>Customize</b> at the top of Home to show, hide or reorder the cards.</p>'+
-    '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history.</p>'+
+    '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history. With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top — it matches envelope and group names and opens the groups that match.</p>'+
     '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
@@ -6023,15 +6304,16 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances from the bank feeds. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a row sets a balance by hand (feed-less accounts); <b>Reorder</b> arranges groups and accounts.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
-    '<p style="margin:0">• <b>Settings → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
+    '<p style="margin:0">• <b>Settings → Maintenance → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
 
-  h += S('🎨','Seasonal themes & birthdays',
+  h += S('🎨','Monthly dress-up & birthdays',
     '<p style="margin:0 0 8px">On a computer, the logo and sidebar dress for the season (on a phone it’s the little emoji in the Home greeting) — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
     '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Personal information) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
     '<p style="margin:0">Not your thing? The <b>Monthly dress-up</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
 
   h += S('↩️','Made a mistake? Nothing is permanent',
-    '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. Approved something to the wrong envelope? Funded with the wrong plan? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation.</p>'+
+    '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. <b>One tap:</b> when you approve, move, or fund, the green confirmation at the bottom of the screen carries an <b>Undo</b> button for a few seconds — tap it and the action is reversed on the spot. Missed it? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation; nothing expires there.</p>'+
+    '<p style="margin:0 0 8px"><b>One tap back, too:</b> your phone\u2019s back gesture (or the browser\u2019s Back button) now steps back through SBC Money — envelope detail to Envelopes, a Settings page to Settings — instead of leaving the app.</p>'+
     '<p style="margin:0">You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can’t break your money.</p>');
 
   h += S('📮','When a save doesn\u2019t reach your sheet',
@@ -6042,14 +6324,34 @@ function renderHowTo(){
     '<p style="margin:0"><b>Approve all</b> used to take up to a minute and a half for a big batch (it saved each transaction one at a time), which is exactly what made those writes time out. It now saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>"Apps Script was busy"</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.</p>');
 
   h += S('🔄','Making the app re-read your sheet',
-    '<p style="margin:0 0 8px">Settings → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (the sheet would only put the old numbers back — fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.</p>'+
+    '<p style="margin:0 0 8px">Settings → Maintenance → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (the sheet would only put the old numbers back — fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.</p>'+
     '<p style="margin:0">You rarely need it: the app catches up on its own within the hour, and after a save that had to go the slow way it re-reads before the next Home screen automatically. Reach for it after a repair made directly in the sheet or the Apps Script editor. It cannot pull bank balances forward — that\u2019s <b>↻ Refresh from Tiller</b> on Balances.</p>');
+
+  h += S('🗺️','Every page, one line each',
+    '<p style="margin:0 0 8px">The pages the rest of this guide doesn\u2019t stop to explain. If a page loads with a red ⚠ and a <b>Try again</b> button, tap it — the load failed, nothing else did.</p>'+
+    '<p style="margin:0 0 6px">• <b>Transactions</b> — every approved transaction; search by description, filter by account, envelope or hidden, and tag from here.</p>'+
+    '<p style="margin:0 0 6px">• <b>Fund</b> — moves pool money into envelopes. Type the amount (or take the whole pool), apply a plan or split by hand, and the footer says <b>Fully assigned ✓</b> when every dollar has a job. Plans live at the bottom of this page.</p>'+
+    '<p style="margin:0 0 6px">• <b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one.</p>'+
+    '<p style="margin:0 0 6px">• <b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour.</p>'+
+    '<p style="margin:0 0 6px">• <b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.</p>'+
+    '<p style="margin:0 0 6px">• <b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the six below.</p>'+
+    '<p style="margin:0 0 6px">• <b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write or ✓ Accept button.</p>'+
+    '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎.</p>'+
+    '<p style="margin:0 0 6px">• <b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.</p>'+
+    '<p style="margin:0 0 6px">• <b>Access</b> — who can sign in to <i>your</i> budget; add a family member\u2019s email here.</p>'+
+    '<p style="margin:0 0 6px">• <b>Sign-ins & activity</b> — every sign-in and who changed what.</p>'+
+    '<p style="margin:0 0 6px">• <b>Health settings</b> — which account groups count as cash and debt for the honesty check.</p>'+
+    '<p style="margin:0"><b>Display density</b>, <b>Monthly dress-up</b>, <b>Back up envelopes to Tiller</b> and the <b>Customize</b> button on Home are all cosmetic or belt-and-suspenders — none of them moves money.</p>');
+
+  h += S('⬆️','Keeping the app current',
+    '<p style="margin:0 0 8px">SBC Money is a web page you\u2019ve added to your home screen, and it now keeps a copy of itself on your device so it opens instantly, even on a bad connection. When Scott ships an update, a teal <b>Update available — tap to reload</b> banner appears at the top of Home within an hour or so. Tap it; the app reloads on the new version and nothing you\u2019ve done is lost.</p>'+
+    '<p style="margin:0"><b>Settings → About</b> shows the version on both halves of the app — <b>Server</b> and <b>UI</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will.</p>');
 
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
     '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
     '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes.</p>'+
-    '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>Settings → 💳 Obligations</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
+    '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>Settings → Obligations & autopay</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
     '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
 
   $('#shell').innerHTML = h;
@@ -6062,7 +6364,7 @@ function renderActivity(){
     var log = rs[0], ops = rs[1]||[];
     var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
       '<h2 class="viewtitle">Sign-ins & activity</h2>'+
-      '<div class="empty" style="padding:2px 2px 12px;text-align:left">Every sign-in to YOUR budget is listed here — including anyone you’ve given access to. Every change also records who made it: see below, or the full History.</div>';
+      '<div class="note" style="padding:2px 2px 12px">Every sign-in to YOUR budget is listed here — including anyone you’ve given access to. Every change also records who made it: see below, or the full History.</div>';
 
     h += '<div class="grp"><h3>Sign-ins</h3><div class="card">';
     if(!log.rows.length){
@@ -6235,6 +6537,8 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    case 'app-reload': appReload_(); break;   // v3.69.0 (U4)
+    case 'retry-view': render(); break;       // v3.69.0 (U7)
     case 'density': applyDensity(arg, true); break;
     case 'season-toggle': (function(){ // v3.57 — per device, instant
       try{ localStorage.setItem(SEASON_KEY, seasonOn()?'off':'on'); }catch(e2){}
@@ -6388,6 +6692,8 @@ document.addEventListener('click', function(ev){
       renderEnvelopes(); break;
     case 'env-open': openEnvelope(arg); break;
     case 'env-back': go('envelopes'); break;
+    case 'env-q-clear': state.envQ=''; renderEnvelopes(); break;   // v3.69.0 (U9)
+    case 'settings-maint': try{ localStorage.setItem('sbcMaintOpen', settingsMaintOpen_()?'0':'1'); }catch(e){} renderSettings(); break;   // v3.69.0 (U14)
     case 'env-new': state.envNew={name:'',group:'',type:'Expense'}; renderEnvelopes(); break;
     case 'env-new-cancel': state.envNew=null; renderEnvelopes(); break;
     case 'env-new-save': envNewSave(); break;
@@ -6569,6 +6875,31 @@ document.addEventListener('change', function(ev){
    - token expired but we have a cached view → keep it on screen with the refresh
      bar; GSI auto-select (gsiReady → onCredential) refreshes the token and boots
    - nothing cached and no valid token → the sign-in screen, as before */
+/* ---- v3.69.0 (review T3): a real test seam, no build step ----------------
+   The tests used to lift functions out of this file with regexes and anchor
+   on line distances ("two test invariants anchor on their distance from the
+   top of this function"). That is brittle and the code said so. Now the
+   helpers worth unit-testing are exported on ONE object: in the browser it is
+   window.SBC (harmless, inspectable from the console); under Node
+   (tests/sbc_harness.js runs this script block in a vm with a stub document)
+   it is module.exports. Add a line here when you add a helper worth testing;
+   tests pin the WIRING, not this list. Function declarations hoist, so the
+   block can sit here at the end. */
+var SBC = (typeof module!=='undefined' && module.exports) ? module.exports : (window.SBC = {});
+SBC.FE_VERSION = FE_VERSION;
+SBC.state = state;
+SBC.money = money; SBC.cents = cents; SBC.esc = esc;
+SBC.toastMs = toastMs; SBC.toast = toast;
+SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SBC.markPendingUnapproved = markPendingUnapproved; SBC.PENDING_APPROVED_TTL = PENDING_APPROVED_TTL;
+SBC.run = run; SBC.undoNow_ = undoNow_; SBC.fail = fail;
+SBC.MUTATING = MUTATING; SBC.SUPA_WRITES = SUPA_WRITES; SBC.MIRROR_ONLY = MIRROR_ONLY;
+SBC.rptRange = rptRange; SBC.rptStep = rptStep; SBC.rptAutoGran = rptAutoGran; SBC.rptDays = rptDays; SBC.rptISO = rptISO;
+SBC.verNewer_ = verNewer_; SBC.updateCheck_ = updateCheck_; SBC.updateBanner_ = updateBanner_;
+SBC.go = go; SBC.goHistoryReplay_ = goHistoryReplay_;
+SBC.supaOn_ = supaOn_; SBC.supaStrike_ = supaStrike_;
+SBC.mutSig_ = mutSig_; SBC.mutationDepth_ = mutationDepth_;
+SBC.cssVar_ = cssVar_;
+
 (function start(){
   // v3.57.1: if Google's script loaded before this script finished parsing, its
   // onload attribute recorded the signal without calling anything (gsiReady did
@@ -6577,6 +6908,8 @@ document.addEventListener('change', function(ev){
   if(window._gsiEarly === 'ok' && !gsiUp) gsiReady();
   else if(window._gsiEarly === 'fail' && !gsiUp) gsiFailed();
   applySeason();   // v3.57: dress the sidebar brand before anything paints
+  goPushHistory_(state.view);   // v3.69.0 (U3): the first entry is Home, so the first Back returns to it
+  swRegister_();                // v3.69.0 (F15): cache-first shell for the home-screen app
   var hydrated = hydrateSnapshot_();
   if(hydrated){
     setGreeting_();
