@@ -526,7 +526,7 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
   font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;
   pointer-events:none;max-width:90vw;
 }
-.toast.show{opacity:1}
+.toast.show{opacity:1;pointer-events:auto;cursor:pointer} /* v3.68.0 U6: tap to dismiss */
 @media(min-width:900px){.toast{bottom:32px}}
 h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px 16px}
 .viewhead{display:flex;justify-content:space-between;align-items:center;margin:2px 4px 16px}
@@ -1067,7 +1067,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.67.1';
+var FE_VERSION = 'v3.68.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1078,9 +1078,24 @@ function money(n){
   return (n<0?'-$':'$')+v;
 }
 function cents(n){ return Math.round((Number(n)||0)*100); }
+/* v3.68.0 (U6): a toast that vanishes before it can be read is the same as
+   swallowing the outcome — the rule this codebase already has, broken by a
+   fixed 2.6 s. On 9/9/26 Brady's Settings ↻ Refresh failed with "The caller
+   does not have permission" (his sheets were not shared with the mirror's
+   service account) and the message was gone before it could be read; the app
+   just looked empty, and it cost an hour. Duration now scales with length, a
+   warning is held long enough to act on, and a tap dismisses. */
+var TOAST_MIN_MS = 2600, TOAST_MAX_MS = 8000, TOAST_WARN_MIN_MS = 5000;
+function toastMs(msg){
+  var s = String(msg==null?'':msg);
+  var ms = Math.max(TOAST_MIN_MS, s.length * 45);
+  if(/⚠/.test(s)) ms = Math.max(ms, TOAST_WARN_MIN_MS);
+  return Math.min(ms, TOAST_MAX_MS);
+}
 function toast(msg){
   var t=$('#toast'); t.textContent=msg; t.classList.add('show');
-  clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},2600);
+  clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');}, toastMs(msg));
+  t.onclick=function(){ clearTimeout(t._h); t.classList.remove('show'); };
 }
 function fail(e){
   $('#shell').innerHTML = '<div class="empty">⚠ '+esc(e && e.message || e)+'</div>';
@@ -3377,10 +3392,14 @@ function planFromTiller(){
       run('apiPlanFromTiller', {}).then(function(r){
         var msg = 'Built “'+r.name+'” — '+r.lineCount+' envelopes, '+money(r.total);
         if(!r.balanced) msg += ' (income target '+money(r.expectedIncome)+')';
-        toast(msg+' ✓');
+        msg += ' ✓';
+        // v3.68.0 (U6): these were two toasts fired back to back, so the
+        // summary was overwritten instantly whenever anything was skipped —
+        // the one case where you most want to read both. One message now.
         if(r.skipped && r.skipped.length){
-          toast('Skipped '+r.skipped.length+': '+r.skipped.map(function(s){return s.name;}).join(', '));
+          msg += ' · ⚠ skipped '+r.skipped.length+': '+r.skipped.map(function(s){return s.name;}).join(', ');
         }
+        toast(msg);
         state.plansOpen = true;
         state.plans = null;
         refreshPlansView();
@@ -5643,11 +5662,28 @@ function feedLagPanel(){
   // an overclaim: the feed-lag guard sits on the automatic true-up in
   // apiReconcileToBank, not on anything reachable from this page. Update balance
   // and ✓ Reviewed have always worked while a feed is catching up.
-  var h = settingsSectionLabel('📡 FEED CHECK — '+money(Math.abs(f.totalLag))+' UNSETTLED')+'<div class="card">'+
-    '<div class="empty" style="padding:2px 0 10px;text-align:left">These accounts’ <b>balance feed</b> is out of sync with their <b>transactions</b> — '+
-    'usually the bank hasn’t refreshed the balance yet. This is timing noise, not real drift; it clears when the feed catches up. '+
-    'Everything on this page still works — it’s the automatic <b>true-up to bank</b> that waits for the feed to agree.</div>';
-  (f.accounts||[]).filter(function(a){return a.lagging;}).forEach(function(a){
+  // v3.68.0: the old copy called every listed account "timing noise that clears
+  // when the feed catches up". That was true of the phantom the report used to
+  // manufacture at its own window edge, and it is no longer true of what
+  // survives: the two sides are now compared over the SAME span, so a listed
+  // divergence is money the balance moved without a transaction to match.
+  // Staleness is its own row type now, and reads differently.
+  var stales = (f.accounts||[]).filter(function(a){return a.stale && !a.lagging;});
+  // v3.68.0: with staleness its own flag, anyLag can be true while totalLag is
+  // $0.00 — "$0.00 UNSETTLED" would read as a bug. Title by what is wrong.
+  var lags = (f.accounts||[]).filter(function(a){return a.lagging;});
+  var title = lags.length ? '📡 FEED CHECK — '+money(Math.abs(f.totalLag))+' UNSETTLED'
+                          : '📡 FEED CHECK — FROZEN FEED';
+  var h = settingsSectionLabel(title)+'<div class="card">'+
+    (lags.length ? '<div class="empty" style="padding:2px 0 10px;text-align:left">These accounts’ <b>balance</b> moved by an amount their <b>transactions</b> don’t explain, '+
+    'over the same span. Usually a charge that has posted to the balance but hasn’t arrived as a transaction yet — interest, a fee, or a purchase the feed is slow with. '+
+    'Everything on this page still works — it’s the automatic <b>true-up to bank</b> that waits for the two to agree.</div>' : '');
+  if(stales.length){
+    h += '<div class="empty" style="padding:2px 0 10px;text-align:left">🧊 <b>'+esc(stales.map(function(a){return a.account;}).join(', '))+
+      '</b> hasn’t reported a balance in '+(f.staleDays||3)+'+ days. That’s a frozen feed, not a slow one — refresh or re-link it at <b>my.tiller.com</b>. '+
+      'The true-up waits for this too, because there is no balance worth truing to.</div>';
+  }
+  (f.accounts||[]).filter(function(a){return a.lagging || a.stale;}).forEach(function(a){
     // v3.51: only say "stale" when it IS stale. This was styled red + italic
     // unconditionally, so a feed that refreshed TODAY (Corey's Discover, 0d)
     // read as broken when the only thing behind was the transaction side.
@@ -5665,7 +5701,8 @@ function feedLagPanel(){
       '<span class="upd'+(feedStale?' stale':'')+'">feed '+esc(a.feedAsOf||'')+(a.feedDaysOld!=null?' · '+a.feedDaysOld+'d':'')+'</span>'+
       '<span class="bal amber">'+money(a.divergence)+'</span>'+
       '<span style="flex-basis:100%;font-size:11px;color:var(--ink-3);margin-top:4px">'+
-      'feed Δ '+money(bankDelta)+' vs '+a.txnCount+' txns '+money(a.txnSum)+liab+'</span></div>';
+      'feed Δ '+money(bankDelta)+' vs '+a.txnCount+' txns '+money(a.txnSum)+liab+
+      (a.spanFrom? ' · '+esc(a.spanFrom)+'→'+esc(a.spanTo):'')+'</span></div>';
   });
   return h+'</div>';
 }
@@ -5973,7 +6010,8 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old. On 8/26/26 that hid a $1,061.54 gap for a week.</p>'+
     '<p style="margin:0 0 8px">SBC now watches for it: an account whose balance hasn’t changed in days <i>while transactions kept arriving</i> gets called out in a banner above the Dashboard, and you get one email a day until it’s sorted.</p>'+
     '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Reconcile accounts</b>.</p>'+
-    '<p style="margin:0">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>');
+    '<p style="margin:0 0 8px">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>'+
+    '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
 
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Tap <b>Customize</b> at the top of Home to show, hide or reorder the cards.</p>'+
