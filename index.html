@@ -496,6 +496,13 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
 .balrow{display:flex;align-items:baseline;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line)}
 .balrow:last-child{border-bottom:none}
 .balrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:13.5px}
+/* v3.71.0: an account name that opens its register. Underlined faintly so it
+   reads as a target without turning the page into a wall of links; the arrow
+   only appears on hover/focus so the resting state stays a balance sheet. */
+.balrow .nm[data-act]{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;text-decoration-thickness:1.5px}
+.balrow .nm[data-act]:hover,.balrow .nm[data-act]:focus-visible{text-decoration-color:currentColor;outline:none}
+.balrow .nm[data-act]::after{content:' \203a';opacity:0;color:var(--ink-3);font-weight:700}
+.balrow .nm[data-act]:hover::after,.balrow .nm[data-act]:focus-visible::after{opacity:1}
 .balrow .upd{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .balrow .upd.stale{color:var(--red);font-style:italic}
 /* v3.51: feed-timing divergence is an OBLIGATION, not an error — amber, never
@@ -809,12 +816,17 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
   </div>
 </div>
 
+<!-- v3.72.0: the fifth tab was a GEAR, and behind it sat Transactions,
+     Balances, Accounts and Reports — four primary destinations filed under
+     "settings" because the phone has no sidebar. Settings was doing two
+     unrelated jobs at once, which is why it read as a jumble however its rows
+     were grouped. The gear is now MORE: navigation. Settings is one row on it. -->
 <nav class="tabs">
   <button data-v="dash"></button>
   <button data-v="inbox"></button>
   <button data-v="fund"></button>
   <button data-v="envelopes"></button>
-  <button data-v="settings"></button>
+  <button data-v="more"></button>
 </nav>
 
 <div class="toast" id="toast"></div>
@@ -1093,7 +1105,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.70.2';
+var FE_VERSION = 'v3.72.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1489,6 +1501,11 @@ $all('nav.tabs button').forEach(function(b){
    pushing (goHistoryReplay_) so back never grows the stack it is unwinding.
    Envelope detail also records the envelope id — state.envDetail is what
    renderEnvDetail needs, and it is null again after a real navigation. */
+/* v3.72.0: named once, used by go() and by the two pages themselves, so a view
+   can never appear on a page without also lighting its tab. */
+var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
+  'removetxn','reconcile','howto','activity','obligations','personal'];
+var MORE_VIEWS = ['txns','balances','accounts','reports'];
 var goReplaying_ = false;
 function goPushHistory_(view){
   if(goReplaying_) return;
@@ -1516,7 +1533,13 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
-      (b.dataset.v==='settings' && ['settings','more','sync','history','about','healthset','admin','removetxn','reconcile','howto','activity','obligations','personal'].indexOf(view)!==-1));
+      /* v3.72.0: two owners now. The desktop sidebar's Settings button lights
+         for the settings subtree; the phone's More tab lights for that subtree
+         AND for the Money pages it is the only route to. They are different
+         elements, so both rules can be true without fighting. */
+      (b.dataset.v==='settings' && SETTINGS_VIEWS.indexOf(view)!==-1) ||
+      (b.dataset.v==='more' && (view==='more' ||
+         SETTINGS_VIEWS.indexOf(view)!==-1 || MORE_VIEWS.indexOf(view)!==-1)));
   });
   render();
 }
@@ -1894,7 +1917,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -1906,7 +1929,9 @@ function render(){
   else if(state.view==='balances') renderBalances();
   else if(state.view==='reports') renderReports();
   else if(state.view==='sync') renderSync();
-  else if(state.view==='more' || state.view==='settings') renderSettings();
+  else if(state.view==='more') renderMore();                  // v3.72.0: navigation
+  else if(state.view==='settings') renderSettings();          // v3.72.0: settings only
+  else if(state.view==='maint') renderMaintenance();          // v3.72.0: the plumbing page
   else if(state.view==='admin') renderAdmin();
   else if(state.view==='removetxn') renderRemoveTxn();
   else if(state.view==='reconcile') renderReconcile();
@@ -3426,6 +3451,17 @@ function busyButtons(b){ $all('.txncard .btn').forEach(function(x){ x.disabled=b
    v3.22: pick the first card AS RENDERED — drawInbox lists "Auto-categorized"
    before "Needs a category", so state.inbox[0] could be a different card than
    the one at the top of the screen. */
+/* v3.71.0: a span with role="link" is not a button — the browser will not fire
+   a click for Enter or Space. Anything given role="link" + tabindex here needs
+   this or it is mouse-only, which is an accessibility bug and also just annoying
+   on a keyboard. Space is preventDefault'd so the page does not scroll under it. */
+document.addEventListener('keydown', function(ev){
+  if(ev.key!=='Enter' && ev.key!==' ') return;
+  var el = ev.target && ev.target.closest && ev.target.closest('[role="link"][data-act]');
+  if(!el) return;
+  ev.preventDefault();
+  el.click();
+});
 document.addEventListener('keydown', function(ev){
   if(ev.key!=='Enter' || state.view!=='inbox' || !state.inbox || !state.inbox.length) return;
   if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
@@ -3952,10 +3988,19 @@ function drawTxns(){
     '<div class="searchbar"><input id="regQ" placeholder="Search description…" value="'+esc(r.q)+'">'+
     '<button class="btn sm" data-act="reg-search">Search</button></div>'+
     '<div class="filterbar">'+
+    /* v3.71.0: the options come from apiAccounts, but the filter can now be set
+       from Balances before that list has loaded — or for an account the list
+       does not carry (hidden, or named differently on the Accounts tab). Inject
+       the current filter if it is missing, or the select silently reads "All
+       accounts" while the rows are filtered, which is worse than a stray row. */
     '<select id="regAcct" data-act="reg-acct"><option value="">All accounts</option>'+
-    (state.accounts||[]).map(function(a){
-      return '<option value="'+esc(a)+'"'+(r.account===a?' selected':'')+'>'+esc(a)+'</option>';
-    }).join('')+'</select>'+
+    (function(){
+      var list = (state.accounts||[]).slice();
+      if(r.account && list.indexOf(r.account)===-1) list.unshift(r.account);
+      return list.map(function(a){
+        return '<option value="'+esc(a)+'"'+(r.account===a?' selected':'')+'>'+esc(a)+'</option>';
+      }).join('');
+    })()+'</select>'+
     (r.envelope
       ? '<button class="pill sel" data-act="reg-env-clear">'+esc(envName(r.envelope))+' ✕</button>'
       : '<button class="pill" data-act="open-picker" data-arg="regenv|x|0">Filter by envelope…</button>')+
@@ -4180,8 +4225,17 @@ function balGroupHtml(g){
     g.rows.forEach(function(r){
       var stale = r.days >= 30;
       var slow = r.days >= 7 && r.days < 30;
+      /* v3.71.0 (Scott): tapping the account name opens Transactions filtered to
+         that account — the register view of one account, which is the question
+         a balance immediately provokes ("what moved in here?"). apiRegister
+         already takes an `account` filter and state.register.account already
+         drives it, so this is navigation, not new plumbing. tabindex so it is
+         reachable without a mouse; NOT clickable in reorder mode, where the row
+         means something else. */
       h += '<div class="balrow'+(stale?' stale':'')+'">'+
-        '<span class="nm">'+esc(r.name)+(r.manual?' <span style="font-size:10px;opacity:.55">manual</span>':'')+'</span>'+
+        '<span class="nm" data-act="bal-txns" data-arg="'+esc(r.name)+'" role="link" tabindex="0" '+
+          'title="See transactions for '+esc(r.name)+'">'+
+          esc(r.name)+(r.manual?' <span style="font-size:10px;opacity:.55">manual</span>':'')+'</span>'+
         (r.manual?'<button class="baledit" data-act="bal-edit" data-arg="'+esc(r.name)+'" title="Update balance">✎</button>':'')+
         '<span class="upd'+(slow||stale?' stale':'')+'">'+esc(r.updated)+'</span>'+
         '<span class="bal">'+money(r.balance)+'</span>'+
@@ -5792,73 +5846,85 @@ function renderPersonal(){
   h += '</div>';
   $('#shell').innerHTML = h;
 }
-function renderSettings(){
-  var desktop = window.innerWidth >= 900;
-  var h = '<h2 class="viewtitle">Settings</h2>';
-  // On phones the sidebar is hidden, so surface the Money pages here too.
-  // On desktop they live in the sidebar's Money group, so we don't repeat them.
-  if(!desktop){
-    h += settingsSectionLabel('MONEY')+settingsList([
-      ['txns','Transactions'],['balances','Balances'],['accounts','Accounts'],['reports','Reports <span class="beta inline">BETA</span>']]);
-  }
-  /* v3.69.0 (U14): Settings was a 17-item mixed list — density first, "Back up
-     envelopes to Tiller" at the same level as "How to use", emoji on 3 of 12
-     rows. Now: the four things a person opens on purpose; a collapsed
-     MAINTENANCE group for the once-in-a-while tools; display choices last.
-     No icons anywhere (all or none — none). The dress-up row stays directly
-     above About (v3.57.2, pinned by seasonal_theme_test). */
-  h += settingsSectionLabel('SETTINGS')+settingsList([
-    ['howto','How to use SBC Money'],
-    ['obligations','Obligations & autopay'],
-    ['history','History & undo'],
-    ['personal','Personal information']]);
-  h += settingsMaintenance_();
-  h += densityControl();
-  h += '<div class="card morelist" style="margin-top:14px">'+
-    seasonControl() +
-    '<div class="envrow" data-act="goview" data-arg="about"><span class="nm">About</span><span>›</span></div>' +
-    '</div>';
-  // Log out: on phones it lives here; on desktop it's in the sidebar footer.
-  if(!desktop){
+/* ============================ v3.72.0 — MORE vs SETTINGS ====================
+ * Scott, 9/10/26: "Certain things should be easy to get into - especially when
+ * we think of mobile (like transactions)."
+ *
+ * The phone has no sidebar, so Transactions / Balances / Accounts / Reports
+ * were surfaced INSIDE Settings under a MONEY heading. That made Settings two
+ * pages wearing one hat — a navigation menu and a preferences screen — and no
+ * amount of regrouping its rows could fix that, because the incoherence was
+ * the page having two jobs, not the order of its contents.
+ *
+ * Split:
+ *   MORE      navigation. The pages the tab bar has no room for, then Settings.
+ *   SETTINGS  preferences and records only, grouped by what a thing IS.
+ *   MAINTENANCE  its own page, not a disclosure that doubles the page length.
+ *
+ * Tab bar is unchanged (Scott's call): Home · Inbox · Fund · Envelopes · More.
+ * ========================================================================== */
+function renderMore(){
+  var h = '<h2 class="viewtitle">More</h2>';
+  h += settingsSectionLabel('MONEY')+settingsList([
+    ['txns','Transactions'],
+    ['balances','Balances'],
+    ['accounts','Accounts'],
+    ['reports','Reports <span class="beta inline">BETA</span>']]);
+  h += settingsSectionLabel('APP')+settingsList([['settings','Settings']]);
+  // Log out: on phones it lives here now (it followed Settings before); on
+  // desktop it stays in the sidebar footer.
+  if(window.innerWidth < 900){
     h += '<div class="actions" style="margin-top:18px"><button class="btn ghost" data-act="logout">Log out</button></div>';
   }
-  h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money · '+esc(state.boot.user)+'</div>';
+  h += '<div class="empty" style="padding-top:18px;font-size:12px">SBC Money \u00b7 '+esc(state.boot.user)+'</div>';
   $('#shell').innerHTML = h;
 }
-/* v3.69.0 (U14): the collapsed Maintenance group. Open state is per device
-   (localStorage) so someone who lives in here doesn't re-open it every visit. */
-function settingsMaintOpen_(){ try{ return localStorage.getItem('sbcMaintOpen')==='1'; }catch(e){ return false; } }
-function settingsMaintenance_(){
-  var open = settingsMaintOpen_();
-  var h = '<div class="card morelist" style="margin-top:14px">'+
-    '<div class="envrow" data-act="settings-maint" style="cursor:pointer"><span class="nm">Maintenance</span>'+
-    '<span class="note" style="flex:1;font-size:12px">sync, reconcile, health, access, backups</span>'+
-    '<span class="garrow'+(open?' open':'')+'" style="font-size:18px">›</span></div>';
-  if(!open) return h+'</div>';
-  h += '</div>';
-  /* v3.70.1 -- EXPANDED MAINTENANCE WAS A WALL.
-     U14 collapsed this group and it reads beautifully shut. OPEN, it emitted
-     everything as flat siblings of the SETTINGS card: six rows with nothing
-     tying them to Maintenance, two ghost buttons floating loose in the page
-     flow each trailed by a full-width paragraph, and TILLER wedged in above
-     DISPLAY. Every other group on this page carries a label; these did not, so
-     the children read as peers of "How to use SBC Money" rather than as the
-     contents of the thing you just opened.
-     Three changes, and NO behaviour is touched -- same rows, same actions,
-     same links, same handlers:
-       1. a MAINTENANCE label, so the group is a group like every other one;
-       2. the two actions share ONE card with their notes instead of floating;
-       3. TILLER keeps its own label and stays last, where it reads as "and here
-          are the sheets behind all this" rather than as an interruption. */
-  h += settingsSectionLabel('MAINTENANCE');
+
+/* Grouped by WHAT A THING IS, which is the only grouping a person can predict:
+ *   SET UP   the rules — what you owe, what counts as on-budget, who you are
+ *   RECORDS  what already happened, read-only
+ *   DISPLAY  how it looks. Monthly dress-up moved here from its pinned spot
+ *            above About (v3.57.2): it is an appearance preference, and next to
+ *            About it was an orphan sitting beside a version number.
+ *   APP      the app itself — help, the plumbing page, the version
+ * The old "SETTINGS" heading inside the Settings page is gone; a label that
+ * repeats the page title carries no information, and its four rows were four
+ * unrelated things (help, config, a log, a profile) pretending to be a group. */
+function renderSettings(){
+  var h = '<h2 class="viewtitle">Settings</h2>';
+  h += settingsSectionLabel('SET UP')+settingsList([
+    ['obligations','Obligations & autopay'],
+    ['healthset','Health settings'],
+    ['personal','Personal information']]);
+  h += settingsSectionLabel('RECORDS')+settingsList([
+    ['history','History & undo'],
+    ['activity','Sign-ins & activity']]);
+  h += densityControl();                                   // emits its own DISPLAY label
+  h += '<div class="card morelist" style="margin-top:14px">'+seasonControl()+'</div>';
+  h += settingsSectionLabel('APP')+settingsList([
+    ['howto','How to use SBC Money'],
+    ['maint','Maintenance'],
+    ['about','About']]);
+  $('#shell').innerHTML = h;
+}
+
+/* v3.72.0: was `settingsMaintenance_()`, a disclosure that expanded into a
+   second page's worth of content inline — six rows, two actions with
+   paragraph-length notes, and the Tiller links — pushing DISPLAY and About
+   below the fold and making the page length jump on a tap. It is a page.
+   Health settings and Sign-ins & activity LEFT for SET UP and RECORDS: one is
+   configuration and one is a log, and neither is plumbing. What remains is
+   coherently "things you do to the machinery". */
+function renderMaintenance(){
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">\u2039 Settings</button>'+
+    '<h2 class="viewtitle">Maintenance</h2>'+
+    '<div class="note" style="padding:0 2px 14px">Tools for when something looks wrong, '+
+    'or when you want SBC and Tiller to agree right now instead of within the hour.</div>';
   h += settingsList([
     ['sync','Tiller sync'],
     ['reconcile','Reconcile accounts'],
-    ['healthset','Health settings'],
     ['removetxn','Remove a transaction'],
-    ['admin','Access (who can sign in)'],
-    ['activity','Sign-ins & activity']]);
-  // v3.54: see mirrorRefreshFromSheet.
+    ['admin','Access (who can sign in)']]);
   h += '<div class="card" style="margin-top:14px;padding:12px">'+
     '<div class="actions"><button class="btn ghost" data-act="snapshot-tiller">\u2b07 Back up envelopes to Tiller</button></div>'+
     '<div class="note" style="padding:6px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>'+
@@ -5866,14 +5932,13 @@ function settingsMaintenance_(){
     '<div class="note" style="padding:6px 2px 0">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers \u2014 otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>'+
     '</div>';
   // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
-  // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
-  // Corey and Brady land on their own sheets.
+  // for browser tabs. Ids come from apiBootstrap and are resolved PER USER.
   var tillerLinks = settingsLinkList([
     [sheetUrl(state.boot.companionSheetId), 'Tiller Companion Sheet'],
     [sheetUrl(state.boot.tillerSheetId), 'Tiller Spreadsheet'],
     ['https://my.tiller.com', 'Tiller (my.tiller.com)']]);
   if(tillerLinks) h += settingsSectionLabel('TILLER')+tillerLinks;
-  return h;
+  $('#shell').innerHTML = h;
 }
 
 /* ============================ access / admin (v3.8) ============================ */
@@ -6334,7 +6399,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
     '<p style="margin:0 0 6px"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>'+
     '<p style="margin:0 0 6px"><b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there. (Before v3.66 these rows just said "Money moved".)</p>'+
-    '<p style="margin:0 0 6px"><b>Maintenance</b> — the folded row in Settings that holds the once-in-a-while tools: Tiller sync, Reconcile accounts, Health settings, Remove a transaction, Access, Sign-ins, the Tiller backup and links.</p>'+
+    '<p style="margin:0 0 6px"><b>Maintenance</b> — a page under Settings holding the tools for when something looks wrong: Tiller sync, Reconcile accounts, Remove a transaction, Access, the Tiller backup and the sheet links. (v3.72.0: Health settings moved to <b>Settings → Set up</b> and Sign-ins &amp; activity to <b>Settings → Records</b> — one is configuration, the other a log, and neither is plumbing.)</p>'+
     '<p style="margin:0"><b>Write-back</b> — every save you make here is also written to your Google Sheet in the background (that\u2019s the "syncing in background" toast). The sheet is the record; the app is the fast view of it.</p>');
 
   h += S('💵','Payday — the routine that matters most',
@@ -6438,7 +6503,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎.</p>'+
     '<p style="margin:0 0 6px">• <b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.</p>'+
     '<p style="margin:0 0 6px">• <b>Access</b> — who can sign in to <i>your</i> budget; add a family member\u2019s email here.</p>'+
-    '<p style="margin:0 0 6px">• <b>Sign-ins & activity</b> — every sign-in and who changed what.</p>'+
+    '<p style="margin:0 0 6px">• <b>More</b> (phone) — the pages the five tabs have no room for: Transactions, Balances, Accounts, Reports, and Settings. On a computer these all live in the left sidebar instead.</p>'+'<p style="margin:0 0 6px">• <b>Sign-ins & activity</b> — every sign-in and who changed what.</p>'+
     '<p style="margin:0 0 6px">• <b>Health settings</b> — which account groups count as cash and debt for the honesty check.</p>'+
     '<p style="margin:0"><b>Display density</b>, <b>Monthly dress-up</b>, <b>Back up envelopes to Tiller</b> and the <b>Customize</b> button on Home are all cosmetic or belt-and-suspenders — none of them moves money.</p>');
 
@@ -6792,7 +6857,6 @@ document.addEventListener('click', function(ev){
     case 'env-open': openEnvelope(arg); break;
     case 'env-back': go('envelopes'); break;
     case 'env-q-clear': state.envQ=''; renderEnvelopes(); break;   // v3.69.0 (U9)
-    case 'settings-maint': try{ localStorage.setItem('sbcMaintOpen', settingsMaintOpen_()?'0':'1'); }catch(e){} renderSettings(); break;   // v3.69.0 (U14)
     case 'env-new': state.envNew={name:'',group:'',type:'Expense'}; renderEnvelopes(); break;
     case 'env-new-cancel': state.envNew=null; renderEnvelopes(); break;
     case 'env-new-save': envNewSave(); break;
@@ -6854,6 +6918,19 @@ document.addEventListener('click', function(ev){
     case 'bal-down': balMove(arg,1); break;
     case 'bal-acct-up': balMoveAccount(p[0],p[1],-1); break;
     case 'bal-acct-down': balMoveAccount(p[0],p[1],1); break;
+    /* v3.71.0: Balances -> the register, filtered to one account. Clear the
+       OTHER filters so the page shows exactly what was asked for, and drop the
+       cached items so renderTxns refetches rather than flashing the last
+       account's rows. Back returns to Balances (go() pushes history). */
+    case 'bal-txns':
+      state.register.account = arg;
+      state.register.q = '';
+      state.register.envelope = '';
+      state.register.limit = 50;
+      state.register.items = null;
+      state.register.sig = '';
+      go('txns');
+      break;
     case 'bal-edit': balEdit(arg); break;
     case 'bal-edit-save': balEditSave(arg); break;
     case 'bal-edit-cancel': balEditCancel(); break;
