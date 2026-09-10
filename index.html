@@ -1093,7 +1093,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.70.0';
+var FE_VERSION = 'v3.70.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -5821,6 +5821,21 @@ function settingsMaintenance_(){
     '<span class="garrow'+(open?' open':'')+'" style="font-size:18px">›</span></div>';
   if(!open) return h+'</div>';
   h += '</div>';
+  /* v3.70.1 -- EXPANDED MAINTENANCE WAS A WALL.
+     U14 collapsed this group and it reads beautifully shut. OPEN, it emitted
+     everything as flat siblings of the SETTINGS card: six rows with nothing
+     tying them to Maintenance, two ghost buttons floating loose in the page
+     flow each trailed by a full-width paragraph, and TILLER wedged in above
+     DISPLAY. Every other group on this page carries a label; these did not, so
+     the children read as peers of "How to use SBC Money" rather than as the
+     contents of the thing you just opened.
+     Three changes, and NO behaviour is touched -- same rows, same actions,
+     same links, same handlers:
+       1. a MAINTENANCE label, so the group is a group like every other one;
+       2. the two actions share ONE card with their notes instead of floating;
+       3. TILLER keeps its own label and stays last, where it reads as "and here
+          are the sheets behind all this" rather than as an interruption. */
+  h += settingsSectionLabel('MAINTENANCE');
   h += settingsList([
     ['sync','Tiller sync'],
     ['reconcile','Reconcile accounts'],
@@ -5828,11 +5843,13 @@ function settingsMaintenance_(){
     ['removetxn','Remove a transaction'],
     ['admin','Access (who can sign in)'],
     ['activity','Sign-ins & activity']]);
-  h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="snapshot-tiller">⬇ Back up envelopes to Tiller</button></div>'+
-    '<div class="note" style="padding:4px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>';
   // v3.54: see mirrorRefreshFromSheet.
-  h += '<div class="actions" style="margin-top:14px"><button class="btn ghost" data-act="mirror-refresh">↻ Refresh app data from sheet</button></div>'+
-    '<div class="note" style="padding:4px 2px 0">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers — otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>';
+  h += '<div class="card" style="margin-top:14px;padding:12px">'+
+    '<div class="actions"><button class="btn ghost" data-act="snapshot-tiller">\u2b07 Back up envelopes to Tiller</button></div>'+
+    '<div class="note" style="padding:6px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>'+
+    '<div class="actions" style="margin-top:16px"><button class="btn ghost" data-act="mirror-refresh">\u21bb Refresh app data from sheet</button></div>'+
+    '<div class="note" style="padding:6px 2px 0">Re-reads envelopes, inbox, transactions and journal straight from your companion sheet and tells you exactly what it did. Use it if a repair was made in the sheet or the Apps Script editor and the app still shows the old numbers \u2014 otherwise it catches up on its own within the hour. It will say <b>Skipped</b> if one of your own saves hasn\u2019t reached the sheet yet (see the banner on Home).</div>'+
+    '</div>';
   // v3.41 (Scott 8/1): jump straight to the underlying sheets instead of hunting
   // for browser tabs. Ids come from apiBootstrap and are resolved PER USER, so
   // Corey and Brady land on their own sheets.
