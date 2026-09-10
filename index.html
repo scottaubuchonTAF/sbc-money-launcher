@@ -1093,7 +1093,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.69.0';
+var FE_VERSION = 'v3.70.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2059,12 +2059,46 @@ var DASH_WIDGETS = {
     // other lands in the inbox within the hour.
     var un=(H.unexplained!=null)?Number(H.unexplained):(Number(H.residual)||0);
     var unOk=(H.unexplainedOk!=null)?!!H.unexplainedOk:!!H.ok;
-    if(!unOk) freezeReval_();   // v3.55: a real gap earns the frozen-balance check
-                                // (self-guarded — one fetch per session, after paint)
     var haveFloat=(H.inFlight!=null);
     var lag=haveFloat?Number(H.inFlight):((H.feedLag!=null)?Number(H.feedLag):0);
     var imp=haveFloat?(Number(H.importerWindow)||0):0;
     var resid=Number(H.residual)||0;
+    /* v3.70.0 R1 — the books either balance or they don't, and that is an EXACT
+       identity (bank − envelopes − pending). No estimator gets to overrule it.
+       Kept as its own name because both the pill and the note depend on it. */
+    var booksBalance=(Math.abs(resid)<0.005);
+    /* v3.70.0 — THE FLOAT HAS TWO HALVES AND THEY NEED DIFFERENT SENTENCES.
+       phase1c clamps in-flight into [0, residual] before subtracting it, so:
+         applied   = float that actually accounts for part of the residual. It
+                     really does clear on its own.
+         unapplied = float the books have ALREADY absorbed some other way. The
+                     residual will not move when it settles. On 9/10/26 this was
+                     Scott's $1,061.54 — a balance he set by hand on 8/26, which
+                     does not "clear", it ages out of the 35-day window ~9/30.
+       Before v3.70.0 the card called the whole bucket "feeds catching up …
+       clears on its own", which was true of the first half and false of the
+       second. Pre-phase1c payloads send neither field; treat it all as applied,
+       which is the old behaviour exactly. */
+    var applied=(H.appliedFloat!=null)?Number(H.appliedFloat):lag;
+    var unapplied=(H.unappliedFloat!=null)?Number(H.unappliedFloat):0;
+    /* v3.70.0 — staleness comes from the last VALUE change now (phase1d), not
+       the last row date. Tiller writes a row daily with an unchanged number, so
+       the row date is always fresh while the number rots. This is the ONLY
+       signal on this card that survives a frozen feed. */
+    var staleAccts=(H.staleAccounts&&H.staleAccounts.length)?H.staleAccounts:null;
+    var anyStale=!!H.anyStale&&!!staleAccts;
+    var staleWord=anyStale
+      ? '<b>'+esc(staleAccts.join(', '))+'</b>'+
+        (H.staleSince?' has not moved since '+esc(H.staleSince):' has stopped moving')+
+        (H.staleDays?' ('+H.staleDays+' days)':'')
+      : '';
+    /* v3.55 + v3.70.0: a real gap earns the frozen-balance check — and so does a
+       stale balance now, because after the clamp a frozen feed can sit behind a
+       PERFECTLY BALANCED set of books (9/10/26: residual $0.00 while Rewards
+       Checking had been frozen six days). Gating this on !unOk alone meant the
+       one state that needs a human was the one state we never looked at.
+       Still self-guarded: one fetch per session, after paint. */
+    if(!unOk || anyStale) freezeReval_();
     var lagAcctsArr=(haveFloat&&H.inFlightAccounts&&H.inFlightAccounts.length)?H.inFlightAccounts
       :((H.feedLagAccounts&&H.feedLagAccounts.length)?H.feedLagAccounts:null);
     var lagAccts=lagAcctsArr?lagAcctsArr.join(', '):'';
@@ -2078,37 +2112,63 @@ var DASH_WIDGETS = {
         if(Math.abs(Math.abs(Number(frz[fi].amountSince)||0)-Math.abs(un))<1){ frzMatch=frz[fi]; break; }
       }
     }
-    var pill=unOk?'<span class="dokpill">✓ Envelopes match your accounts</span>'
+    /* v3.70.0 R1 — `|| booksBalance` is the belt to the clamp's braces. With
+       phase1c live, unOk is already true whenever the residual is zero. Against
+       an older database (or if a future estimator change slips), this stops the
+       pill claiming money is "unexplained" when bank and envelopes are equal —
+       the exact sentence Scott was shown on 9/10/26. */
+    var pill=(unOk||booksBalance)?'<span class="dokpill">✓ Envelopes match your accounts</span>'
       :(frzMatch
         ?'<span class="dwarnpill">⚠ '+money(un)+' · '+esc(frzMatch.account)+' is behind</span>'
         :'<span class="dwarnpill">⚠ '+money(un)+' unexplained</span>');
     // "$Y arriving in your inbox shortly." — only when the importer is behind.
     var impLine=(Math.abs(imp)>=0.005)
       ? ' '+money(Math.abs(imp))+' arriving in your inbox shortly.' : '';
-    var note='';
-    if(unOk && Math.abs(lag)>=0.005){
-      // Reconciled AFTER float: this is the calm, self-clearing case.
-      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' in flight — feeds catching up'+
+    /* v3.70.0 — THE NOTE, REWRITTEN. Two rules the old branches broke on 9/10:
+       R1. Never print the word "unexplained" while the books balance. If
+           |resid| < a cent there is no gap, whatever the estimator says. The
+           9/10 card called the same $896.33 "in flight" AND "NOT explained".
+       R2. "Clears on its own" belongs to APPLIED float only. Unapplied float
+           and a frozen balance are not self-healing and must never claim to be.
+       Order matters: a stale balance outranks everything, because it is the one
+       state that needs a human. */
+    var note='', sub=function(s){ return '<div class="dsub" style="margin-top:6px">'+s+'</div>'; };
+    if(anyStale){
+      // R2 — a frozen number is the headline whether or not the totals agree.
+      note=sub(staleWord+', while transactions kept posting. '+
+        (booksBalance
+          ? 'Your totals still agree, so nothing is lost — but the balance shown is behind. '
+          : '')+
+        'Refresh the feed in Tiller, or set it by hand on Balances.');
+    } else if(unOk && Math.abs(applied)>=0.005){
+      // The calm, genuinely self-clearing case.
+      note=sub(money(applied)+' in flight — feeds catching up'+
         (lagAccts?' ('+esc(lagAccts)+')':'')+
-        '. Clears on its own; no action needed.'+impLine+'</div>';
+        '. Clears on its own; no action needed.'+impLine);
+    } else if(unOk && Math.abs(unapplied)>=0.005){
+      // R1 + R2 — float with no gap to explain. Say what it is; promise nothing.
+      note=sub('Your envelopes and accounts agree. '+money(Math.abs(unapplied))+
+        ' of recent movement'+(lagAccts?' on '+esc(lagAccts):'')+
+        ' has no matching transaction — usually a balance set by hand. It does not '+
+        'affect your totals and drops off once it leaves the 35-day window.'+impLine);
     } else if(unOk && Math.abs(resid)>=0.005){
-      // Reconciled with a residual we can't attribute to a named account.
-      note='<div class="dsub" style="margin-top:6px">'+money(resid)+
-        ' difference — all timing. Clears on its own; no action needed.'+impLine+'</div>';
-    } else if(!unOk && Math.abs(lag)>=0.005){
-      note='<div class="dsub" style="margin-top:6px">'+money(lag)+' of the gap is in flight'+
+      note=sub(money(resid)+' difference — all timing. Clears on its own; no action needed.'+impLine);
+    } else if(!unOk && Math.abs(applied)>=0.005){
+      note=sub(money(applied)+' of the gap is in flight'+
         (lagAccts?' ('+esc(lagAccts)+')':'')+'; '+money(un)+
-        ' is NOT explained — worth a look on the Reconcile page.'+impLine+'</div>';
+        ' is not explained yet — worth a look on the Reconcile page.'+impLine);
     } else if(!unOk){
-      note='<div class="dsub" style="margin-top:6px">'+money(un)+
-        ' is not explained by feed timing — worth a look on the Reconcile page.</div>';
+      note=sub(money(un)+' is not explained by feed timing — worth a look on the Reconcile page.');
     }
     // v3.55: if a balance has stopped MOVING, say THAT instead of "unexplained".
     // On 8/26 this card showed "−$1,061.54 unexplained · Oldest balance update
     // 8/26/26" while Rewards Checking had been frozen at $3,416.80 for a week —
     // every line technically true and the whole card misleading. A freeze whose
     // size matches the gap IS the explanation, so it replaces the note.
-    if(frz && !unOk){
+    // v3.70.0: `|| anyStale` — FeedFreeze knows the EXPECTED balance, which is
+    // strictly more useful than our own stale sentence, so let it win whenever
+    // it has an answer. It no longer needs a gap to be allowed to speak.
+    if(frz && (!unOk || anyStale)){
       var f0=frzMatch||frz[0];
       note='<div class="dsub" style="margin-top:6px">'+
         (frzMatch?'That is ':'')+'<b>'+esc(f0.account)+'</b>: its balance has not moved since '+
@@ -2151,6 +2211,12 @@ var DASH_WIDGETS = {
       extra+='<div class="dkv"><span class="k" style="color:var(--amber)">Balance not moving · '+
         esc(frz[0].account)+'</span><span class="v" style="color:var(--amber)">'+
         frz[0].daysStuck+' days</span></div>';
+    } else if(anyStale){
+      // v3.70.0: the mirror can see this without FeedFreeze having run, because
+      // phase1d measures the last VALUE change. Same row, one source earlier.
+      extra+='<div class="dkv"><span class="k" style="color:var(--amber)">Balance not moving · '+
+        esc(staleAccts.join(', '))+'</span><span class="v" style="color:var(--amber)">'+
+        (H.staleDays?H.staleDays+' days':'stale')+'</span></div>';
     }
     if(H.stalest)
       extra+='<div class="dkv"><span class="k">Newest balance row</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
@@ -6284,12 +6350,14 @@ function renderHowTo(){
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
     '<p style="margin:0 0 6px">• <b>"$X in flight — feeds catching up"</b> is normal and needs nothing from you. Your bank posted something the app hasn’t received yet (or the reverse). It clears itself, usually within a few hours.</p>'+
     '<p style="margin:0 0 6px">• <b>"$Y arriving in your inbox shortly"</b> means transactions are already on their way in — they’ll show up in the Inbox on the next hourly sync.</p>'+
-    '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open <b>Settings → Maintenance → Reconcile accounts</b>; it usually means a balance or an envelope needs a nudge.</p>'+
+    '<p style="margin:0 0 6px">• <b>"$Z of recent movement has no matching transaction"</b> (v3.70.0) turns up when a balance was set by hand. The money is already counted correctly on both sides, so your totals are right — the app just can’t point at a transaction that explains the step. It disappears once that day falls outside the 35-day window it looks at. Nothing to do.</p>'+
+    '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open <b>Settings → Maintenance → Reconcile accounts</b>; it usually means a balance or an envelope needs a nudge. As of v3.70.0 the pill can only go amber when your envelopes and accounts genuinely disagree — if the two totals match, you get green, no matter what the feed estimates say. Before that, a big enough estimate could invent a gap that wasn’t there.</p>'+
     '<p style="margin:0">Money sitting in your <b>Inbox unapproved</b> also shows as a difference — the bank has spent it but no envelope has been told yet. Clearing the Inbox is the fix, and that’s another reason not to let it pile up.</p>');
 
   h += S('🧊','When a balance is frozen',
     '<p style="margin:0 0 8px">Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old. On 8/26/26 that hid a $1,061.54 gap for a week.</p>'+
     '<p style="margin:0 0 8px">SBC now watches for it: an account whose balance hasn’t changed in days <i>while transactions kept arriving</i> gets called out in a banner above the Dashboard, and you get one email a day until it’s sorted.</p>'+
+    '<p style="margin:0 0 8px">As of <b>v3.70.0</b> Budget health watches for the same thing, and it does it the honest way — by the last day the <i>number</i> changed, not the last day a row arrived. It also speaks up when your totals still add up: on 9/10/26 the books balanced to the cent while a checking balance had been frozen for six days, and the old card had nothing to say about it. A frozen balance is now the headline whether or not anything looks wrong.</p>'+
     '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Maintenance → Reconcile accounts</b>.</p>'+
     '<p style="margin:0 0 8px">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>'+
     '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Maintenance → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
@@ -6899,6 +6967,18 @@ SBC.go = go; SBC.goHistoryReplay_ = goHistoryReplay_;
 SBC.supaOn_ = supaOn_; SBC.supaStrike_ = supaStrike_;
 SBC.mutSig_ = mutSig_; SBC.mutationDepth_ = mutationDepth_;
 SBC.cssVar_ = cssVar_;
+/* v3.70.0: the Budget health card is what lied on 9/10/26, so it gets a seam.
+   Tests feed it a health payload and read the rendered HTML back — the WORDING
+   is the behaviour here, and regex-scraping index.html would only pin the
+   source text, not what a given payload actually produces. */
+SBC.DASH_WIDGETS = DASH_WIDGETS;
+SBC.renderHealthCard_ = function(health, sz, freeze){
+  var prevDash = state.dash, prevFreeze = state.freeze;
+  state.dash = { health: health };
+  state.freeze = freeze || null;
+  try { return DASH_WIDGETS.health.render(sz || 'l'); }
+  finally { state.dash = prevDash; state.freeze = prevFreeze; }
+};
 
 (function start(){
   // v3.57.1: if Google's script loaded before this script finished parsing, its
