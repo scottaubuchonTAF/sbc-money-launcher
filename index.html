@@ -1114,7 +1114,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.72.3';
+var FE_VERSION = 'v3.72.4';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4431,15 +4431,52 @@ function oblRows_(){
 }
 
 /* ---- config screen (More → Obligations) --------------------------------- */
+/* v3.72.4 — Scott: "obligations take a long time to load."
+   TWO causes, both fixed here.
+   1. The payload bundled the account PICKERS with the rows, and building those
+      pickers indexes 180 days of Balance History across every account through
+      Apps Script. Reading your obligations never needs them — only the editor
+      does. apiObligations is now rows-only; apiObligationAccounts is fetched
+      lazily by oblNeedAccounts_() when the editor opens.
+   2. Every visit showed a spinner and waited, even with the answer already in
+      hand. Now: draw what we have IMMEDIATELY and revalidate behind it, the
+      same shape as dashFetchDash. A spinner only appears on a cold first open.
+   Re-draw only when the payload actually CHANGED and the user is not mid-edit:
+   repainting under someone's fingers is the bug v3.62 called "state refresh
+   without render" in reverse. */
 function renderObligations(){
-  $('#shell').innerHTML = '<h2 class="viewtitle">Obligations</h2><div class="spin"></div>';
-  run('apiObligations').then(function(o){ state.oblConfig = o; drawObligations(); }).catch(fail);
+  var have = !!state.oblConfig;
+  if(have) drawObligations();
+  else $('#shell').innerHTML = '<h2 class="viewtitle">Obligations</h2><div class="spin"></div>';
+  run('apiObligations').then(function(o){
+    var changed = JSON.stringify(o) !== JSON.stringify(state.oblConfig);
+    state.oblConfig = o;
+    if(state.view==='obligations' && (!have || (changed && !state.oblEdit))) drawObligations();
+  }).catch(function(e){ if(!have) fail(e); else console.warn('apiObligations:', e&&e.message||e); });
+}
+/* The editor needs the pickers; nothing else does. One fetch per session —
+   the account list does not change while you are typing into a form. */
+function oblNeedAccounts_(){
+  if(state.oblAccounts || state.oblAccountsLoading) return;
+  state.oblAccountsLoading = true;
+  run('apiObligationAccounts').then(function(a){
+    state.oblAccounts = a; state.oblAccountsLoading = false;
+    if(state.view==='obligations' && state.oblEdit) drawObligations();
+  }).catch(function(e){
+    state.oblAccountsLoading = false;
+    toast('Could not load the account list — reopen the editor to retry.');
+    console.warn('apiObligationAccounts:', e&&e.message||e);
+  });
 }
 function oblModeLabel_(m){
   return m==='statement' ? 'Statement balance' : (m==='full-current' ? 'Whatever is owed today' : 'Fixed amount');
 }
 function drawObligations(){
   var o = state.oblConfig, ed = state.oblEdit;
+  /* v3.72.4: picker fields moved out of `o` into their own lazily-fetched
+     payload. Merged here so every reference below reads the same way, and so a
+     still-loading picker degrades to an empty select rather than an error. */
+  var acc = state.oblAccounts || {};
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Obligations</h2>'+
     '<div class="note" style="padding:4px 0 14px">Tell SBC when each card or loan gets paid '+
@@ -4487,7 +4524,7 @@ function drawObligations(){
     h += '<div class="grp"><h3>'+(ed.id?'Edit':'Add')+'</h3><div class="card" style="padding:12px">';
     h += row('Name', '<input id="obl_name" class="amt" style="flex:1" value="'+esc(ed.name||'')+'" placeholder="Discover">');
     h += row('What is it', sel('type', [['card','Credit card'],['loan','Loan / mortgage']], ed.type||'card'));
-    h += row('Paid from', sel('fund', [''].concat(o.cashAccounts||[]), ed.fundingAccount||''));
+    h += row('Paid from', sel('fund', [''].concat(acc.cashAccounts||[]), ed.fundingAccount||''));
     h += row('Amount is', sel('mode', [['statement','Statement balance (cards)'],
       ['full-current','Whatever is owed today'],['fixed','A fixed amount']], ed.mode||'statement'));
     // v3.56.1: Scott, adding his mortgage — "that shouldn't even matter, you
@@ -4500,12 +4537,12 @@ function drawObligations(){
       // Scott chose "Citi Double Cash Card", whose feed stopped in May 2023,
       // and every message afterwards was about a dead account. Each option now
       // carries when it last reported a balance, and a dead one says so.
-      var ages = o.accountAsOf || {}, deadAfter = o.deadFeedDays || 45;
+      var ages = acc.accountAsOf || {}, deadAfter = (acc.deadFeedDays||o.deadFeedDays) || 45;
       // v3.56.14/.15: accounts missing from the Accounts TAB are listed here
       // (Scott: "i don't see my card listed") — but accounts marked HIDE are
       // not, because Hide is the user's own decision (Scott: "you shouldn't
       // list anything in there that is hidden").
-      var unl = {}; (o.unlistedAccounts||[]).forEach(function(n){ unl[n]=1; });
+      var unl = {}; (acc.unlistedAccounts||[]).forEach(function(n){ unl[n]=1; });
       var lbl_ = function(n){
         var a = ages[String(n).toLowerCase()];
         var tail = !a ? ' · ⚠ no balance in the last 6 months'
@@ -4513,9 +4550,9 @@ function drawObligations(){
         if(unl[n]) tail += ' · not on Accounts tab';
         return n+tail;
       };
-      var acctOpts = [['','']].concat((o.debtAccounts||[]).map(function(n){ return [n, lbl_(n)]; }));
-      if((o.otherAccounts||[]).length)
-        acctOpts = acctOpts.concat(o.otherAccounts.map(function(n){ return [n, lbl_(n)]; }));
+      var acctOpts = [['','']].concat((acc.debtAccounts||[]).map(function(n){ return [n, lbl_(n)]; }));
+      if((acc.otherAccounts||[]).length)
+        acctOpts = acctOpts.concat(acc.otherAccounts.map(function(n){ return [n, lbl_(n)]; }));
       h += row('Read the amount from', sel('account', acctOpts, ed.account||''));
       var cur = ages[String(ed.account||'').toLowerCase()];
       if(ed.account && cur && cur.days > deadAfter)
@@ -4562,10 +4599,11 @@ function oblFormRead_(){
   var l = v('lead'); if(l!==undefined) ed.leadDays = l;
   return ed;
 }
-function oblAdd(){ state.oblEdit = { mode:'statement', type:'card' }; drawObligations(); }
+function oblAdd(){ state.oblEdit = { mode:'statement', type:'card' }; oblNeedAccounts_(); drawObligations(); }
 function oblEdit(id){
   var r = (state.oblConfig.rows||[]).find(function(x){ return x.id===id; });
   state.oblEdit = r ? JSON.parse(JSON.stringify(r)) : { mode:'statement', type:'card' };
+  oblNeedAccounts_();   // v3.72.4: the pickers are fetched only now
   drawObligations();
 }
 function oblCancel(){ state.oblEdit = null; drawObligations(); }
