@@ -1093,7 +1093,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.70.1';
+var FE_VERSION = 'v3.70.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2146,11 +2146,26 @@ var DASH_WIDGETS = {
         (lagAccts?' ('+esc(lagAccts)+')':'')+
         '. Clears on its own; no action needed.'+impLine);
     } else if(unOk && Math.abs(unapplied)>=0.005){
-      // R1 + R2 — float with no gap to explain. Say what it is; promise nothing.
-      note=sub('Your envelopes and accounts agree. '+money(Math.abs(unapplied))+
-        ' of recent movement'+(lagAccts?' on '+esc(lagAccts):'')+
-        ' has no matching transaction — usually a balance set by hand. It does not '+
-        'affect your totals and drops off once it leaves the 35-day window.'+impLine);
+      /* v3.70.2 — R4: SAY NOTHING.
+         Scott, 9/10/26: "there is nothing wrong with the account or balances,
+         it's just a timing issue with that bank. The transaction appears before
+         the balance (or vice versa)."
+         He is right, and it goes deeper than wording. A bank feed ALWAYS posts
+         the balance and the transaction on different days. That is permanent
+         and universal — not a condition the books can be in or out of. The
+         in-flight bucket exists to explain a NON-ZERO residual; when there is
+         no gap there is nothing to explain, and unapplied float is by
+         definition the part that never touched the totals.
+         v3.70.0 replaced a WRONG sentence here with a careful, accurate one —
+         right diagnosis, wrong layer. The fix is not better words, it is no
+         words. The green pill already says the only thing that is both true and
+         useful. Deliberately empty; `unapplied` stays computed because the
+         stale branch and the kv rows still read the float.
+         ⚠ Do NOT "solve" this by changing Health Feed Window Days. Sweeping
+         21..70 days showed every failing anchor was the DAY AFTER A PAYDAY —
+         payroll is bi-weekly and cutoff = current_date - N advances daily, so
+         any fixed N walks back into that slot every 14 days. */
+      note='';
     } else if(unOk && Math.abs(resid)>=0.005){
       note=sub(money(resid)+' difference — all timing. Clears on its own; no action needed.'+impLine);
     } else if(!unOk && Math.abs(applied)>=0.005){
@@ -6367,7 +6382,6 @@ function renderHowTo(){
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? Green means yes — nothing is missing and nothing is invented.</p>'+
     '<p style="margin:0 0 6px">• <b>"$X in flight — feeds catching up"</b> is normal and needs nothing from you. Your bank posted something the app hasn’t received yet (or the reverse). It clears itself, usually within a few hours.</p>'+
     '<p style="margin:0 0 6px">• <b>"$Y arriving in your inbox shortly"</b> means transactions are already on their way in — they’ll show up in the Inbox on the next hourly sync.</p>'+
-    '<p style="margin:0 0 6px">• <b>"$Z of recent movement has no matching transaction"</b> (v3.70.0) turns up when a balance was set by hand. The money is already counted correctly on both sides, so your totals are right — the app just can’t point at a transaction that explains the step. It disappears once that day falls outside the 35-day window it looks at. Nothing to do.</p>'+
     '<p style="margin:0 0 8px">• An <b>amber pill with an unexplained amount</b> is the one worth a look. Open <b>Settings → Maintenance → Reconcile accounts</b>; it usually means a balance or an envelope needs a nudge. As of v3.70.0 the pill can only go amber when your envelopes and accounts genuinely disagree — if the two totals match, you get green, no matter what the feed estimates say. Before that, a big enough estimate could invent a gap that wasn’t there.</p>'+
     '<p style="margin:0">Money sitting in your <b>Inbox unapproved</b> also shows as a difference — the bank has spent it but no envelope has been told yet. Clearing the Inbox is the fix, and that’s another reason not to let it pile up.</p>');
 
