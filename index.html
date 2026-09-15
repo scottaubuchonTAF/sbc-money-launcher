@@ -336,6 +336,31 @@ aside.side{display:none}
 .tagchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
 .tagchip{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px dashed var(--teal-300);color:var(--teal-700);font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;white-space:nowrap}
 .tagchip .tx{color:var(--teal-600);font-weight:800;cursor:pointer;padding:0 2px}
+/* v3.75.0 — Goals + Max */
+.goalcard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.goalcard.compact{box-shadow:none;padding:8px 0;margin:0;border-radius:0;border-top:1px solid var(--line);cursor:default}
+.goalcard.compact:first-child{border-top:none}
+.goalcard .grow{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.goalcard .gnm{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goalcard .gamt{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.goalcard .dim,.gform .dim{color:var(--ink-3);font-weight:500}
+.goalcard .gbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
+.goalcard .gbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
+.goalcard.done .gbar i{background:var(--teal-700)}
+.goalcard .gsub{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);margin-top:6px}
+.goalcard .gnote{font-size:12.5px;color:var(--ink-2);margin-top:6px}
+.goalcard .gact{margin-top:8px}
+.gchip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:var(--line);color:var(--ink-2);white-space:nowrap}
+.gchip.ok{background:var(--teal-50);color:var(--teal-700)} .gchip.bad{background:var(--red-bg);color:var(--red)}
+.gbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:var(--teal-50);color:var(--teal-700);white-space:nowrap;margin-left:6px;border:none;font:inherit;font-size:11px;font-weight:700}
+.gbadge.done{background:var(--teal-600);color:#fff}
+.gbadge.over{background:var(--amber-bg,#fff4e0);color:var(--amber,#b26a00);cursor:pointer}
+.gform{display:grid;gap:10px}
+.gform label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2);font-weight:600}
+.gform input,.gform select{width:100%;box-sizing:border-box}
+.gline{margin-top:10px;font-size:13px}
+.gline.gmax{color:var(--ink-2)} .gline.gmax.over{color:var(--amber,#b26a00)}
+.lnk{background:none;border:none;padding:0;font:inherit;color:var(--teal-700);font-weight:700;cursor:pointer;text-decoration:underline}
 .tagadd{border:1.5px dashed var(--line);background:transparent;color:var(--ink-3);font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;cursor:pointer}
 .regtable .rc-env .tagchip{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
 .tagedit{background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:8px}
@@ -802,6 +827,7 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
     <button class="nav" data-v="fund"></button>
     <div class="navlbl">Money</div>
     <button class="nav" data-v="envelopes"></button>
+    <button class="nav" data-v="goals"></button>
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="balances"></button>
     <button class="nav" data-v="obligations"></button>
@@ -933,7 +959,7 @@ var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
    answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
    nothing about envelopes / inbox / register / journal, and clearing here
    would tell Home it is fresh when it is not. */
-var MIRROR_REFRESH_ONE = { apiPlans:1 };   // WHICH tables is the server's business — one list, not two
+var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1 };   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -995,6 +1021,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
   apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
   apiWriteBackStatus:1, // v3.60: failed write-backs (mirror-only)
+  apiGoals:1,           // v3.75.0: goals + max (targets rows; its write is Apps-Script-only → MIRROR_REFRESH_ONE)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1135,7 +1162,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.74.1';
+var FE_VERSION = 'v3.75.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1300,6 +1327,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
   apiSetEnvelopeHidden:1, // v3.51
+  apiSetGoal:1, apiClearGoal:1, apiSetMax:1, apiClearMax:1, // v3.75.0 — Apps-Script-only writes; marking dirty is what makes apiGoals refresh `targets`
   apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
@@ -1504,6 +1532,7 @@ var ICONS = {
   reports:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
   obligations:'<path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M12 13v4M9.5 15.5L12 18l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  goals:'<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
   settings:'<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H9.6l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L5.6 11a7.7 7.7 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8c.5.4 1.1.7 1.7 1l.3 2.1h4.8l.3-2.1c.6-.3 1.2-.6 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   admin:'<circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   logout:'<path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 12h9M16 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -1513,7 +1542,7 @@ var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envel
   plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   reports:'Reports', sync:'Sync', history:'History', more:'More', settings:'Settings',
   admin:'Access', about:'About', howto:'How to use', activity:'Sign-ins & activity',
-  obligations:'Obligations'};
+  obligations:'Obligations', goals:'Goals'};   // v3.75.0
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -1544,7 +1573,7 @@ $all('nav.tabs button').forEach(function(b){
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
   'removetxn','reconcile','howto','activity','personal'];
-var MORE_VIEWS = ['txns','fund','obligations','accounts','reports'];   // v3.72.2: swapped with the tab bar
+var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
   if(goReplaying_) return;
@@ -1960,7 +1989,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 ? ' narrow':'');
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -1981,6 +2010,7 @@ function render(){
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='personal') renderPersonal();     // v3.57.3
   else if(state.view==='obligations') renderObligations();
+  else if(state.view==='goals') renderGoals();          // v3.75.0
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
   else if(state.view==='activity') renderActivity();
@@ -2013,6 +2043,7 @@ var HOME_CARDS = [
   {id:'trend',    slot:'body', size:'m'},
   {id:'attention',slot:'body', size:'l'},
   {id:'coming',   slot:'body', size:'l'},   // v3.56.4 — Obligations: what leaves, and from where
+  {id:'goals',    slot:'body', size:'m'},   // v3.75.0 — 🎯 Goals: saving for something
   {id:'recent',   slot:'body', size:'l'},
   {id:'targets',  slot:'body', size:'l'},
   {id:'areas',    slot:'body', size:'m'},
@@ -2497,6 +2528,22 @@ var DASH_WIDGETS = {
 
   /* v3.30: Needs attention — negative envelopes straight from boot data (no
      extra fetch; paints instantly from the cached/booted envelope list). */
+  /* v3.75.0 — 🎯 Goals. Reads state.dash.goals (on the dashboard payload): no
+     fetch, no scan. Three states, told apart honestly: no dash yet → loading;
+     dash without `goals` (older server) → nothing; [] → the invitation. */
+  goals:{title:'Goals',icon:'🎯',nav:'goals',render:function(){
+    var head='<div class="dhead"><div class="dlbl">Goals</div></div>';
+    if(!state.dash) return head+'<div class="dwmiss"><span class="skv">loading…</span></div>';
+    if(!Array.isArray(state.dash.goals)) return '';
+    var items = (state.goals && state.goals.items) || state.dash.goals;
+    var goals = items.filter(function(it){ return it.goal && !it.hidden; });
+    if(!goals.length) return head+'<div class="dwmiss">No goals yet — start saving for something →</div>';
+    var sorted = goalSort_(goals), reached = sorted.filter(function(it){ return goalCalc_(it).reached; }).length;
+    var rows = sorted.slice(0,3).map(function(it){ return goalCardHtml_(it, true, null, true); }).join('');
+    var more = sorted.length>3 ? '<div class="dsub" style="margin-top:6px">+'+(sorted.length-3)+' more →</div>' : '';
+    return head+'<div class="dscroll">'+rows+more+'</div>'+
+      (reached ? '<div class="dsub" style="margin-top:6px">'+reached+' reached ✓</div>' : '');
+  }},
   attention:{title:'Needs attention',icon:'⚠️',nav:'envelopes',render:function(){
     var b=state.boot;
     if(!b) return '<div class="dhead"><div class="dlbl">Needs attention</div></div><div class="dwmiss"><span class="skv">loading…</span></div>';
@@ -2508,8 +2555,17 @@ var DASH_WIDGETS = {
     // an account that hasn't got the money is a harder deadline than a negative
     // envelope, which is just a number carried forward.
     var obl = oblRows_();
+    // v3.75.0: two more line kinds — an envelope sitting over its max, and a
+    // dated goal past its date and not reached. From the dashboard payload; no fetch.
+    var gl = goalAttentionRows_();
     var head='<div class="dhead"><div class="dlbl">Needs attention'+
-      ((neg.length+obl.length)?' · '+(neg.length+obl.length):'')+'</div></div>';
+      ((neg.length+obl.length+gl.length)?' · '+(neg.length+obl.length+gl.length):'')+'</div></div>';
+    var glHtml = gl.map(function(r){
+      if(r.kind==='max') return '<div class="dkv" style="align-items:flex-start"><span class="k" style="color:var(--amber)">'+esc(r.name)+' is '+money(r.cents/100)+' over its max.</span>'+
+        '<span class="v"><button class="btn ghost sm" data-act="goal-move-over" data-arg="'+esc(r.id)+'">Move it</button></span></div>';
+      return '<div class="dkv" style="align-items:flex-start"><span class="k" style="color:var(--amber)">'+esc(r.name)+' was due '+esc(goalFmtDay_(r.date))+' and is '+money(r.cents/100)+' short.</span>'+
+        '<span class="v"><button class="btn ghost sm" data-act="env-open" data-arg="'+esc(r.id)+'">Open</button></span></div>';
+    }).join('');
     var oblHtml = obl.map(function(o){
       var tone = o.severity==='alarm' ? 'var(--red)' : (o.severity==='suppressed'?'var(--ink-3)':'var(--amber)');
       var line;
@@ -2525,12 +2581,12 @@ var DASH_WIDGETS = {
         (o.estimated?' <span style="opacity:.7">(estimated)</span>':'')+
         '</span><span class="v"><button class="btn ghost sm" data-act="obl-snooze" data-arg="'+esc(o.id)+'">I moved it</button></span></div>';
     }).join('');
-    if(!neg.length && !obl.length) return head+'<div class="dwmiss">✓ Nothing needs attention</div>';
-    if(!neg.length) return head+'<div class="dscroll">'+oblHtml+'</div>';
+    if(!neg.length && !obl.length && !gl.length) return head+'<div class="dwmiss">✓ Nothing needs attention</div>';
+    if(!neg.length) return head+'<div class="dscroll">'+oblHtml+glHtml+'</div>';
     var rows=neg.slice(0,8).map(function(e){
       return '<div class="dkv"><span class="k">'+esc(e.name)+'</span><span class="v neg">'+money(e.balance)+'</span></div>'; }).join('');
     if(neg.length>8) rows+='<div class="dsub" style="margin-top:6px">+'+(neg.length-8)+' more →</div>';
-    return head+'<div class="dscroll">'+oblHtml+rows+'</div>';}}
+    return head+'<div class="dscroll">'+oblHtml+glHtml+rows+'</div>';}}
 };
 /* v3.69.0 (U15): chart chrome reads the theme tokens at call time, so a token
    change (or a future dark theme) reaches the axes without touching JS. */
@@ -2628,7 +2684,7 @@ function dashFetchRecent(){
    nothing anyone hid comes back. After the next save the list is exact, and
    future cards need no migration entry at all. */
 var HOME_KNOWN_KEY = 'sbcHomeKnown';
-var HOME_CARDS_SINCE = {coming:1};   // introduced in v3.56 — only needed once
+var HOME_CARDS_SINCE = {coming:1, goals:1};   // coming: v3.56 · goals: v3.75.0 — each only needed once
 function homeKnown_(){
   var saved=null;
   try{ saved = JSON.parse(localStorage.getItem(HOME_KNOWN_KEY)||'null'); }catch(e){}
@@ -2779,7 +2835,7 @@ function homeSkeletonHtml_(){
 /* ============================ envelopes ============================ */
 function envRowHtml(e){
   return '<div class="envrow click" data-act="env-open" data-arg="'+esc(e.id)+'">'+
-    '<span class="nm">'+esc(e.name)+'</span>'+
+    '<span class="nm">'+esc(e.name)+goalRowBadges_(e)+'</span>'+   // v3.75.0: 🎯 pct · "$X over max"
     '<span class="bal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</span>'+
     '<span class="chev">›</span></div>';
 }
@@ -3002,6 +3058,7 @@ function renderEnvDetail(){
     '<div class="dgrp">'+esc(e.group)+(e.type==='Income'?' · income':'')+
       (e.hidden?' · hidden':'')+'</div></div>'+   // v3.51
     '<div class="dbal'+(e.balance<0?' neg':'')+'">'+money(e.balance)+'</div></div>';
+  if(e.type==='Expense') h += goalDetailHtml_(e);   // v3.75.0: goal / max lines + editor
   if(state.move){
     var m = state.move;
     // v3.50: bidirectional — "out" = this envelope → picked (the only mode
@@ -3030,6 +3087,9 @@ function renderEnvDetail(){
       (canSweep ? '<button class="btn sm" data-act="env-sweep-pool">→ Move '+money(e.balance)+' to pool</button>' : '')+
       '<button class="btn '+(canSweep?'ghost ':'')+'sm" data-act="env-move-start">⇄ Move money</button>'+
       (renaming ? '' : '<button class="btn ghost sm" data-act="env-rename">Edit name / group</button>')+
+      (e.type!=='Expense' || (state.goalEdit && state.goalEdit.id===e.id) ? '' :   // v3.75.0
+        '<button class="btn ghost sm" data-act="goal-edit" data-arg="'+esc(e.id)+'">🎯 '+(goalOf_(e.id)&&goalOf_(e.id).goal?'Edit goal':'Set goal')+'</button>'+
+        '<button class="btn ghost sm" data-act="max-edit" data-arg="'+esc(e.id)+'">'+(goalOf_(e.id)&&goalOf_(e.id).max?'Edit max':'Set max')+'</button>')+
       (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="'+(e.hidden?'env-unhide':'env-hide')+
         '" data-arg="'+esc(e.id)+'">'+(e.hidden?'Unhide':'Hide from lists')+'</button>')+
       (e.id===poolId ? '' : '<button class="btn ghost sm" data-act="env-archive" data-arg="'+esc(e.id)+'">Archive</button>')+
@@ -4963,6 +5023,351 @@ function drawBalances(){
   $('#shell').innerHTML = h;
 }
 
+/* ============================ v3.75.0 — Goals + envelope Max ============================
+   "Add a goals tab so that somebody could start saving for something." — Scott, 9/15/26
+   A goal IS an envelope: the money sits where it always did. What makes it a goal is
+   one Targets row (type 'goal': total, optional date, note). A MAX is a second row
+   type ('max-balance'): a ceiling the envelope may exceed — we flag, we never move.
+   Design: SBC-Goals-Design-2026-09-15.md. Server: apps-script/Goals.gs, edge apiGoals.
+
+   DATA. Two sources, one shape (items[]):
+     state.dash.goals   rides the apiDashboard payload — Home and the Envelopes list
+                        read it and NEVER fetch for it ([[home-must-not-fetch]]).
+     state.goals        the Goals page's own read (apiGoals, mirror-served with a
+                        one-table refresh of `targets` while the dirty flag is set —
+                        the write goes to Apps Script, so the read must ask).
+   MATH lives here, once (goalCalc_), and is exported on SBC for the tests. The
+   servers send raw cents and dates; nobody else computes a percent or a pace.
+
+   DECISIONS (9/15): date optional — a "someday" goal has no pace, no $/month, is
+   never Behind. months left = ceil(days/30.4), min 1. Behind only past a grace of
+   one month's share (target / total months). Past-due + not reached → Needs
+   attention. Goals/max on Expense envelopes only (server refuses the rest). */
+var GOAL_MONTH_DAYS = 30.4;
+function goalParseDay_(s){   // 'YYYY-MM-DD' → local midnight ms, or null
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||'').trim());
+  if(!m) return null;
+  return new Date(Number(m[1]), Number(m[2])-1, Number(m[3])).getTime();
+}
+function goalMonthsLeft_(daysLeft){ return Math.max(1, Math.ceil(daysLeft / GOAL_MONTH_DAYS)); }
+/* item = {balanceCents, goal:{amountCents,date,since,note}|null, max:{amountCents}|null}
+   → {pct, remainingCents, reached, dated, daysLeft, monthsLeft, perMonthCents,
+      pace:'reached'|'ontrack'|'behind'|null, pastDue, overMaxCents} */
+function goalCalc_(item, nowMs){
+  var now = (nowMs==null) ? Date.now() : nowMs;
+  var bal = Number(item.balanceCents)||0;
+  var out = { pct:0, remainingCents:0, reached:false, dated:false, daysLeft:null, monthsLeft:null,
+    perMonthCents:null, pace:null, pastDue:false, overMaxCents:0 };
+  var g = item.goal;
+  if(g && g.amountCents > 0){
+    var target = Number(g.amountCents);
+    out.pct = Math.max(0, Math.min(100, Math.round(bal / target * 100)));
+    out.remainingCents = Math.max(0, target - bal);
+    out.reached = bal >= target;
+    var due = goalParseDay_(g.date);
+    if(due != null){
+      out.dated = true;
+      var dayMs = 86400000;
+      out.daysLeft = Math.ceil((due - now) / dayMs);
+      out.pastDue = out.daysLeft < 0 && !out.reached;
+      out.monthsLeft = goalMonthsLeft_(Math.max(0, out.daysLeft));
+      out.perMonthCents = out.reached ? 0 : Math.ceil(out.remainingCents / out.monthsLeft);
+      if(out.reached) out.pace = 'reached';
+      else if(out.pastDue) out.pace = 'behind';
+      else {
+        // The pace line runs from when the goal was set (`since`) to the date.
+        // expected = target × elapsed/total; Behind only past one month's share.
+        var since = goalParseDay_(g.since);
+        if(since == null || since >= due) out.pace = 'ontrack';
+        else {
+          var total = due - since, elapsed = Math.max(0, Math.min(total, now - since));
+          var expected = target * (elapsed / total);
+          // one month's share of the whole = target × (30.4 days / total days); not
+          // ceil()'d months — a one-year goal is 12 shares, not 13.
+          var grace = Math.min(target, target * (GOAL_MONTH_DAYS * dayMs / total));
+          out.pace = (bal < expected - grace) ? 'behind' : 'ontrack';
+        }
+      }
+    } else if(out.reached) out.pace = 'reached';
+  }
+  if(item.max && item.max.amountCents > 0) out.overMaxCents = Math.max(0, bal - Number(item.max.amountCents));
+  return out;
+}
+/* Sort for the Goals page and the Home card: dated (nearest first) → someday
+   (closest to done first) → Reached ✓ last. */
+function goalSort_(items, nowMs){
+  return items.slice().sort(function(a, b){
+    var ca = goalCalc_(a, nowMs), cb = goalCalc_(b, nowMs);
+    var ra = ca.reached?1:0, rb = cb.reached?1:0;
+    if(ra !== rb) return ra - rb;
+    if(ca.dated !== cb.dated) return ca.dated ? -1 : 1;
+    if(ca.dated) return goalParseDay_(a.goal.date) - goalParseDay_(b.goal.date);
+    if(ca.pct !== cb.pct) return cb.pct - ca.pct;
+    return String(a.name).localeCompare(String(b.name));
+  });
+}
+function goalsData_(){
+  if(state.goals && state.goals.items) return state.goals.items;
+  if(state.dash && Array.isArray(state.dash.goals)) return state.dash.goals;
+  return null;   // not checked yet — distinct from "none" (an empty array)
+}
+function goalOf_(envId){
+  var items = goalsData_() || [];
+  for(var i=0;i<items.length;i++) if(items[i].envelopeId===envId) return items[i];
+  return null;
+}
+function goalsLoad_(force){
+  if(state.goalsLoading) return state.goalsLoading;
+  if(!force && state.goals && state.goals.items) return Promise.resolve(state.goals);
+  state.goalsLoading = run('apiGoals').then(function(r){
+    state.goals = r && r.items ? r : { items: [] };
+    if(state.dash) state.dash.goals = state.goals.items;   // keep Home's copy in step
+    state.goalsLoading = null;
+    if(state.view==='goals') renderGoals();
+    else if(state.view==='envelopes') renderEnvelopes();
+    else if(state.view==='envdetail') renderEnvDetail();
+    return state.goals;
+  }).catch(function(e){ state.goalsLoading = null; throw e; });
+  return state.goalsLoading;
+}
+/* Optimistic patch after a write: the mirror read may lag a beat behind Apps
+   Script; the user should see what they just typed. `goal`/`max` undefined =
+   leave that half alone; null = cleared. */
+function goalPatch_(envId, goal, max){
+  var e = findEnv(envId);
+  var lists = [];
+  if(state.goals && state.goals.items) lists.push(state.goals.items);
+  if(state.dash && Array.isArray(state.dash.goals) && state.dash.goals!==(state.goals&&state.goals.items)) lists.push(state.dash.goals);
+  if(!lists.length){ state.goals = { items: [] }; lists.push(state.goals.items); }
+  lists.forEach(function(items){
+    var it = null;
+    for(var i=0;i<items.length;i++) if(items[i].envelopeId===envId){ it = items[i]; break; }
+    if(!it){
+      if(!e) return;
+      it = { envelopeId: envId, name: e.name, group: e.group, hidden: !!e.hidden, balanceCents: cents(e.balance), goal: null, max: null };
+      items.push(it);
+    }
+    if(goal !== undefined) it.goal = goal;
+    if(max !== undefined) it.max = max;
+    if(!it.goal && !it.max){ var k = items.indexOf(it); if(k>-1) items.splice(k,1); }
+  });
+}
+function goalFmtDay_(s){
+  var ms = goalParseDay_(s); if(ms==null) return '';
+  var d = new Date(ms);
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+
+    (d.getFullYear()!==new Date().getFullYear() ? ', '+d.getFullYear() : '');
+}
+function goalPaceChip_(c, item){
+  if(!item.goal) return '';
+  if(c.pace==='reached') return '<span class="gchip ok">Reached ✓</span>';
+  if(c.pastDue) return '<span class="gchip bad">Behind · was due '+esc(goalFmtDay_(item.goal.date))+'</span>';
+  if(c.pace==='behind') return '<span class="gchip bad">Behind</span>';
+  if(c.pace==='ontrack') return '<span class="gchip ok">On track</span>';
+  return '<span class="gchip">Someday</span>';
+}
+/* One goal card — Goals page (full) and Home (compact). */
+function goalCardHtml_(item, compact, nowMs, noNav){
+  var c = goalCalc_(item, nowMs), g = item.goal;
+  var bal = Number(item.balanceCents)||0, target = g ? Number(g.amountCents) : 0;
+  var h = '<div class="goalcard'+(compact?' compact':'')+(c.reached?' done':'')+'"'+
+    (noNav ? '' : ' data-act="env-open" data-arg="'+esc(item.envelopeId)+'"')+'>';
+  h += '<div class="grow"><span class="gnm">🎯 '+esc(item.name)+(item.hidden?' <span class="dim">· hidden</span>':'')+'</span>'+
+    '<span class="gamt">'+money(bal/100)+' <span class="dim">/ '+money(target/100)+'</span></span></div>';
+  h += '<div class="dbar gbar"><i style="width:'+c.pct+'%"></i></div>';
+  var sub = [];
+  sub.push(c.pct+'%');
+  if(c.dated && !c.reached && !c.pastDue) sub.push(money(c.perMonthCents/100)+'/month to make it');
+  if(c.dated) sub.push('by '+goalFmtDay_(g.date));
+  else if(!c.reached) sub.push('no date — at your pace');
+  h += '<div class="gsub"><span>'+esc(sub.join(' · '))+'</span>'+goalPaceChip_(c, item)+'</div>';
+  if(!compact && g.note) h += '<div class="gnote">'+esc(g.note)+'</div>';
+  if(!compact) h += '<div class="gact"><button class="btn ghost sm" data-act="goal-edit" data-arg="'+esc(item.envelopeId)+'">Edit</button></div>';
+  return h+'</div>';
+}
+function renderGoals(){
+  var items = goalsData_();
+  var h = '<div class="viewhead"><h2>Goals</h2>'+
+    '<button class="btn sm" data-act="goal-new">+ New goal</button></div>';
+  h += '<div class="note" style="padding:0 0 14px">Saving for something? Pick an envelope (or make one), say how much, and — if you like — by when. '+
+    'The envelope holds the money like any other; this page just keeps score.</div>';
+  if(state.goalNew) h += goalNewFormHtml_();
+  if(items === null){
+    h += '<div class="spin"></div>';
+    $('#shell').innerHTML = h;
+    goalsLoad_().catch(function(e){ if(state.view==='goals') fail(e); });
+    return;
+  }
+  var goals = items.filter(function(it){ return it.goal; });
+  if(!goals.length){
+    h += '<div class="empty">No goals yet.<br><span style="font-size:13px">Tap <b>+ New goal</b> to start saving for something.</span></div>';
+  } else {
+    var sorted = goalSort_(goals);
+    var live = sorted.filter(function(it){ return !goalCalc_(it).reached; });
+    var done = sorted.filter(function(it){ return goalCalc_(it).reached; });
+    live.forEach(function(it){ h += goalCardHtml_(it, false); });
+    if(done.length){
+      h += '<div class="grp" style="margin-top:14px"><h3>Reached</h3></div>';
+      done.forEach(function(it){ h += goalCardHtml_(it, false); });
+    }
+  }
+  $('#shell').innerHTML = h;
+  var sel = $('#gnEnv');
+  if(sel) sel.onchange = function(){ goalNewRead_(); renderGoals(); };
+  if(!state.goals || !state.goals.items) goalsLoad_().catch(function(e){ console.warn('apiGoals:', e&&e.message||e); });
+}
+/* + New goal: What for (an existing spending envelope, or a new one) · How much
+   · By when (optional). A new envelope is created first (apiCreateEnvelope, its
+   own undoable op), then the goal row is written. */
+function goalExpenseEnvelopes_(){
+  var out = [];
+  (state.boot && state.boot.groups || []).forEach(function(g){ (g.envelopes||[]).forEach(function(e){
+    if(e.type==='Expense' && !e.hidden) out.push({ id:e.id, name:e.name, group:g.name });
+  }); });
+  out.sort(function(a,b){ return a.name.localeCompare(b.name); });
+  return out;
+}
+function goalNewFormHtml_(){
+  var n = state.goalNew;
+  var opts = '<option value="__new__"'+(n.envelopeId==='__new__'?' selected':'')+'>＋ A new envelope…</option>';
+  goalExpenseEnvelopes_().forEach(function(e){
+    opts += '<option value="'+esc(e.id)+'"'+(n.envelopeId===e.id?' selected':'')+'>'+esc(e.name)+' ('+esc(e.group)+')</option>';
+  });
+  var h = '<div class="card" style="padding:14px;margin-bottom:14px"><div class="gform">';
+  h += '<label>What for<select id="gnEnv" class="amt">'+opts+'</select></label>';
+  if(n.envelopeId==='__new__'){
+    h += '<label>New envelope name<input id="gnName" class="amt" type="text" placeholder="Guitar" value="'+esc(n.name||'')+'"></label>';
+    h += '<label>Group<input id="gnGroup" class="amt" type="text" list="gnGroupList" placeholder="Other" value="'+esc(n.group||'')+'">'+
+      '<datalist id="gnGroupList">'+(state.boot.groups||[]).map(function(g){ return '<option value="'+esc(g.name)+'">'; }).join('')+'</datalist></label>';
+  }
+  h += '<label>How much<input id="gnAmt" class="amt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="800" value="'+esc(n.amount||'')+'"></label>';
+  h += '<label>By when <span class="dim">(optional — leave blank for someday)</span><input id="gnDate" class="amt" type="date" value="'+esc(n.date||'')+'"></label>';
+  h += '<label>Why <span class="dim">(optional)</span><input id="gnNote" class="amt" type="text" maxlength="200" placeholder="Myrtle Beach 2027" value="'+esc(n.note||'')+'"></label>';
+  h += '</div><div class="actions"><button class="btn sm" data-act="goal-new-save">Start saving</button>'+
+    '<button class="btn ghost sm" data-act="goal-new-cancel">Cancel</button></div></div>';
+  return h;
+}
+function goalNewRead_(){
+  var n = state.goalNew; if(!n) return;
+  n.envelopeId = ($('#gnEnv')||{}).value || n.envelopeId;
+  n.name = (($('#gnName')||{}).value||n.name||'');
+  n.group = (($('#gnGroup')||{}).value||n.group||'');
+  n.amount = (($('#gnAmt')||{}).value||'');
+  n.date = (($('#gnDate')||{}).value||'');
+  n.note = (($('#gnNote')||{}).value||'');
+}
+function goalNewSave_(){
+  goalNewRead_();
+  var n = state.goalNew; if(!n) return;
+  var amt = Number(n.amount);
+  if(!(amt > 0)){ toast('How much are you saving for?'); return; }
+  if(n.date && goalParseDay_(n.date) != null && goalParseDay_(n.date) < goalParseDay_(rptISO(new Date()))){ toast('Pick a future date, or leave it blank for someday.'); return; }
+  var btn = document.querySelector('[data-act="goal-new-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var p;
+  if(n.envelopeId==='__new__'){
+    var name = String(n.name||'').trim();
+    if(!name){ toast('Name the new envelope'); if(btn){ btn.disabled=false; btn.textContent='Start saving'; } return; }
+    p = run('apiCreateEnvelope', { name:name, group:(n.group||'').trim()||'Other', type:'Expense' })
+      .then(function(r){ invalidateData(); return refreshBoot().then(function(){ return r.id; }); });
+  } else p = Promise.resolve(n.envelopeId);
+  p.then(function(envId){
+    return run('apiSetGoal', { envelopeId: envId, amount: amt, date: n.date||'', note: (n.note||'').trim() })
+      .then(function(r){
+        state.goalNew = null;
+        goalPatch_(envId, r && r.goal ? r.goal : { amountCents: Math.round(amt*100), date: n.date||null, note:(n.note||'').trim(), since: rptISO(new Date()) }, undefined);
+        toast('Goal set ✓', { label:'Undo', fn:function(){ undoNow_(r && r.opId, 'the goal'); goalPatch_(envId, null, undefined); goalsLoad_(true); } });
+        renderGoals();
+        goalsLoad_(true).catch(function(){});
+      });
+  }).catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Start saving'; } toast('⚠ '+(e.message||e)); });
+}
+/* Envelope detail: the goal / max editor (state.goalEdit = {id, kind:'goal'|'max'}). */
+function goalDetailHtml_(e){
+  var item = goalOf_(e.id);
+  var ed = state.goalEdit && state.goalEdit.id===e.id ? state.goalEdit : null;
+  var h = '';
+  if(item && (item.goal || item.max)){
+    var c = goalCalc_(item);
+    if(item.goal){
+      h += '<div class="gline">'+goalCardHtml_(item, true, null, true)+'</div>';
+    }
+    if(item.max){
+      h += '<div class="gline gmax'+(c.overMaxCents>0?' over':'')+'">Max '+money(item.max.amountCents/100)+
+        (c.overMaxCents>0 ? ' · <b>'+money(c.overMaxCents/100)+' over</b> — <button class="lnk" data-act="goal-move-over" data-arg="'+esc(e.id)+'">move it</button>' : ' · under ✓')+'</div>';
+    }
+  }
+  if(ed){
+    var isGoal = ed.kind==='goal';
+    var cur = item ? (isGoal ? item.goal : item.max) : null;
+    h += '<div class="splitbox" style="margin-top:12px"><div class="gform">';
+    h += '<label>'+(isGoal?'Save up to':'Max the envelope should hold')+
+      '<input id="geAmt" class="amt" type="number" inputmode="decimal" step="0.01" min="0" value="'+esc(ed.amount!=null?ed.amount:(cur?String(cur.amountCents/100):''))+'"></label>';
+    if(isGoal){
+      h += '<label>By when <span class="dim">(optional)</span><input id="geDate" class="amt" type="date" value="'+esc(ed.date!=null?ed.date:(cur&&cur.date||''))+'"></label>';
+      h += '<label>Why <span class="dim">(optional)</span><input id="geNote" class="amt" type="text" maxlength="200" value="'+esc(ed.note!=null?ed.note:(cur&&cur.note||''))+'"></label>';
+    }
+    h += '</div><div class="actions"><button class="btn sm" data-act="goal-edit-save">Save</button>'+
+      '<button class="btn ghost sm" data-act="goal-edit-cancel">Cancel</button>'+
+      (cur ? '<button class="btn ghost sm" style="margin-left:auto" data-act="goal-edit-clear">Clear '+(isGoal?'goal':'max')+'</button>' : '')+
+      '</div></div>';
+  }
+  return h;
+}
+function goalEditSave_(){
+  var ed = state.goalEdit; if(!ed) return;
+  var amt = Number((($('#geAmt')||{}).value||''));
+  if(!(amt > 0)){ toast('Enter an amount above $0'); return; }
+  var isGoal = ed.kind==='goal';
+  var date = isGoal ? (($('#geDate')||{}).value||'') : '';
+  var note = isGoal ? ((($('#geNote')||{}).value||'').trim()) : '';
+  var btn = document.querySelector('[data-act="goal-edit-save"]');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var id = ed.id;
+  var call = isGoal ? run('apiSetGoal', { envelopeId:id, amount:amt, date:date, note:note })
+                    : run('apiSetMax', { envelopeId:id, amount:amt });
+  call.then(function(r){
+    state.goalEdit = null;
+    if(isGoal) goalPatch_(id, r && r.goal ? r.goal : { amountCents:Math.round(amt*100), date:date||null, note:note, since:rptISO(new Date()) }, undefined);
+    else goalPatch_(id, undefined, r && r.max ? r.max : { amountCents:Math.round(amt*100) });
+    toast((isGoal?'Goal':'Max')+' saved ✓', { label:'Undo', fn:function(){ undoNow_(r && r.opId, isGoal?'the goal':'the max'); goalsLoad_(true); } });
+    if(state.view==='envdetail') renderEnvDetail();
+    goalsLoad_(true).catch(function(){});
+  }).catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
+}
+function goalEditClear_(){
+  var ed = state.goalEdit; if(!ed) return;
+  var isGoal = ed.kind==='goal', id = ed.id;
+  run(isGoal ? 'apiClearGoal' : 'apiClearMax', { envelopeId:id }).then(function(r){
+    state.goalEdit = null;
+    if(isGoal) goalPatch_(id, null, undefined); else goalPatch_(id, undefined, null);
+    toast((isGoal?'Goal':'Max')+' cleared ✓', { label:'Undo', fn:function(){ undoNow_(r && r.opId, isGoal?'clearing the goal':'clearing the max'); goalsLoad_(true); } });
+    if(state.view==='envdetail') renderEnvDetail();
+    goalsLoad_(true).catch(function(){});
+  }).catch(function(e){ toast('⚠ '+(e.message||e)); });
+}
+/* Envelopes list decorations: 🎯 pct on goal envelopes; "$X over max" chip that
+   opens Move with the amount pre-filled (the user picks where it goes). */
+function goalRowBadges_(e){
+  var item = goalOf_(e.id); if(!item) return '';
+  var c = goalCalc_(item), h = '';
+  if(item.goal) h += '<span class="gbadge'+(c.reached?' done':'')+'" title="Goal '+money(item.goal.amountCents/100)+'">🎯 '+(c.reached?'✓':c.pct+'%')+'</span>';
+  if(c.overMaxCents > 0) h += '<button class="gbadge over" data-act="goal-move-over" data-arg="'+esc(e.id)+'" title="Over its max — tap to move">'+money(c.overMaxCents/100)+' over max</button>';
+  return h;
+}
+/* Home: 🎯 Goals card + the two Needs-attention line kinds. Both read
+   state.dash.goals (already on the dashboard payload) — no fetch here, ever. */
+function goalAttentionRows_(){
+  var items = goalsData_() || [], out = [];
+  items.forEach(function(it){
+    if(it.hidden) return;
+    var c = goalCalc_(it);
+    if(c.overMaxCents > 0) out.push({ kind:'max', id:it.envelopeId, name:it.name, cents:c.overMaxCents });
+    if(it.goal && c.pastDue) out.push({ kind:'due', id:it.envelopeId, name:it.name, cents:c.remainingCents, date:it.goal.date });
+  });
+  return out;
+}
+
 /* ============================ sync (v3.3 Phase A — read-only) ============================ */
 function renderSync(){
   if(state.sync){ drawSync(); return; }
@@ -6011,6 +6416,7 @@ function renderMore(){
        sidebar all say Obligations; only this row still carried the "& autopay"
        suffix, inherited from the old Settings row that the v3.56.5 pass never
        reached, and I copied it onto More in v3.72.1 without noticing. */
+    ['goals','Goals'],   // v3.75.0
     ['obligations','Obligations'],
     ['accounts','Accounts'],
     ['reports','Reports <span class="beta inline">BETA</span>']]);
@@ -6543,6 +6949,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
     '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
     '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
+    '<p style="margin:0 0 6px"><b>Goal</b> \u2014 an envelope you\u2019re saving up in, with a number to reach and (if you like) a date. It\u2019s still just an envelope; <b>Goals</b> keeps score.</p>'+
+    '<p style="margin:0 0 6px"><b>Max</b> \u2014 a ceiling for an envelope. It can go over; when it does, SBC suggests moving the extra. It never moves anything itself.</p>'+
     '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
     '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
     '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
@@ -6578,6 +6986,12 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">Funding it would double-count the same debt: once when you swiped, once again in the envelope. The money would sit there forever with nothing to spend it on.</p>'+
     '<p style="margin:0 0 8px">What about the balance you owe? It’s already accounted for — the charge came out of a spending envelope the day you swiped, so the money is spoken for and no envelope is pretending otherwise.</p>'+
     '<p style="margin:0">You can see it: under the big <b>Available to fund</b> number on the Dashboard, <b>Cash in accounts</b> is what’s sitting in checking and savings, and <b>Cards owed</b> in amber underneath is the part of it that belongs to the card companies. Amber, not red — that’s an obligation, not a problem. <b>Waiting in your inbox</b> shows up there too, which is why the pool can read a little above your bank balance until you clear the Inbox.</p>');
+
+  h += S('🎯','Goals — saving for something',
+    '<p style="margin:0 0 8px">A goal is just an envelope with a finish line. Open <b>Goals</b> (sidebar, or More on your phone), tap <b>+ New goal</b>, and say <b>what for</b> (pick an envelope or make a new one), <b>how much</b>, and \u2014 only if you want \u2014 <b>by when</b>. Leave the date blank and it\u2019s a <i>someday</i> goal: no deadline, no nagging, just a bar that fills up as you put money in.</p>'+
+    '<p style="margin:0 0 8px">Money gets into a goal the same way it gets into any envelope: fund it on payday, or <b>Move money</b> into it from another envelope. The Goals page shows saved / target, the percent, and for a dated goal <b>$X/month to make it</b> plus <b>On track</b> or <b>Behind</b>. Behind gives you a month\u2019s grace, so it won\u2019t flip red the day before payday. A dated goal that passes its date short shows up on <b>Needs attention</b> until you reach it, re-date it or clear it.</p>'+
+    '<p style="margin:0 0 8px">Goal envelopes wear a <b>\ud83c\udfaf</b> badge with their percent in the Envelopes list, and the <b>\ud83c\udfaf Goals</b> card on Home shows your nearest three. When the balance reaches the number it reads <b>Reached \u2713</b> \u2014 then spend it, or set a new number. Change or clear a goal any time from the envelope\u2019s page (<b>Edit goal</b>).</p>'+
+    '<p style="margin:0"><b>Max</b> is the opposite tool, for everyday envelopes: open the envelope, <b>Set max</b>, and if Groceries ever sits above it you\u2019ll see <i>\u201c$120 over max\u201d</i> on the row and on Needs attention. Tap it and Move opens with that amount filled in \u2014 you pick where it goes. SBC only points; it never moves your money.</p>');
 
   h += S('🏦','Autopay — will the cash be in the right account?',
     '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
@@ -6663,7 +7077,7 @@ function renderHowTo(){
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
     '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
-    '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes.</p>'+
+    '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes, glance at <b>Goals</b> \u2014 are you on pace?</p>'+
     '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>More → Obligations</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
     '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
 
@@ -7099,6 +7513,23 @@ document.addEventListener('click', function(ev){
     case 'move-dir': if(state.move && state.move.dir!==arg){ state.move.dir=arg; renderEnvDetail(); } break; // v3.50
     case 'env-move-cancel': state.move=null; renderEnvDetail(); break;
     case 'env-move-go': moveGo(); break;
+    /* v3.75.0 — goals + max */
+    case 'goal-new': state.goalNew={envelopeId:'__new__', name:'', group:'', amount:'', date:'', note:''}; renderGoals(); break;
+    case 'goal-new-cancel': state.goalNew=null; renderGoals(); break;
+    case 'goal-new-save': goalNewSave_(); break;
+    case 'goal-edit': state.goalEdit={id:arg, kind:'goal'}; state.move=null; if(state.view!=='envdetail' || !state.envDetail || state.envDetail.id!==arg) openEnvelope(arg); else renderEnvDetail(); break;
+    case 'max-edit': state.goalEdit={id:arg, kind:'max'}; state.move=null; renderEnvDetail(); break;
+    case 'goal-edit-save': goalEditSave_(); break;
+    case 'goal-edit-clear': goalEditClear_(); break;
+    case 'goal-edit-cancel': state.goalEdit=null; renderEnvDetail(); break;
+    case 'goal-move-over': (function(){   // over its max → Move out, amount pre-filled; the user picks where
+      var it = goalOf_(arg), c = it ? goalCalc_(it) : null;
+      var over = c && c.overMaxCents>0 ? (c.overMaxCents/100).toFixed(2) : '';
+      state.goalEdit=null;
+      if(state.view!=='envdetail' || !state.envDetail || state.envDetail.id!==arg) openEnvelope(arg);
+      state.move={dir:'out', toId:'', amount:over};
+      renderEnvDetail();
+    })(); break;
     case 'env-sweep-pool': sweepToPool(); break;
     case 'resplit-on':
       var rt = (state.register.items||[]).find(function(x){return x.txnId===arg;});
@@ -7263,6 +7694,12 @@ SBC.inboxTagAdd = inboxTagAdd;
 SBC.inboxTagRm = inboxTagRm;
 SBC.clearInboxTags_ = clearInboxTags_;
 SBC.userBusy = userBusy;
+/* v3.75.0: goals — the math and the sort are the behaviour; the card's STRUCTURE
+   too (a bar, a percent, a pace chip only when dated). */
+SBC.goalCalc_ = goalCalc_; SBC.goalSort_ = goalSort_; SBC.goalParseDay_ = goalParseDay_;
+SBC.goalMonthsLeft_ = goalMonthsLeft_; SBC.goalCardHtml_ = goalCardHtml_; SBC.goalAttentionRows_ = goalAttentionRows_;
+SBC.goalRowBadges_ = goalRowBadges_; SBC.goalsData_ = goalsData_; SBC.goalPatch_ = goalPatch_;
+SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_VIEWS = MORE_VIEWS; SBC.NAV_LABELS = NAV_LABELS; SBC.ICONS = ICONS;
 
 (function start(){
   // v3.57.1: if Google's script loaded before this script finished parsing, its
