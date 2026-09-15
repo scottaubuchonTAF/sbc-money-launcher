@@ -1090,7 +1090,8 @@ var state = {
   dashLayout:null, homeCustomize:false, density:'mid', birthday:'',
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null,
-  tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{} // v3.58 tags UI
+  tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{}, // v3.58 tags UI
+  inboxTags:{} // v3.73.0: tags typed on an Inbox card, applied BY the approve
 };
 /* Reports v2 (v3.59) — period navigator + filters, persisted per browser
    (new key sbcReport2; the old v3.21 sbcReport blob is simply orphaned). */
@@ -1114,7 +1115,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.72.4';
+var FE_VERSION = 'v3.73.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1919,7 +1920,8 @@ function actBusy(act, on, label){
 /* Skip background re-draws while the user is typing or mid-edit. */
 function userBusy(){
   return (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) ||
-    Object.keys(state.resplit).length > 0;
+    Object.keys(state.resplit).length > 0 ||
+    Object.keys(state.tagEdit).length > 0;   // v3.73.0: a background redraw would eat the half-typed tag
 }
 
 /* ============================ render dispatch ============================ */
@@ -3247,7 +3249,13 @@ function drawInbox(){
     otherTs.forEach(function(t){ h += inboxCardHtml(t); });
     h += '</div>';
   }
+  h += tagDatalistHtml();   // v3.73.0: same shared datalist the register uses
   $('#shell').innerHTML = h;
+  // v3.73.0: Enter adds the typed tag, same as the Transactions editor.
+  var tIn = document.querySelector('.tagedit input[data-txn]');
+  if(tIn){ tIn.addEventListener('keydown', function(ev){
+    if(ev.key==='Enter'){ ev.preventDefault(); inboxTagAdd(tIn.getAttribute('data-txn')); } });
+    tIn.focus(); }
 }
 /* Eligible for Approve all: has an envelope and isn't mid-split. v3.6.11:
    income is included — deposits approve into an income envelope (Regular Pay
@@ -3269,6 +3277,7 @@ function inboxCardHtml(t){
       '<div class="meta">'+esc(t.date)+' · '+esc(t.account)+'</div>';
     if(sp && sp.on){
       h += splitEditorHtml(t.txnId, t.amount, sp.lines, 'inbox');
+      h += inboxTagsHtml(t);   // v3.73.0: a tag describes the purchase, so it rides every leg
       h += '<div class="actions">'+
         '<button class="btn" '+(splitReady(t.amount, sp.lines)?'':'disabled')+
           ' data-act="approve-split" data-arg="'+esc(t.txnId)+'">Approve split</button>'+
@@ -3289,7 +3298,7 @@ function inboxCardHtml(t){
         '<button class="pill" data-act="split-on" data-arg="'+esc(t.txnId)+'">Split…</button>';
       // v3.6.9: no per-txn funding — deposits are approved into the Income
       // Cash Pool like everything else; funding happens on the Fund page.
-      h += '</div><div class="actions">'+
+      h += '</div>'+inboxTagsHtml(t)+'<div class="actions">'+
         '<button class="btn" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
         '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this</label>'+
         '</div>';
@@ -3298,13 +3307,57 @@ function inboxCardHtml(t){
   }
   return h;
 }
+/* v3.73.0 — tagging at approve time.
+   The Inbox card carries the SAME chips + "+ tag" editor the Transactions page
+   has, but nothing is written while you type: the tags sit in state.inboxTags
+   and travel INSIDE the approve (apiApprove / apiApproveBatch), so one lock,
+   one audit op, and one Undo covers the approval and its tags together. Tags
+   on an unapproved row would have nowhere to live — the register row that
+   holds the Tags cell does not exist until the approve creates it. */
+function inboxTagsOf(txnId){ return state.inboxTags[txnId] || []; }
+/* Shim so tagChipsHtml/tagEditorHtml (written against register items) render an
+   Inbox row unchanged — one chip renderer, one editor, both pages. */
+function inboxTagShim_(t){ return { txnId:t.txnId, key:t.key||'', tags:inboxTagsOf(t.txnId) }; }
+function inboxTagsHtml(t){
+  var sh = inboxTagShim_(t);
+  var open = !!state.tagEdit[t.txnId];
+  return '<div class="tagchips">'+tagChipsHtml(sh, open?'edit':'add')+'</div>'+
+    (open ? tagEditorHtml(sh) : '');
+}
+/* Add the typed tag to THIS card. No network call — the approve carries it. */
+function inboxTagAdd(txnId){
+  var inp = document.querySelector('.tagedit input[data-txn]');
+  var val = inp ? String(inp.value||'').trim() : '';
+  if(!val) return;
+  var cur = inboxTagsOf(txnId).slice(0);
+  if(cur.length >= 10){ toast('10 tags is the limit'); return; }   // matches normTags_
+  if(!cur.some(function(x){ return x.toLowerCase()===val.toLowerCase(); })) cur.push(val);
+  state.inboxTags[txnId] = cur;
+  drawInbox();
+  setTimeout(function(){ var i2=document.querySelector('.tagedit input[data-txn]'); if(i2){ i2.value=''; i2.focus(); } }, 0);
+}
+function inboxTagRm(txnId, tag){
+  var cur = inboxTagsOf(txnId).filter(function(x){ return x!==tag; });
+  if(cur.length) state.inboxTags[txnId] = cur; else delete state.inboxTags[txnId];
+  drawInbox();
+}
+/* An approved (or vanished) row must not leave its tags behind to be re-applied
+   to whatever row inherits that id later. */
+function clearInboxTags_(ids){
+  (ids||[]).forEach(function(id){ delete state.inboxTags[id]; delete state.tagEdit[id]; });
+}
+
 function approveAll(){
   var items = state.inbox.filter(approveAllEligible).map(function(t){
-    return { txnId: t.txnId, key: t.key, envelopeId: state.sel[t.txnId] || t.suggestedId };
+    return { txnId: t.txnId, key: t.key, envelopeId: state.sel[t.txnId] || t.suggestedId,
+             tags: inboxTagsOf(t.txnId) };   // v3.73.0: per ITEM — each card keeps its own tags
   });
   if(!items.length){ toast('Nothing ready to approve'); return; }
+  var taggedN = items.filter(function(it){ return it.tags && it.tags.length; }).length;
   confirmUi('Approve '+items.length+' transaction'+(items.length===1?'':'s')+
-    ' into their suggested envelopes? Each stays individually undoable from History.', 'Approve all')
+    ' into their suggested envelopes?'+
+    (taggedN ? ' '+taggedN+' carr'+(taggedN===1?'ies its':'y their')+' tags along.' : '')+
+    ' Each stays individually undoable from History.', 'Approve all')
   .then(function(ok){
     if(!ok) return;
     busyButtons(true);
@@ -3349,6 +3402,7 @@ function approveAll(){
         .map(function(it){ return it.key || it.txnId; })); // v3.32
       state.inbox = state.inbox.filter(function(t){ return !doneIds[t.txnId]; });
       Object.keys(doneIds).forEach(function(id){ delete state.sel[id]; delete state.split[id]; });
+      clearInboxTags_(Object.keys(doneIds));   // v3.73.0
       invalidateData();
       setInboxCount_(state.inbox.length);   // v3.49
       refreshBoot();
@@ -3363,6 +3417,8 @@ function approveAll(){
   });
 }
 function cssId(s){ return String(s).replace(/[^a-zA-Z0-9_-]/g,'_'); }
+/* v3.73.0: the tag editor lives on two pages now — redraw the one showing it. */
+function drawTagHost_(){ if(state.view==='inbox') drawInbox(); else drawTxns(); }
 
 /* shared split editor (inbox + resplit + fund legs use the same line model) */
 function splitEditorHtml(key, total, lines, kind){
@@ -3422,7 +3478,8 @@ function approve(txnId){
   var createRule = ruleEl && ruleEl.checked ? t.description : null;
   busyButtons(true);
   approvePending_(txnId);
-  run('apiApprove', { txnId:txnId, key:t.key, envelopeId:envId, createRule:createRule })
+  run('apiApprove', { txnId:txnId, key:t.key, envelopeId:envId, createRule:createRule,
+    tags:inboxTagsOf(txnId) })   // v3.73.0
     .then(afterApprove(txnId, t.key)).catch(approveErr);
 }
 /* v3.29.1: immediate feedback — an approve takes the server 3-4s and the old
@@ -3442,7 +3499,7 @@ function approveSplit(txnId){
   if(!sp || !t || !splitReady(t.amount, sp.lines)) return;
   busyButtons(true);
   approvePending_(txnId);
-  run('apiApprove', { txnId:txnId, key:t.key,
+  run('apiApprove', { txnId:txnId, key:t.key, tags:inboxTagsOf(txnId),   // v3.73.0
     splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
     .then(afterApprove(txnId, t.key)).catch(approveErr);
 }
@@ -3453,6 +3510,7 @@ function afterApprove(txnId, key){
     toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval'); } } : null);
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.sel[txnId]; delete state.split[txnId];
+    clearInboxTags_([txnId]);   // v3.73.0
     bumpInboxCount_(-1);     // v3.49: Home's card moves now, not at the next boot
     invalidateData();        // v3.49: also revalidates Home in the background
     updateBadges(inboxCountEff_());
@@ -6525,7 +6583,7 @@ function renderHowTo(){
     '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
     '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
     '<p style="margin:0 0 6px">• <b>Reports</b> <i>(BETA — still being shaped; tell Scott what you want to see)</i> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
-    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
+    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). Tag as you approve: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there are applied BY the approve — one entry in History, and one <b>Undo</b> takes the approval and its tags back together. ✓ Approve all carries each card’s own tags. Already approved? On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
     '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances from the bank feeds. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a row sets a balance by hand (feed-less accounts); <b>Reorder</b> arranges groups and accounts.</p>'+
     '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
     '<p style="margin:0">• <b>Settings → Maintenance → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
@@ -7020,13 +7078,16 @@ document.addEventListener('click', function(ev){
     case 'resplit-go': resplitGo(arg); break;
     case 'unapprove': unapprove(arg); break;
     // v3.58 — tags
-    case 'tag-edit-on': state.tagEdit = {}; state.tagEdit[arg] = true; fetchTags(); drawTxns(); break;
-    case 'tag-edit-off': delete state.tagEdit[arg]; drawTxns(); break;
-    case 'tag-add': tagAdd(arg); break;
+    // v3.73.0: the same four actions now serve the Inbox editor too. On the
+    // Inbox nothing is written until Approve — there is no register row yet.
+    case 'tag-edit-on': state.tagEdit = {}; state.tagEdit[arg] = true; fetchTags(); drawTagHost_(); break;
+    case 'tag-edit-off': delete state.tagEdit[arg]; drawTagHost_(); break;
+    case 'tag-add': if(state.view==='inbox') inboxTagAdd(arg); else tagAdd(arg); break;
     case 'tag-rm': (function(){
+      var tag = p.slice(1).join('|');
+      if(state.view==='inbox'){ inboxTagRm(p[0], tag); return; }
       var t = (state.register.items||[]).find(function(x){ return x.txnId===p[0]; });
       if(!t) return;
-      var tag = p.slice(1).join('|');
       var prev = (t.tags||[]).slice(0);
       t.tags = (t.tags||[]).filter(function(x){ return x!==tag; });
       saveTags(t, prev);
@@ -7147,6 +7208,23 @@ SBC.renderHealthCard_ = function(health, sz, freeze){
   try { return DASH_WIDGETS.health.render(sz || 'l'); }
   finally { state.dash = prevDash; state.freeze = prevFreeze; }
 };
+/* v3.73.0: tagging now happens ON the Inbox card, so the card's STRUCTURE is
+   the behaviour — a chip per tag, exactly one "+ tag" opener, and the editor
+   only while it is open. Scraping the source would pin the template, not what
+   a given row actually renders. */
+SBC.renderInboxCard_ = function(t, tags, open){
+  var prevTags = state.inboxTags, prevEdit = state.tagEdit, prevSplit = state.split;
+  state.inboxTags = {}; state.tagEdit = {}; state.split = {};
+  if(tags && tags.length) state.inboxTags[t.txnId] = tags;
+  if(open) state.tagEdit[t.txnId] = true;
+  try { return inboxCardHtml(t); }
+  finally { state.inboxTags = prevTags; state.tagEdit = prevEdit; state.split = prevSplit; }
+};
+SBC.inboxTagsOf = inboxTagsOf;
+SBC.inboxTagAdd = inboxTagAdd;
+SBC.inboxTagRm = inboxTagRm;
+SBC.clearInboxTags_ = clearInboxTags_;
+SBC.userBusy = userBusy;
 
 (function start(){
   // v3.57.1: if Google's script loaded before this script finished parsing, its
