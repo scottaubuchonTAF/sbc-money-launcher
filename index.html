@@ -933,7 +933,7 @@ var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
    answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
    nothing about envelopes / inbox / register / journal, and clearing here
    would tell Home it is fresh when it is not. */
-var MIRROR_REFRESH_ONE = { apiPlans:'plans' };
+var MIRROR_REFRESH_ONE = { apiPlans:1 };   // WHICH tables is the server's business — one list, not two
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -1105,7 +1105,13 @@ var state = {
   dashSeries:null, dashSeriesLoading:false, balancesLoading:false, registerLoading:false,
   report:null, reportData:null, reportLoading:false, reportErr:null,
   tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{}, // v3.58 tags UI
-  inboxTags:{} // v3.73.0: tags typed on an Inbox card, applied BY the approve
+  inboxTags:{}, // v3.73.0: tags typed on an Inbox card, applied BY the approve
+  /* v3.74.0: which EDGE FUNCTION build answered. Deliberately OUTSIDE state.boot
+     — refreshBoot() replaces state.boot wholesale with the Apps Script
+     bootstrap, which knows nothing about the mirror and would drop it (the same
+     reason state.writeBack and state.freeze live out here). null = the mirror
+     has not answered this session, which is itself worth saying on About. */
+  mirrorVersion:null
 };
 /* Reports v2 (v3.59) — period navigator + filters, persisted per browser
    (new key sbcReport2; the old v3.21 sbcReport blob is simply orphaned). */
@@ -1129,7 +1135,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.73.1';
+var FE_VERSION = 'v3.74.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1612,6 +1618,9 @@ function bootApply_(res){
     // the Apps Script bootstrap, which would silently drop it (the v3.55 freeze
     // banner lives in state.freeze for the same reason).
     if(res.writeBack !== undefined) state.writeBack = res.writeBack;
+    // v3.74.0: same reasoning, one line up — capture the edge build before the
+    // Apps Script reconcile replaces state.boot.
+    if(res.boot && res.boot.mirrorVersion) state.mirrorVersion = res.boot.mirrorVersion;
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
     applySeason();                         // v3.57: dress for the season/birthday
@@ -6492,10 +6501,16 @@ function renderAbout(){
     '<text x="121" y="66" text-anchor="middle" font-size="33" font-weight="700" fill="#ffffff" font-family="inherit">C</text>'+
     '</svg>'+
     '<div class="abname">SBC <span>Money</span></div>'+
-    '<div class="abver">Server '+esc(b.version||'(checking…)')+' · UI '+esc(FE_VERSION)+' · '+esc(b.versionDate||'')+'</div>'+
+    '<div class="abver">Server '+esc(b.version||'(checking…)')+' · UI '+esc(FE_VERSION)+
+      ' · Mirror '+esc(state.mirrorVersion||'(not used yet)')+' · '+esc(b.versionDate||'')+'</div>'+
     // v3.35: only warn on a REAL mismatch. A mirror-served boot has version=null
     // until the background apiBootstrap reconcile lands — that's not a deploy skew.
     ((b.version && b.version!==FE_VERSION)?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
+    /* v3.74.0: the third deployable. A stale edge function used to be INVISIBLE
+       here — both other lines read healthy while the mirror ran old code. Only
+       warn on a real disagreement; null just means the mirror hasn't answered
+       yet this session (or is off), which is not a deploy problem. */
+    ((state.mirrorVersion && state.mirrorVersion!==FE_VERSION)?'<div class="abver" style="color:#f59e0b">⚠ The mirror is running '+esc(state.mirrorVersion)+' — re-run supabase\\Deploy Edge Function.cmd</div>':'')+
     '<div class="absub">Signed in as '+esc(b.user)+'</div>'+
     '<div class="absoon"><span data-act="goview" data-arg="howto" style="cursor:pointer;text-decoration:underline">📖 How to use SBC Money</span></div>'+
     '</div>';
