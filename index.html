@@ -920,6 +920,20 @@ var SUPA_API = 'https://bcnackbirzagcqtjuups.supabase.co/functions/v1/api';
    Self-expires after 2h: by then the hourly sync has covered it and a stuck flag
    would only buy a pointless refresh on every boot. */
 var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
+/* v3.73.1 — ⚠ A MIRROR-SERVED READ WHOSE WRITE BYPASSES THE MIRROR NEEDS ITS
+   OWN REFRESH. apiSavePlan (and plan duplicate / restore / activate / From
+   Tiller) are Apps-Script-only writes: the plan lands in the companion sheet
+   and the dirty flag gets set. But apiPlans is mirror-served, `plans` was
+   never in the edge function's refresh set, and the flag only ever triggered a
+   refresh for the two HOME reads — so a brand-new plan was invisible in SBC
+   until the :07 sync, an hour later, while sitting in the sheet the whole time.
+   Broken since v3.37 made apiPlans mirror-served; found 9/15/26 when Brady
+   built his first funding plan.
+   These reads ask the edge function to refresh ONE table — their own — before
+   answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
+   nothing about envelopes / inbox / register / journal, and clearing here
+   would tell Home it is fresh when it is not. */
+var MIRROR_REFRESH_ONE = { apiPlans:'plans' };
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -948,7 +962,7 @@ function refreshConfirmed_(r){
    identity to tell whether a refresh was requested). Apps Script ignores the
    extra key, so a fallback to legacyCall_ is harmless. */
 function withMirrorRefresh_(fn, args){
-  if(!MIRROR_REFRESH_FNS[fn] || !mirrorDirty_()) return args;
+  if(!(MIRROR_REFRESH_FNS[fn] || MIRROR_REFRESH_ONE[fn]) || !mirrorDirty_()) return args;
   var a = Array.prototype.slice.call(args);
   var src = (a[0] && typeof a[0]==='object') ? a[0] : null, o = {};
   if(src) for(var k in src){ if(Object.prototype.hasOwnProperty.call(src,k)) o[k]=src[k]; }
@@ -1115,7 +1129,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.73.0';
+var FE_VERSION = 'v3.73.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1404,7 +1418,9 @@ function apiCall_(fn, args, retry, mutating){
       // carries _refresh = {table: why}; 'error' / 'pending-write' / 'no-sheet'
       // keep the flag so the next Home read asks again. Clearing on request was
       // how a Sheets 503 left the mirror stale until :07 with no sign of it.
-      if(asked && refreshConfirmed_(r && r._refresh)) clearMirrorDirty_();
+      // v3.73.1: only a FULL refresh (the Home reads) may clear the flag — a
+      // one-table refresh leaves every other table exactly as stale as it was.
+      if(asked && MIRROR_REFRESH_FNS[fn] && refreshConfirmed_(r && r._refresh)) clearMirrorDirty_();
       return r;
     }).catch(function(err){
       // v3.62 (Finding 8): an aborted REFRESHING read isn't the mirror failing —
@@ -7190,11 +7206,18 @@ SBC.toastMs = toastMs; SBC.toast = toast;
 SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SBC.markPendingUnapproved = markPendingUnapproved; SBC.PENDING_APPROVED_TTL = PENDING_APPROVED_TTL;
 SBC.run = run; SBC.undoNow_ = undoNow_; SBC.fail = fail;
 SBC.MUTATING = MUTATING; SBC.SUPA_WRITES = SUPA_WRITES; SBC.MIRROR_ONLY = MIRROR_ONLY;
+SBC.SUPA_READS = SUPA_READS;   // v3.73.1: the read/write split is the bug surface
 SBC.rptRange = rptRange; SBC.rptStep = rptStep; SBC.rptAutoGran = rptAutoGran; SBC.rptDays = rptDays; SBC.rptISO = rptISO;
 SBC.verNewer_ = verNewer_; SBC.updateCheck_ = updateCheck_; SBC.updateBanner_ = updateBanner_;
 SBC.go = go; SBC.goHistoryReplay_ = goHistoryReplay_;
 SBC.supaOn_ = supaOn_; SBC.supaStrike_ = supaStrike_;
 SBC.mutSig_ = mutSig_; SBC.mutationDepth_ = mutationDepth_;
+/* v3.73.1: the dirty-flag routing is what hid a brand-new funding plan, so the
+   decision itself gets a seam rather than a regex over the source. */
+SBC.MIRROR_REFRESH_FNS = MIRROR_REFRESH_FNS; SBC.MIRROR_REFRESH_ONE = MIRROR_REFRESH_ONE;
+SBC.withMirrorRefresh_ = withMirrorRefresh_;
+SBC.markMirrorDirty_ = markMirrorDirty_; SBC.clearMirrorDirty_ = clearMirrorDirty_;
+SBC.mirrorDirty_ = mirrorDirty_;
 SBC.cssVar_ = cssVar_;
 /* v3.70.0: the Budget health card is what lied on 9/10/26, so it gets a seam.
    Tests feed it a health payload and read the rendered HTML back — the WORDING
