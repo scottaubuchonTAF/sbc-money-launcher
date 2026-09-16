@@ -1162,7 +1162,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.0';
+var FE_VERSION = 'v3.76.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1348,6 +1348,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSetGoal:1, apiClearGoal:1, apiSetMax:1, apiClearMax:1, // v3.75.0 — Apps-Script-only writes; marking dirty is what makes apiGoals refresh `targets`
   apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
+  apiAddMissingTillerCategories:1, // v3.76.1
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
   apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1,
@@ -5518,6 +5519,15 @@ function drawSync(){
       return '<div class="regrow"><div class="l1"><span class="desc">'+esc(r.name)+'</span>'+
         '<span class="acctchip">'+esc(r.group||'')+'</span></div></div>';
     }, 'Every SBC envelope exists as a Tiller category.');
+    /* v3.76.1: envelopes created before v3.76.0 never reached Tiller; until now
+       this section could only list them. Adds a Categories row per envelope
+       (Group + Type), each undoable from History. */
+    if(s.missingCatsCount>0){
+      h += '<div class="actions" style="margin:-8px 4px 18px">'+
+        '<button class="btn sm" data-act="missing-cats-add">\u270e Add '+s.missingCatsCount+
+        ' categor'+(s.missingCatsCount===1?'y':'ies')+' to Tiller</button>'+
+        '<span style="color:var(--ink-3);font-size:12px">new rows only \u00b7 undoable from History</span></div>';
+    }
   } else {
     h += '<div class="empty">No "Categories" tab found in the Tiller sheet — skipped that check.</div>';
   }
@@ -5528,6 +5538,25 @@ function drawSync(){
   $('#shell').innerHTML = h;
 }
 
+/* v3.76.1: add the Categories rows Tiller is missing for existing envelopes. */
+function missingCatsAdd(){
+  var s = state.sync; var n = s ? s.missingCatsCount : 0;
+  var names = (s && s.missingCats ? s.missingCats : []).map(function(r){ return r.name; });
+  confirmUi('Add '+n+' categor'+(n===1?'y':'ies')+' to your Tiller sheet?\n\n'+
+    (names.length ? names.join(', ')+(n>names.length?', \u2026':'')+'\n\n' : '')+
+    'Each becomes a new row on the Categories tab with its group and type. Nothing else in Tiller changes. Undoable from History.', 'Add to Tiller')
+  .then(function(ok){
+    if(!ok) return;
+    toast('Adding to Tiller\u2026');
+    run('apiAddMissingTillerCategories', {}).then(function(r){
+      var msg = r.added && r.added.length ? 'Added '+r.added.length+' categor'+(r.added.length===1?'y':'ies')+' to Tiller \u2713' : (r.note||'Nothing added');
+      if(r.failed && r.failed.length) msg += ' \u00b7 \u26a0 '+r.failed.length+' failed: '+r.failed.map(function(f){ return f.name+' ('+f.why+')'; }).join(', ');
+      toast(msg);
+      state.sync = null;
+      if(state.view==='sync') renderSync();
+    }).catch(function(e){ toast('\u26a0 '+(e.message||e)); });
+  });
+}
 /* v3.5: write SBC envelope names into BLANK Tiller Category cells. */
 function backfillGo(){
   var n = state.sync && state.sync.counts ? state.sync.counts.backfill : 0;
@@ -7080,7 +7109,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• <b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour.</p>'+
     '<p style="margin:0 0 6px">• <b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.</p>'+
     '<p style="margin:0 0 6px">• <b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the six below.</p>'+
-    '<p style="margin:0 0 6px">• <b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write or ✓ Accept button.</p>'+
+    '<p style="margin:0 0 6px">• <b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined \u2014 ✎ Add puts them on the Categories tab in one tap.</p>'+
     '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎.</p>'+
     '<p style="margin:0 0 6px">• <b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.</p>'+
     '<p style="margin:0 0 6px">• <b>Access</b> — who can sign in to <i>your</i> budget; add a family member\u2019s email here.</p>'+
@@ -7523,6 +7552,7 @@ document.addEventListener('click', function(ev){
       drawSync(); break;
     case 'accept-tiller': acceptTiller(arg); break;
     case 'backfill-go': backfillGo(); break;
+    case 'missing-cats-add': missingCatsAdd(); break; // v3.76.1
     case 'inspect-txn': inspectTxn(arg); break;
     case 'inspect-close':
       if(el.tagName==='BUTTON' || ev.target===el) $('#ovl').innerHTML='';
