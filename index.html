@@ -59,18 +59,28 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input,select{font:inherit}
 
 /* ================= layout: phone tabs / desktop sidebar ================= */
-/* v3.76.2 - ⚠ THE TAB-BAR GAP BELONGS ON .shell, NOT ON body.
-   Scott, 9/16/26: "you can't scroll all the way to the bottom of any screen
-   because of the menu bar." body carried padding-bottom:calc(64px + safe-area)
-   to clear the fixed nav - but body was also height:100%, and the bottom padding
-   of a fixed-height box does NOT extend the scrollable area for content that
-   overflows it. The gap was reserved in a place the scroll could never reach.
-   .shell is an ordinary in-flow block, so its padding always adds to the page
-   height. Same root cause as the tab bar drifting (see the html/body note above);
-   both are fixed by not capping the body, and this puts the reservation somewhere
-   that works regardless. 64px clears the bar (~53px) with slack. */
-.shell{max-width:680px;margin:0 auto;
-  padding:16px 16px calc(24px + 64px + env(safe-area-inset-bottom))}
+/* v3.76.3 - ⚠ THE TAB-BAR GAP IS A SPACER, NOT PADDING, AND IT IS MEASURED.
+   Scott, 9/16/26, still on v3.76.2: "we have bounce in 3.76.2" - the page moved
+   but still would not reach his mortgage balance or his archived envelopes.
+   TWO defects, and v3.76.2 only found the first:
+     1. (v3.76.2, correct) body carried the gap while body was height:100%, and
+        bottom padding on a capped box never extends the scroll. Moving it to
+        .shell - an ordinary in-flow block - fixed that much.
+     2. (this release) THE DENSITY BLOCKS WIPE IT OUT. `body[data-d="mid"]
+        .shell{padding:12px 14px 20px}` is specificity 0,2,0 against .shell's
+        0,1,0, and applyDensity DEFAULTS TO 'mid' - so for almost every user the
+        whole reservation was overwritten by a 20px (compact: 16px) bottom pad.
+        The gap existed only for a density nobody is on.
+   So the gap no longer competes in the padding cascade at all: .shell::after is
+   an empty block whose height nothing else sets. And its height is MEASURED off
+   the real bar rather than guessed - the bar's own font-size and svg scale with
+   density too, so one hard-coded constant was never going to be right.
+   ⚠ nav.tabs already carries padding-bottom:env(safe-area-inset-bottom), so that
+   is INSIDE offsetHeight. Do not add env() here as well - it double-counts. */
+.shell{max-width:680px;margin:0 auto;padding:16px 16px 24px}
+@media(max-width:899px){
+  .shell::after{content:'';display:block;height:var(--tabbar-h,88px)}
+}
 nav.tabs{
   position:fixed;left:0;right:0;bottom:0;z-index:30;
   display:flex;background:var(--card);border-top:1px solid var(--line);
@@ -93,7 +103,6 @@ aside.side{display:none}
 .sgreet{font-size:12.5px;font-weight:700;color:var(--ink-2);align-self:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media(min-width:900px){
-  .shell{padding-bottom:24px}   /* v3.76.2: no tab bar on desktop, nothing to clear */
   nav.tabs{display:none}
   .app{display:flex;min-height:100vh}
   aside.side{
@@ -1183,7 +1192,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.2';
+var FE_VERSION = 'v3.76.3';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -6394,6 +6403,9 @@ function applyDensity(v, save){
   state.density = v;
   document.body.setAttribute('data-d', v);
   try{ localStorage.setItem('sbcDensity', v); }catch(e){}
+  /* v3.76.3: density changes the bar's font-size and icon size, so the spacer
+     under it has to be re-measured. No resize event fires for this. */
+  if(typeof measureTabBar_ === 'function') measureTabBar_();
   if(save){
     toast('Density: '+densityLabel(v));
     run('apiSetDensity',{value:v}).catch(function(e){ console.warn('save density:', e&&e.message||e); });
@@ -7261,6 +7273,24 @@ function syncVV(){
 if(VV){ VV.addEventListener('resize', syncVV); VV.addEventListener('scroll', syncVV); }
 window.addEventListener('orientationchange', function(){ setTimeout(syncVV, 250); });
 syncVV();
+
+/* v3.76.3: the phone tab bar is fixed, so it covers the last rows of every
+   scrolling view. .shell::after reserves exactly its height - measured, because
+   density changes it. Called on load, on resize/orientation, and from
+   applyDensity, which is the one thing that resizes the bar without a resize. */
+function measureTabBar_(){
+  try{
+    var n = document.querySelector('nav.tabs');
+    if(!n) return;
+    var h = Math.round(n.getBoundingClientRect().height);
+    /* display:none on desktop reads 0 - leave the last good value alone rather
+       than collapsing the spacer; the media query hides it there anyway. */
+    if(h > 0) document.documentElement.style.setProperty('--tabbar-h', h+'px');
+  }catch(e){}
+}
+window.addEventListener('resize', measureTabBar_);
+window.addEventListener('orientationchange', function(){ setTimeout(measureTabBar_, 250); });
+measureTabBar_();
 /* every overlay writes straight into #ovl from half a dozen places, so watch the
    node instead of tagging each caller: body.ovlopen stops the page behind the
    sheet from scrolling, and a fresh syncVV catches a keyboard that is already up. */
