@@ -1162,7 +1162,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.75.0';
+var FE_VERSION = 'v3.76.0';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1244,6 +1244,24 @@ function tillerNote(base, r){
   if(w && w.error) return base + ' — Tiller category not written (daily sweep will retry)';
   if(w && w.queued) return base + ' · syncing to Tiller in background'; // v3.23
   if(w && w.written) return base + ' · Tiller ✓';
+  return base;
+}
+/* v3.76.0: envelope create / regroup / archive carry to Tiller's Categories tab
+   (result.tiller, same shape as the v3.53 rename). Say so only when it says
+   something: a ✓ when Tiller changed, a warning when it should have and
+   didn’t, silence when there was nothing to do. */
+function tillerCatNote(base, results){
+  var list = Array.isArray(results) ? results : [results];
+  var ok=false, err=false, off=false;
+  list.forEach(function(r){
+    var t = r && r.tiller; if(!t) return;
+    if(t.error) err=true;
+    else if(t.skipped==='gate-off') off=true;
+    else if(!t.skipped) ok=true;
+  });
+  if(err) return base+' · ⚠ Tiller category not updated';
+  if(ok) return base+' · Tiller ✓';
+  if(off) return base+' · Tiller write-back is off';
   return base;
 }
 function envName(id){
@@ -3151,7 +3169,7 @@ function envNewSave(){
   var btn = document.querySelector('[data-act="env-new-save"]');
   if(btn){ btn.disabled=true; btn.textContent='Creating…'; }
   run('apiCreateEnvelope', { name:name, group:group||'Other', type:type })
-  .then(function(){ toast('Envelope created ✓'); state.envNew=null; invalidateData(); return refreshBoot(); })
+  .then(function(r){ toast(tillerCatNote('Envelope created ✓', r)); state.envNew=null; invalidateData(); return refreshBoot(); })
   .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Create'; } toast('⚠ '+(e.message||e)); });
 }
@@ -3164,20 +3182,20 @@ function envRenameSave(){
   if(name===r.name && group===r.group){ state.envRename=null; renderEnvDetail(); return; }
   var btn = document.querySelector('[data-act="env-rename-save"]');
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
-  var p = Promise.resolve();
-  if(name !== r.name) p = p.then(function(){ return run('apiRenameEnvelope', { envelopeId:r.id, name:name }); });
-  if(group !== r.group) p = p.then(function(){ return run('apiSetEnvelopeGroup', { envelopeId:r.id, group:group }); });
-  p.then(function(){ toast('Saved ✓'); state.envRename=null; invalidateData();
+  var p = Promise.resolve(), results = [];
+  if(name !== r.name) p = p.then(function(){ return run('apiRenameEnvelope', { envelopeId:r.id, name:name }).then(function(x){ results.push(x); }); });
+  if(group !== r.group) p = p.then(function(){ return run('apiSetEnvelopeGroup', { envelopeId:r.id, group:group }).then(function(x){ results.push(x); }); });
+  p.then(function(){ toast(tillerCatNote('Saved ✓', results)); state.envRename=null; invalidateData();
     if(state.envDetail) state.envDetail.txns=null; return refreshBoot(); })
   .then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
   .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
 }
 function envArchive(id){
-  confirmUi('Archive this envelope? It will be hidden from your lists (unarchive later from Envelopes ▸ Archived). Its history is kept.', 'Archive')
+  confirmUi('Archive this envelope? It will be hidden from your lists (unarchive later from Envelopes ▸ Archived) and marked Hide From Reports in your Tiller sheet. Its history is kept on both sides.', 'Archive')
   .then(function(ok){
     if(!ok) return;
     run('apiArchiveEnvelope', { envelopeId:id, archive:true })
-    .then(function(){ toast('Archived ✓'); state.archived=null; invalidateData(); return refreshBoot(); })
+    .then(function(r){ toast(tillerCatNote('Archived ✓', r)); state.archived=null; invalidateData(); return refreshBoot(); })
     .then(function(){ go('envelopes'); })
     .catch(function(e){ toast('⚠ '+(e.message||e)); });
   });
@@ -3205,7 +3223,7 @@ function envUnhide(id){
 }
 function envUnarchive(id){
   run('apiArchiveEnvelope', { envelopeId:id, archive:false })
-  .then(function(){ toast('Unarchived ✓'); state.archived=null; invalidateData(); return refreshBoot(); })
+  .then(function(r){ toast(tillerCatNote('Unarchived ✓', r)); state.archived=null; invalidateData(); return refreshBoot(); })
   .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
@@ -7058,7 +7076,7 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">The pages the rest of this guide doesn\u2019t stop to explain. If a page loads with a red ⚠ and a <b>Try again</b> button, tap it — the load failed, nothing else did.</p>'+
     '<p style="margin:0 0 6px">• <b>Transactions</b> — every approved transaction; search by description, filter by account, envelope or hidden, and tag from here.</p>'+
     '<p style="margin:0 0 6px">• <b>Fund</b> — moves pool money into envelopes. Type the amount (or take the whole pool), apply a plan or split by hand, and the footer says <b>Fully assigned ✓</b> when every dollar has a job. Plans live at the bottom of this page.</p>'+
-    '<p style="margin:0 0 6px">• <b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one.</p>'+
+    '<p style="margin:0 0 6px">• <b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one. Envelopes and Tiller categories are one list: creating, renaming, regrouping or archiving an envelope here does the same thing to its category in your Tiller sheet (archive = <b>Hide From Reports</b>), and the confirmation says <b>Tiller ✓</b> when it landed. Hide is the exception — it only quiets the envelope in SBC.</p>'+
     '<p style="margin:0 0 6px">• <b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour.</p>'+
     '<p style="margin:0 0 6px">• <b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.</p>'+
     '<p style="margin:0 0 6px">• <b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the six below.</p>'+
