@@ -109,7 +109,27 @@ aside.side{display:none}
     display:flex;flex-direction:column;gap:2px;width:236px;flex-shrink:0;
     background:var(--side-bg,var(--teal-900));padding:22px 14px 18px;position:sticky;top:0;height:100vh;
   }
-  aside.side .brand{padding:2px 10px 20px}
+  aside.side .brand{flex:0 0 auto;padding:2px 10px 20px}
+  /* v3.76.3 - ⚠ THE SIDEBAR IS A FIXED-HEIGHT COLUMN, SO SOMETHING INSIDE IT
+     HAS TO SCROLL. Scott, 9/17/26: "the logout button is being half or completely
+     hidden on the desktop version." aside.side is height:100vh + position:sticky,
+     and every child sat directly in the flex column with .foot on margin-top:auto.
+     The nav list has been growing all along (Goals landed in v3.75.0), so on a
+     shorter window - or any Windows display scale above 100% - the column
+     overflowed, and because the sidebar is STUCK to the viewport, whatever spilled
+     past its bottom edge could not be scrolled to from anywhere. The footer was
+     not hidden by a z-index or a clip; it was simply below the bottom of a box
+     that never moves.
+     ★ The list scrolls, the footer does not. .navlist takes the leftover space
+     (flex:1 with min-height:0, which is what lets a flex child shrink below its
+     content) and scrolls inside it; .foot is flex:0 0 auto, so it is always the
+     last thing on screen no matter how many nav rows there are. Adding a nav row
+     now costs scroll, never the Log out button. */
+  aside.side .navlist{display:flex;flex-direction:column;gap:2px;
+    flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+  aside.side .navlist::-webkit-scrollbar{width:6px}
+  aside.side .navlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:99px}
   aside.side .navlbl{color:#5d837d;font-size:10.5px;font-weight:700;letter-spacing:.1em;
     text-transform:uppercase;padding:14px 12px 6px}
   aside.side button.nav{
@@ -125,7 +145,7 @@ aside.side{display:none}
     font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:2px 6px}
   .beta.inline{background:var(--teal-700);color:#fff;font-size:9px;font-weight:800;letter-spacing:.08em;
     border-radius:5px;padding:2px 6px;vertical-align:middle;margin-left:6px}
-  aside.side .foot{margin-top:auto;color:#6e958f;font-size:11px;padding:0 12px;
+  aside.side .foot{flex:0 0 auto;margin-top:12px;color:#6e958f;font-size:11px;padding:0 12px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main{flex:1;min-width:0}
   .shell{max-width:1240px;padding:30px 40px 56px;margin:0}
@@ -852,6 +872,9 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
         <text x="88" y="38" font-size="22" font-weight="800" fill="#ffffff" letter-spacing="-0.3" font-family="inherit">SBC <tspan fill="#5eead4">Money</tspan></text>
       </svg>
     </div>
+    <!-- v3.76.3: the nav list is its own scrolling column so the Log out button
+         below it can never be pushed off the bottom of a short window. -->
+    <div class="navlist">
     <button class="nav" data-v="dash"></button>
     <button class="nav" data-v="inbox"></button>
     <button class="nav" data-v="fund"></button>
@@ -865,6 +888,7 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
     <button class="nav" data-v="reports"></button>
     <div class="navlbl">More</div>
     <button class="nav" data-v="settings"></button>
+    </div>
     <div class="foot" id="sideFoot"></div>
   </aside>
   <div class="main">
@@ -1192,7 +1216,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.3';
+var FE_VERSION = 'v3.76.4';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
