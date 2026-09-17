@@ -145,7 +145,15 @@ aside.side{display:none}
     font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:2px 6px}
   .beta.inline{background:var(--teal-700);color:#fff;font-size:9px;font-weight:800;letter-spacing:.08em;
     border-radius:5px;padding:2px 6px;vertical-align:middle;margin-left:6px}
-  aside.side .foot{flex:0 0 auto;margin-top:12px;color:#6e958f;font-size:11px;padding:0 12px;
+  /* v3.76.5 - the account block. Settings used to be the last row of the nav
+     list under a "More" label, which put the one control everybody eventually
+     wants behind a scroll on a short window. It now sits with the identity it
+     belongs to: a hairline, the gear, who you are, and the way out. It is still
+     an ordinary button.nav, so it wires, highlights and behaves exactly like
+     every other nav row - only its place in the column changed. */
+  aside.side .acct{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;
+    margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.10)}
+  aside.side .foot{flex:0 0 auto;margin-top:8px;color:#6e958f;font-size:11px;padding:0 12px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main{flex:1;min-width:0}
   .shell{max-width:1240px;padding:30px 40px 56px;margin:0}
@@ -886,10 +894,13 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
     <button class="nav" data-v="obligations"></button>
     <button class="nav" data-v="accounts"></button>
     <button class="nav" data-v="reports"></button>
-    <div class="navlbl">More</div>
-    <button class="nav" data-v="settings"></button>
     </div>
-    <div class="foot" id="sideFoot"></div>
+    <!-- v3.76.5: Settings is not a destination you hunt for in a scrolling list -
+         it belongs with who you are signed in as. Hairline, gear, email, Log out. -->
+    <div class="acct">
+      <button class="nav" data-v="settings"></button>
+      <div class="foot" id="sideFoot"></div>
+    </div>
   </aside>
   <div class="main">
     <div class="topbar"><span id="greet"></span><span id="todayLbl"></span></div>
@@ -1216,7 +1227,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.4';
+var FE_VERSION = 'v3.76.5';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
