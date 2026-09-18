@@ -409,6 +409,11 @@ aside.side{display:none}
 .goalcard .gbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
 .goalcard .gbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
 .goalcard.done .gbar i{background:var(--teal-700)}
+/* v3.76.8 - a CAP is not a goal: the bar fills toward a line you would rather
+   not cross, so it is quiet until you do, then amber. Never red - being over a
+   max is a nudge, not a problem (the envelope still has the money). */
+.goalcard.cap .gbar i{background:var(--ink-3)}
+.goalcard.cap.over .gbar i{background:var(--amber,#d97706)}
 .goalcard .gsub{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);margin-top:6px}
 .goalcard .gnote{font-size:12.5px;color:var(--ink-2);margin-top:6px}
 .goalcard .gact{margin-top:8px}
@@ -890,11 +895,17 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
     <button class="nav" data-v="dash"></button>
     <button class="nav" data-v="inbox"></button>
     <button class="nav" data-v="fund"></button>
+    <!-- v3.76.7: Goals and Obligations are the two "what is coming" pages, and
+         they sat on opposite sides of the list with Transactions and Balances
+         between them (Scott, 9/18/26). The column now reads in three beats:
+         what you HAVE (Envelopes, Transactions, Balances), what is COMING
+         (Goals, Obligations), then reference (Accounts, Reports). Order only -
+         no route, label or icon changes, and the phone `more` tab is untouched. -->
     <div class="navlbl">Money</div>
     <button class="nav" data-v="envelopes"></button>
-    <button class="nav" data-v="goals"></button>
     <button class="nav" data-v="txns"></button>
     <button class="nav" data-v="balances"></button>
+    <button class="nav" data-v="goals"></button>
     <button class="nav" data-v="obligations"></button>
     <button class="nav" data-v="accounts"></button>
     <button class="nav" data-v="reports"></button>
@@ -1231,7 +1242,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.6';
+var FE_VERSION = 'v3.76.9';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -5273,9 +5284,30 @@ function goalPaceChip_(c, item){
   return '<span class="gchip">Someday</span>';
 }
 /* One goal card — Goals page (full) and Home (compact). */
+/* v3.76.8 - THE SAME CARD RENDERS BOTH, because a cap does not need a section of
+   its own (Scott, 9/18/26: "I don't think it needs to be it's own section").
+   A goal is a floor you are climbing to; a max is a ceiling you would rather not
+   cross. Same shell, opposite intent, so the differences are stated, not implied:
+   🎯 vs 🧱, a teal bar vs a grey one that goes amber over the line, and "41%"
+   vs "$120 under". An envelope carrying BOTH gets the goal card plus one cap
+   line - it is still one card, not two.
+   ⚠ item.goal may be null here; everything touching `g` is guarded. The Home
+   goals widget still filters `it.goal && !it.hidden`, so cap-only envelopes
+   never reach it. */
+function goalCapLine_(item, c){
+  var m = item.max; if(!m || !(Number(m.amountCents) > 0)) return '';
+  var cap = Number(m.amountCents), bal = Number(item.balanceCents)||0;
+  var txt = c.overMaxCents > 0
+    ? money(c.overMaxCents/100)+' over its '+money(cap/100)+' max'
+    : money(Math.max(0, cap - bal)/100)+' under its '+money(cap/100)+' max';
+  return '<div class="gsub"><span'+(c.overMaxCents>0?' style="color:var(--amber,#d97706);font-weight:700"':'')+
+    '>🧱 '+esc(txt)+'</span></div>';
+}
 function goalCardHtml_(item, compact, nowMs, noNav){
   var c = goalCalc_(item, nowMs), g = item.goal;
   var bal = Number(item.balanceCents)||0, target = g ? Number(g.amountCents) : 0;
+  // Cap-only: no goal to render, so the card is about the ceiling instead.
+  if(!g) return goalCapCardHtml_(item, c, compact, noNav);
   var h = '<div class="goalcard'+(compact?' compact':'')+(c.reached?' done':'')+'"'+
     (noNav ? '' : ' data-act="env-open" data-arg="'+esc(item.envelopeId)+'"')+'>';
   h += '<div class="grow"><span class="gnm">🎯 '+esc(item.name)+(item.hidden?' <span class="dim">· hidden</span>':'')+'</span>'+
@@ -5287,8 +5319,25 @@ function goalCardHtml_(item, compact, nowMs, noNav){
   if(c.dated) sub.push('by '+goalFmtDay_(g.date));
   else if(!c.reached) sub.push('no date — at your pace');
   h += '<div class="gsub"><span>'+esc(sub.join(' · '))+'</span>'+goalPaceChip_(c, item)+'</div>';
+  if(!compact) h += goalCapLine_(item, c);   // v3.76.8: a goal that also has a cap
   if(!compact && g.note) h += '<div class="gnote">'+esc(g.note)+'</div>';
   if(!compact) h += '<div class="gact"><button class="btn ghost sm" data-act="goal-edit" data-arg="'+esc(item.envelopeId)+'">Edit</button></div>';
+  return h+'</div>';
+}
+/* v3.76.8 - an envelope with a max and NO goal. Same shell, ceiling semantics. */
+function goalCapCardHtml_(item, c, compact, noNav){
+  var cap = Number(item.max && item.max.amountCents)||0, bal = Number(item.balanceCents)||0;
+  var over = c.overMaxCents > 0;
+  var pct = cap > 0 ? Math.max(0, Math.min(100, Math.round(bal / cap * 100))) : 0;
+  var h = '<div class="goalcard cap'+(compact?' compact':'')+(over?' over':'')+'"'+
+    (noNav ? '' : ' data-act="env-open" data-arg="'+esc(item.envelopeId)+'"')+'>';
+  h += '<div class="grow"><span class="gnm">🧱 '+esc(item.name)+(item.hidden?' <span class="dim">· hidden</span>':'')+'</span>'+
+    '<span class="gamt">'+money(bal/100)+' <span class="dim">/ '+money(cap/100)+' max</span></span></div>';
+  h += '<div class="dbar gbar"><i style="width:'+pct+'%"></i></div>';
+  var txt = over ? money(c.overMaxCents/100)+' over' : money(Math.max(0, cap-bal)/100)+' under';
+  h += '<div class="gsub"><span>'+esc(txt+' · a ceiling, not a target')+'</span>'+
+    (over ? '<button class="gbadge over" data-act="goal-move-over" data-arg="'+esc(item.envelopeId)+'" title="Over its max — tap to move">move '+money(c.overMaxCents/100)+'</button>' : '')+'</div>';
+  if(!compact) h += '<div class="gact"><button class="btn ghost sm" data-act="max-edit" data-arg="'+esc(item.envelopeId)+'">Edit max</button></div>';
   return h+'</div>';
 }
 function renderGoals(){
@@ -5296,7 +5345,8 @@ function renderGoals(){
   var h = '<div class="viewhead"><h2>Goals</h2>'+
     '<button class="btn sm" data-act="goal-new">+ New goal</button></div>';
   h += '<div class="note" style="padding:0 0 14px">Saving for something? Pick an envelope (or make one), say how much, and — if you like — by when. '+
-    'The envelope holds the money like any other; this page just keeps score.</div>';
+    'The envelope holds the money like any other; this page just keeps score. '+
+    'Envelopes you have capped with a <b>max</b> (🧱) are here too — same list, opposite idea: a ceiling you would rather not cross.</div>';
   if(state.goalNew) h += goalNewFormHtml_();
   if(items === null){
     h += '<div class="spin"></div>';
@@ -5305,13 +5355,24 @@ function renderGoals(){
     return;
   }
   var goals = items.filter(function(it){ return it.goal; });
-  if(!goals.length){
-    h += '<div class="empty">No goals yet.<br><span style="font-size:13px">Tap <b>+ New goal</b> to start saving for something.</span></div>';
+  /* v3.76.8: a max-only envelope was already IN this payload (goalItems_ folds
+     goals and maxes into one items array) and was being filtered away, so there
+     was no list of your caps anywhere in the app. It joins the same list - over
+     its cap first, then by name - between the live goals and Reached. One list,
+     no second section, no extra fetch. */
+  var caps = items.filter(function(it){ return !it.goal && it.max && Number(it.max.amountCents) > 0; });
+  caps.sort(function(a, b){
+    var oa = goalCalc_(a).overMaxCents > 0 ? 0 : 1, ob = goalCalc_(b).overMaxCents > 0 ? 0 : 1;
+    return (oa - ob) || a.name.localeCompare(b.name);
+  });
+  if(!goals.length && !caps.length){
+    h += '<div class="empty">No goals yet.<br><span style="font-size:13px">Tap <b>+ New goal</b> to start saving for something, or set a max on an envelope to cap it.</span></div>';
   } else {
     var sorted = goalSort_(goals);
     var live = sorted.filter(function(it){ return !goalCalc_(it).reached; });
     var done = sorted.filter(function(it){ return goalCalc_(it).reached; });
     live.forEach(function(it){ h += goalCardHtml_(it, false); });
+    caps.forEach(function(it){ h += goalCardHtml_(it, false); });
     if(done.length){
       h += '<div class="grp" style="margin-top:14px"><h3>Reached</h3></div>';
       done.forEach(function(it){ h += goalCardHtml_(it, false); });
@@ -6955,11 +7016,35 @@ function reconToggleManual(account){
   // v3.27 OPTIMISTIC: flip + redraw now; revert on failure.
   if(a) a.manual=on;
   if(!on && state.baledit && state.baledit.account===account) state.baledit=null;
+  /* v3.76.9 — ★★ RECONCILE AND BALANCES MUST ANSWER "IS THIS MANUAL?" THE SAME
+     WAY. Scott, 9/18/26: "I marked an account as manual, but I don't get the
+     edit option in balances." He did nothing wrong — the two screens were
+     reading two different servers.
+       • apiSetManualAccount is an APPS-SCRIPT-ONLY write. The name lands in the
+         companion sheet's `Manual Accounts` setting.
+       • apiReconcile is Apps-Script-served, so it saw the flag at once and the
+         button flipped to "✓ Manual".
+       • apiBalances is MIRROR-served, and apiBalancesMirror builds its manual
+         set from the mirror's copy of settings — refreshed only by the :07
+         pg_cron sync. So Balances kept saying "not manual", and the ✎ is gated
+         on exactly that. Up to an hour of the app contradicting itself.
+     ⚠ `settings` is not in REFRESH_TABLES either, so Maintenance → Refresh app
+     data from sheet could not pull it forward: the 15-minute bypass is the only
+     lever that exists. reconSaveBalance right below already sets it for the
+     same reason (v3.55.2) — the toggle simply never did.
+     Set BEFORE the write, as the balance path does: the flag only routes reads
+     to Apps Script (authoritative), and a failed write reverts the UI anyway.
+     ~ No invalidateData() here on purpose. Marking an account manual moves no
+     money — Home's numbers are identical either way, and telling Home to
+     refetch would be cargo-culting the balance path's cleanup. */
+  state.balances=null;
+  markTillerBalFresh_();
   toast(on?'Marked manual ✓':'Set to auto');
   drawReconcile();
   run('apiSetManualAccount', { account:account, manual:on })
   .catch(function(e){
     if(a) a.manual=!on;
+    state.balances=null;
     drawReconcile();
     toast('⚠ '+(e.message||e));
   });
@@ -7130,7 +7215,9 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">A goal is just an envelope with a finish line. Open <b>Goals</b> (sidebar, or More on your phone), tap <b>+ New goal</b>, and say <b>what for</b> (pick an envelope or make a new one), <b>how much</b>, and \u2014 only if you want \u2014 <b>by when</b>. Leave the date blank and it\u2019s a <i>someday</i> goal: no deadline, no nagging, just a bar that fills up as you put money in.</p>'+
     '<p style="margin:0 0 8px">Money gets into a goal the same way it gets into any envelope: fund it on payday, or <b>Move money</b> into it from another envelope. The Goals page shows saved / target, the percent, and for a dated goal <b>$X/month to make it</b> plus <b>On track</b> or <b>Behind</b>. Behind gives you a month\u2019s grace, so it won\u2019t flip red the day before payday. A dated goal that passes its date short shows up on <b>Needs attention</b> until you reach it, re-date it or clear it.</p>'+
     '<p style="margin:0 0 8px">Goal envelopes wear a <b>\ud83c\udfaf</b> badge with their percent in the Envelopes list, and the <b>\ud83c\udfaf Goals</b> card on Home shows your nearest three. When the balance reaches the number it reads <b>Reached \u2713</b> \u2014 then spend it, or set a new number. Change or clear a goal any time from the envelope\u2019s page (<b>Edit goal</b>).</p>'+
-    '<p style="margin:0"><b>Max</b> is the opposite tool, for everyday envelopes: open the envelope, <b>Set max</b>, and if Groceries ever sits above it you\u2019ll see <i>\u201c$120 over max\u201d</i> on the row and on Needs attention. Tap it and Move opens with that amount filled in \u2014 you pick where it goes. SBC only points; it never moves your money.</p>');
+    '<p style="margin:0 0 8px"><b>Max</b> is the opposite tool, for everyday envelopes: open the envelope, <b>Set max</b>, and if Groceries ever sits above it you\u2019ll see <i>\u201c$120 over max\u201d</i> on the row and on Needs attention. Tap it and Move opens with that amount filled in \u2014 you pick where it goes. SBC only points; it never moves your money.</p>'+
+    /* v3.76.8 */
+    '<p style="margin:0">Anything you have capped shows up on this same <b>Goals</b> page, in the same list, wearing 🧱 instead of 🎯 \u2014 so you can see every cap you have set in one place instead of hunting envelope by envelope. Read the two together: 🎯 is a floor you are climbing to, 🧱 is a ceiling you would rather not cross. An envelope with both is still one card.</p>');
 
   h += S('🏦','Autopay — will the cash be in the right account?',
     '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
@@ -7159,6 +7246,19 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Maintenance → Reconcile accounts</b>.</p>'+
     '<p style="margin:0 0 8px">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>'+
     '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Maintenance → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
+
+  /* v3.76.7 - "if a user wants to set up a manual account, should they do that
+     in SBC or Tiller?" (Scott, 9/18/26). SBC has no create-account path at all:
+     the account list is built from Balance History rows that arrive on the
+     hourly Tiller sync. And the GROUP is the part people skip - a blank group
+     drops the account out of `bank` entirely and lands as unexplained on Budget
+     health (Brady's $8.60, 9/15/26). Say both, in the user's words. */
+  h += S('✋','An account with no feed — HSA, rewards, a car',
+    '<p style="margin:0 0 8px">Some things you want on the books have no bank feed at all: an <b>HSA</b>, a <b>credit-card rewards</b> balance, a <b>401(k)</b>, the value of a car. SBC can track those — you just type the number in when it changes.</p>'+
+    '<p style="margin:0 0 8px"><b>Create the account in Tiller, not in SBC.</b> SBC has no <i>add account</i> button anywhere; the account list you see on Balances and Reconcile is built from what your Tiller sheet reports. Add it on Tiller’s <b>Accounts</b> tab — and <b>give it a Group</b> (Checking, Savings, Credit, Retirement …). ⚠ The group is the step people skip, and an account without one quietly drops out of the honesty check and shows up later as an <i>unexplained</i> balance nobody can find.</p>'+
+    '<p style="margin:0 0 8px">It reaches SBC on the next hourly sync — a Tiller-side change only ever arrives on the hour, so if it isn’t there yet, that’s why.</p>'+
+    '<p style="margin:0 0 8px">Then, in SBC: <b>Settings → Maintenance → Reconcile accounts</b>, find it under 🔄 AUTOMATIC and tap <b>Mark manual</b>. It moves up to ✋ MANUAL. From then on <b>Update balance</b> is how you keep it honest — that writes the new balance back into your Tiller sheet, so both sides stay in step.</p>'+
+    '<p style="margin:0">⚠ <b>A manual account is a balance, not a spending account.</b> It will never have transactions and nothing you spend from it touches an envelope. That’s right for an HSA or a car. It is <i>not</i> the way to track cash in your wallet — for that, keep an envelope and let the money live in the pool.</p>');
 
   h += S('📊','Checking on yourself',
     '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Tap <b>Customize</b> at the top of Home to show, hide or reorder the cards.</p>'+
@@ -7202,7 +7302,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px">• <b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.</p>'+
     '<p style="margin:0 0 6px">• <b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the six below.</p>'+
     '<p style="margin:0 0 6px">• <b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined \u2014 ✎ Add puts them on the Categories tab in one tap.</p>'+
-    '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎.</p>'+
+    '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.</p>'+
     '<p style="margin:0 0 6px">• <b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.</p>'+
     '<p style="margin:0 0 6px">• <b>Access</b> — who can sign in to <i>your</i> budget; add a family member\u2019s email here.</p>'+
     '<p style="margin:0 0 6px">• <b>More</b> (phone) — the pages the five tabs have no room for: Transactions, Fund, Obligations, Accounts, Reports, and Settings. On a computer these all live in the left sidebar instead.</p>'+'<p style="margin:0 0 6px">• <b>Sign-ins & activity</b> — every sign-in and who changed what.</p>'+
@@ -7676,7 +7776,9 @@ document.addEventListener('click', function(ev){
     case 'goal-new-cancel': state.goalNew=null; renderGoals(); break;
     case 'goal-new-save': goalNewSave_(); break;
     case 'goal-edit': state.goalEdit={id:arg, kind:'goal'}; state.move=null; if(state.view!=='envdetail' || !state.envDetail || state.envDetail.id!==arg) openEnvelope(arg); else renderEnvDetail(); break;
-    case 'max-edit': state.goalEdit={id:arg, kind:'max'}; state.move=null; renderEnvDetail(); break;
+    // v3.76.8: reachable from the Goals page now, where the envelope is NOT open —
+    // open it first, exactly as goal-edit does, or renderEnvDetail draws nothing.
+    case 'max-edit': state.goalEdit={id:arg, kind:'max'}; state.move=null; if(state.view!=='envdetail' || !state.envDetail || state.envDetail.id!==arg) openEnvelope(arg); else renderEnvDetail(); break;
     case 'goal-edit-save': goalEditSave_(); break;
     case 'goal-edit-clear': goalEditClear_(); break;
     case 'goal-edit-cancel': state.goalEdit=null; renderEnvDetail(); break;
@@ -7811,6 +7913,14 @@ SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SB
 SBC.run = run; SBC.undoNow_ = undoNow_; SBC.fail = fail;
 SBC.MUTATING = MUTATING; SBC.SUPA_WRITES = SUPA_WRITES; SBC.MIRROR_ONLY = MIRROR_ONLY;
 SBC.SUPA_READS = SUPA_READS;   // v3.73.1: the read/write split is the bug surface
+/* v3.76.9: the manual-account flag crosses the same read/write split, and the
+   only lever is the 15-minute bypass — so the bypass itself is the seam. A
+   source regex would pin the CALL; these pin what the call actually does to the
+   routing decision apiBalances makes next. */
+SBC.reconToggleManual = reconToggleManual;
+SBC.markTillerBalFresh_ = markTillerBalFresh_; SBC.tillerBalFresh_ = tillerBalFresh_;
+SBC.mirrorBypass_ = mirrorBypass_; SBC.MIRROR_BYPASS_FNS = MIRROR_BYPASS_FNS;
+SBC.balGroupHtml = balGroupHtml;   // the ✎ is gated on r.manual — render it and look
 SBC.rptRange = rptRange; SBC.rptStep = rptStep; SBC.rptAutoGran = rptAutoGran; SBC.rptDays = rptDays; SBC.rptISO = rptISO;
 SBC.verNewer_ = verNewer_; SBC.updateCheck_ = updateCheck_; SBC.updateBanner_ = updateBanner_;
 SBC.go = go; SBC.goHistoryReplay_ = goHistoryReplay_;
