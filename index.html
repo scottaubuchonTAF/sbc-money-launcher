@@ -268,6 +268,10 @@ aside.side{display:none}
 .dbrk .r .k{opacity:.82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dbrk .r .v{font-weight:700;white-space:nowrap}
 .dbrk .r.owe .k,.dbrk .r.owe .v{color:#fde68a;opacity:1}
+/* v3.76.6 - money parked in an income envelope that is NOT the pool. Not a
+   warning (nothing is wrong), so no amber: a plain row plus one line of
+   what to do about it. */
+.dbrk .n{font-size:10.5px;line-height:1.4;opacity:.72;margin-top:4px}
 .dmini{display:flex;gap:18px;margin-top:8px;justify-content:center}
 .dmini .k{font-size:9.5px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .dmini .v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -1227,7 +1231,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.76.5';
+var FE_VERSION = 'v3.76.6';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2163,21 +2167,39 @@ function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:
    Deliberately NOT presented as arithmetic on the hero number — pool =
    cash − cards + inbox is NOT an identity (envelopes other than the pool hold
    cash too). These are context rows, which is why there's no total. */
+/* v3.76.6 - income sitting OUTSIDE the pool. The hero stopped counting it (it
+   is not fundable until it is swept), so the card has to say where it went, or
+   money would appear to vanish from Home. One named envelope reads by name;
+   several read as a count. Renders even on a payload with no health block. */
+function heldIncome_(d){
+  var h=(d&&d.heldIncome)?d.heldIncome:null;
+  if(!h) return null;
+  var tot=Number(h.total); if(!isFinite(tot) || Math.abs(tot)<0.005) return null;
+  var items=h.items||[];
+  var label = items.length===1 ? ('In '+String(items[0].name||'another income envelope'))
+            : ('In '+items.length+' other income envelopes');
+  return { row:'<div class="r"><span class="k">'+esc(label)+'</span><span class="v">'+money(tot)+'</span></div>',
+           note:'<div class="n">Not in the pool yet \u2014 open it in Envelopes and Move to pool to fund with it.</div>' };
+}
 function availBreakdown_(d){
+  var rows='', note='';
   var H=(d&&d.health)?d.health:null;
-  if(!H || H.error) return '';
-  var cash=Number(H.cash);
-  if(!isFinite(cash)) return '';            // pre-v3.31 payload: skip silently
-  var owed=Number(H.debt), pend=Number(H.pendingInbox)||0;
-  var rows='<div class="r"><span class="k">Cash in accounts</span><span class="v">'+money(cash)+'</span></div>';
-  // debt arrives POSITIVE (healthBankSide_ stores the magnitude); show the sign.
-  if(isFinite(owed) && Math.abs(owed)>=0.005)
-    rows+='<div class="r owe"><span class="k">Cards owed</span><span class="v">'+money(-Math.abs(owed))+'</span></div>';
-  // Signed as stored: inbox spend is negative, so this row explains a pool that
-  // sits ABOVE the bank without needing a sentence to do it.
-  if(Math.abs(pend)>=0.005)
-    rows+='<div class="r"><span class="k">Waiting in your inbox</span><span class="v">'+money(pend)+'</span></div>';
-  return '<div class="dbrk">'+rows+'</div>';
+  var cash=(H && !H.error)?Number(H.cash):NaN;
+  if(isFinite(cash)){                       // pre-v3.31 payload: skip silently
+    var owed=Number(H.debt), pend=Number(H.pendingInbox)||0;
+    rows+='<div class="r"><span class="k">Cash in accounts</span><span class="v">'+money(cash)+'</span></div>';
+    // debt arrives POSITIVE (healthBankSide_ stores the magnitude); show the sign.
+    if(isFinite(owed) && Math.abs(owed)>=0.005)
+      rows+='<div class="r owe"><span class="k">Cards owed</span><span class="v">'+money(-Math.abs(owed))+'</span></div>';
+    // Signed as stored: inbox spend is negative, so this row explains a pool that
+    // sits ABOVE the bank without needing a sentence to do it.
+    if(Math.abs(pend)>=0.005)
+      rows+='<div class="r"><span class="k">Waiting in your inbox</span><span class="v">'+money(pend)+'</span></div>';
+  }
+  var held=heldIncome_(d);
+  if(held){ rows+=held.row; note=held.note; }
+  if(!rows) return '';
+  return '<div class="dbrk">'+rows+note+'</div>';
 }
 var DASH_WIDGETS = {
   avail:{title:'Available to fund',icon:'💰',hero:true,nav:'fund',render:function(sz){
@@ -7061,6 +7083,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Envelope</b> — a named job for money (Groceries, Rent). Its balance = what’s truly available for that job.</p>'+
     '<p style="margin:0 0 6px"><b>Group</b> — a folder of envelopes (Bills, Everyday, Savings).</p>'+
     '<p style="margin:0 0 6px"><b>Income Cash Pool</b> — the loading dock. New income lands here first, then you deal it out to envelopes. Money in the pool has no job yet.</p>'+
+    /* v3.76.6 */
+    '<p style="margin:0 0 6px"><b>Available to fund</b> on Home is the <b>pool</b>, and nothing else — the same number Fund will let you deal out. Income parked in another income envelope (a <b>Regular Pay</b>, say) is listed under it as <i>In Regular Pay</i>: it is your money, it just isn’t fundable until you open that envelope and tap <b>Move to pool</b>.</p>'+
     '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
     '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
     '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
