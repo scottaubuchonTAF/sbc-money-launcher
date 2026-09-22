@@ -1207,6 +1207,8 @@ var state = {
   /* v3.77.1: Home's Recent activity list, ALWAYS unfiltered. Separate from
      state.register on purpose - see dashFetchRecent(). */
   recent:{items:null, loading:false},
+  /* v3.77.2: the Apps-Script version probe behind About's "Server" line. */
+  verProbe:{loading:false, failed:false},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, envTxnSeq:{}, confirmRes:null, importing:false, // v3.50.1: per-envelope fetch seq
@@ -1245,7 +1247,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.77.1';
+var FE_VERSION = 'v3.77.2';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1698,6 +1700,9 @@ function goHistoryReplay_(st){
 }
 window.addEventListener('popstate', function(ev){ goHistoryReplay_(ev.state); });
 function go(view){
+  // v3.77.2: arriving on About is a fresh request - clear a previous failure so
+  // the page asks again instead of opening straight onto the retry link.
+  if(view==='about' && state.verProbe) state.verProbe.failed = false;
   state.view = view;
   goPushHistory_(view);
   $all('[data-v]').forEach(function(b){
@@ -1763,10 +1768,10 @@ function bootApply_(res){
     // inbox count / group order can lag the hourly sync). Reconcile authoritatively
     // in the BACKGROUND via apiBootstrap (Apps Script) — never blocks first paint.
     // The Apps-Script path (fallback) already carries a version, so skip it there.
-    if(res && res.boot && !res.boot.version){
-      refreshBoot().then(function(){ saveSnapshot_(); })
-        .catch(function(e){ console.warn('boot reconcile:', e && e.message || e); });
-    }
+    // v3.77.2: through probeServerVersion_ so a FAILURE IS RECORDED. This used
+    // to swallow the rejection in a console.warn, and About then showed
+    // "(checking…)" for the rest of the session against a probe that was dead.
+    if(res && res.boot && !res.boot.version) probeServerVersion_();
 }
 /* v3.28: instant-open helpers. We cache the last successful boot + dashboard so the
    next open paints immediately instead of waiting on the cold apiBoot round trip. */
@@ -1890,6 +1895,41 @@ function prewarm(){
       .catch(function(e){ state.registerLoading=false; warn('apiRegister')(e); });
   }
   if(!state.accountsFull) run('apiAccountsFull').then(function(a){ state.accountsFull=a; markFetched('accountsFull'); }).catch(warn('apiAccountsFull'));
+}
+/* v3.77.2 - ★★ A SCREEN MUST ASK FOR WHAT IT DISPLAYS.
+   About's "Server" line is filled by state.boot.version, which only ever came
+   from ONE background refreshBoot() fired at boot. legacyCall_ aborts a read at
+   30 s and a cold Apps Script can blow that, so the reconcile rejected, the
+   rejection went to console.warn, and NOTHING RETRIED. Opening About after that
+   showed "(checking…)" forever - narrating a check that was not happening, next
+   to a blank version date from the same dead payload.
+
+   Now: renderAbout() calls this every time the version is missing, so opening
+   the page always asks; and a failed probe SAYS SO and offers a retry instead
+   of impersonating one in progress. ★ "(checking…)" is a true statement only
+   while something is checking. */
+function probeServerVersion_(force){
+  if(state.boot && state.boot.version) return;   // already known - nothing to ask
+  var p = state.verProbe;
+  if(p.loading) return;                          // one in flight is enough
+  /* ⚠ AND NOT AFTER A FAILURE, unless someone asked for it. Without this the
+     screen retries itself: the probe rejects, its catch re-renders About, and
+     renderAbout's auto-probe fires again - a hot loop against a server that is
+     already down. A failure parks on the retry link; `force` comes from tapping
+     it, and from ARRIVING on the page (go()), so a fresh visit always asks. */
+  if(p.failed && !force) return;
+  p.loading = true; p.failed = false;
+  refreshBoot().then(function(){
+    p.loading = false;
+    // refreshBoot resolved, but a payload with no version is still a miss.
+    p.failed = !(state.boot && state.boot.version);
+    saveSnapshot_();
+    if(state.view==='about') renderAbout();
+  }).catch(function(e){
+    p.loading = false; p.failed = true;
+    console.warn('server version probe:', e && e.message || e);
+    if(state.view==='about') renderAbout();
+  });
 }
 function refreshBoot(){
   return run('apiBootstrap').then(function(b){
@@ -6777,6 +6817,7 @@ function signOut(){
     state.reportData = null; state.removeResults = null;
     state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false, limit:50 };
     state.recent = { items:null, loading:false };   // v3.77.1
+    state.verProbe = { loading:false, failed:false };   // v3.77.2
     state.envTxnCache = {}; state.sel = {}; state.split = {}; state.resplit = {}; state.fund = {};
     try{ localStorage.removeItem('sbcDashLayout'); }catch(e3){}
     var si = $('#signin'); if(si) si.style.display = 'flex';
@@ -7147,8 +7188,9 @@ function renderAbout(){
     '<text x="121" y="66" text-anchor="middle" font-size="33" font-weight="700" fill="#ffffff" font-family="inherit">C</text>'+
     '</svg>'+
     '<div class="abname">SBC <span>Money</span></div>'+
-    '<div class="abver">Server '+esc(b.version||'(checking…)')+' · UI '+esc(FE_VERSION)+
-      ' · Mirror '+esc(state.mirrorVersion||'(not used yet)')+' · '+esc(b.versionDate||'')+'</div>'+
+    '<div class="abver">Server '+abServerVer_()+' · UI '+esc(FE_VERSION)+
+      ' · Mirror '+esc(state.mirrorVersion||'(not used yet)')+
+      (b.versionDate ? ' · '+esc(b.versionDate) : '')+'</div>'+
     // v3.35: only warn on a REAL mismatch. A mirror-served boot has version=null
     // until the background apiBootstrap reconcile lands — that's not a deploy skew.
     ((b.version && b.version!==FE_VERSION)?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
@@ -7161,6 +7203,16 @@ function renderAbout(){
     '<div class="absoon"><span data-act="goview" data-arg="howto" style="cursor:pointer;text-decoration:underline">📖 How to use SBC Money</span></div>'+
     '</div>';
   $('#shell').innerHTML = h;
+  // v3.77.2: ask. Opening this page is the request - it must not sit on a
+  // placeholder waiting for a background call that already failed.
+  if(!b.version) probeServerVersion_();
+}
+/* v3.77.2: the three honest states of the Server line. */
+function abServerVer_(){
+  var b = state.boot || {};
+  if(b.version) return esc(b.version);
+  if(state.verProbe.failed) return '<span data-act="about-recheck" style="cursor:pointer;text-decoration:underline">(unavailable \u2014 tap to retry)</span>';
+  return '(checking\u2026)';
 }
 
 /* ============================ how to use (v3.24) ============================ */
@@ -7539,6 +7591,7 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    case 'about-recheck': probeServerVersion_(true); renderAbout(); break;   // v3.77.2
     case 'app-reload': appReload_(); break;   // v3.69.0 (U4)
     case 'retry-view': render(); break;       // v3.69.0 (U7)
     case 'density': applyDensity(arg, true); break;
@@ -7957,6 +8010,7 @@ SBC.cssVar_ = cssVar_;
    source text, not what a given payload actually produces. */
 SBC.DASH_WIDGETS = DASH_WIDGETS;
 SBC.dashFetchRecent = dashFetchRecent;   // v3.77.1: the guard is the fix - drive it
+SBC.probeServerVersion_ = probeServerVersion_; SBC.abServerVer_ = abServerVer_; SBC.renderAbout = renderAbout;   // v3.77.2
 SBC.renderHealthCard_ = function(health, sz, freeze){
   var prevDash = state.dash, prevFreeze = state.freeze;
   state.dash = { health: health };
