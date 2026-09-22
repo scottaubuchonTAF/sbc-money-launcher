@@ -1204,6 +1204,9 @@ function supaWriteCall_(fn, args){
 var state = {
   view:'dash', boot:null, dash:null, inbox:null, picker:null, history:null,
   sel:{}, split:{}, register:{q:'', account:'', envelope:'', includeHidden:false, items:null, limit:50}, resplit:{},
+  /* v3.77.1: Home's Recent activity list, ALWAYS unfiltered. Separate from
+     state.register on purpose - see dashFetchRecent(). */
+  recent:{items:null, loading:false},
   plans:null, planEdit:null, fund:{}, pickCtx:null,
   accounts:null, accountsFull:null, balances:null, sync:null, envOpen:{}, envDetail:null, move:null,
   envTxnCache:{}, envTxnSeq:{}, confirmRes:null, importing:false, // v3.50.1: per-envelope fetch seq
@@ -1242,7 +1245,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.77.0';
+var FE_VERSION = 'v3.77.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1880,6 +1883,9 @@ function prewarm(){
     run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
       .then(function(it){ state.register.items=it; state.register.sig='|||0|50'; state.registerLoading=false;
         markFetched('register'); // v3.27 (same limit/filters as the Transactions view); v3.28.1 sig incl. limit
+        // v3.77.1: this read is unfiltered, so it answers Home's question too -
+        // seed state.recent from it and the cold load still costs ONE call.
+        state.recent.items=it; markFetched('recent');
         if(state.view==='dash') renderDash(); })
       .catch(function(e){ state.registerLoading=false; warn('apiRegister')(e); });
   }
@@ -2613,7 +2619,7 @@ var DASH_WIDGETS = {
       '<div><div class="k">Net worth</div><div class="v">'+nw+'</div></div></div>';}},
 
   recent:{title:'Recent activity',icon:'🧾',nav:'txns',render:function(sz){
-    var items=state.register.items;
+    var items=state.recent.items;   // v3.77.1: NOT state.register.items (the filtered one)
     if(!items) return '<div class="dlbl">Recent activity</div><div class="dwmiss">Loading…</div>';
     if(!items.length) return '<div class="dhead"><div class="dlbl">Recent activity</div></div><div class="dwmiss">No transactions yet.</div>';
     var fmt=function(t){ var envn=(t.legs&&t.legs.length>1)?'Split':((t.legs&&t.legs[0])?t.legs[0].envelopeName:'');
@@ -2777,12 +2783,23 @@ function dashRevalHealth_(){
     })
     .catch(function(e){ state._healthReval=false; console.warn('health reval:', e&&e.message||e); });
 }
+/* v3.77.1 - ★★ TWO SCREENS ASKING DIFFERENT QUESTIONS MUST NOT SHARE ONE ANSWER.
+   Home's Recent activity used to read state.register.items - the SAME array the
+   Transactions page overwrites with the FILTERED server result. Filter by an
+   account or an envelope there, go Home, and the widget showed that filter. And
+   this function's old guard (`if(state.register.items) return`) meant it never
+   refetched, so the filter stuck for the rest of the session. state.recent is
+   its own store and is only ever filled from an UNFILTERED read. The SWR clock
+   ('recent') is what keeps it honest: invalidateData() drops _fetchedAt after
+   every mutation, so the next renderDash refetches. */
 function dashFetchRecent(){
-  if(state.register.items || state.registerLoading) return;
-  state.registerLoading = true;
+  if(state.recent.loading) return;
+  if(state.recent.items && freshEnough('recent')) return;
+  state.recent.loading = true;
   run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:20}).then(function(it){
-    state.register.items=it; state.register.sig='|||0|20'; state.registerLoading=false; if(state.view==='dash') renderDash();
-  }).catch(function(e){ state.registerLoading=false; console.warn('dash recent:', e&&e.message||e); });
+    state.recent.items=it; state.recent.loading=false; markFetched('recent');
+    if(state.view==='dash') renderDash();
+  }).catch(function(e){ state.recent.loading=false; console.warn('dash recent:', e&&e.message||e); });
 }
 
 /* Derive {visible:{id:1}, order:[body ids in display order]} from the saved
@@ -6759,6 +6776,7 @@ function signOut(){
     state.reconcile = null; state.access = null; state.archived = null;
     state.reportData = null; state.removeResults = null;
     state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false, limit:50 };
+    state.recent = { items:null, loading:false };   // v3.77.1
     state.envTxnCache = {}; state.sel = {}; state.split = {}; state.resplit = {}; state.fund = {};
     try{ localStorage.removeItem('sbcDashLayout'); }catch(e3){}
     var si = $('#signin'); if(si) si.style.display = 'flex';
@@ -7938,6 +7956,7 @@ SBC.cssVar_ = cssVar_;
    is the behaviour here, and regex-scraping index.html would only pin the
    source text, not what a given payload actually produces. */
 SBC.DASH_WIDGETS = DASH_WIDGETS;
+SBC.dashFetchRecent = dashFetchRecent;   // v3.77.1: the guard is the fix - drive it
 SBC.renderHealthCard_ = function(health, sz, freeze){
   var prevDash = state.dash, prevFreeze = state.freeze;
   state.dash = { health: health };
