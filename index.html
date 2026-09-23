@@ -1183,6 +1183,10 @@ function supaCall_(fn, args){
                        apply → retrying on Apps Script is SAFE.
      anything else   = network-level ambiguity — the write may have applied
                        and been forwarded; retrying could double-approve. */
+/* v3.78.1: when the last mirror-first write landed. For a few minutes after it
+   the SHEET is behind the mirror (the write-back is still in flight), so an
+   Apps Script bootstrap read in that window carries stale envelope balances. */
+var lastMirrorWriteAt_ = 0, MIRROR_LEAD_MS = 180000;
 function supaWriteCall_(fn, args){
   return fetch(SUPA_API, { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args, exec: backendUrl() }) })
@@ -1191,7 +1195,7 @@ function supaWriteCall_(fn, args){
     return r.json();
   })
   .then(function(res){
-    if(res && res.ok){ supaFails_ = 0; return res.result; }
+    if(res && res.ok){ supaFails_ = 0; lastMirrorWriteAt_ = Date.now(); return res.result; }   // v3.78.1
     var e = new Error((res && res.error) || 'mirror error');
     e.definitive = true;             // mirror answered: nothing was applied
     if(res && res.auth){ e.definitive = true; e.auth = true; }   // v3.69.0 (F4): not a strike
@@ -1250,7 +1254,7 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.78.0';
+var FE_VERSION = 'v3.78.1';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1934,9 +1938,59 @@ function probeServerVersion_(force){
     if(state.view==='about') renderAbout();
   });
 }
+/* v3.78.1 - ★★ A WRITE'S SUCCESS MUST NEVER DEPEND ON A READ (9/23 review).
+   refreshBoot() is the slow Apps Script reconcile (5-25 s, 30 s timeout).
+   • ONE in flight. A call while one runs gets the same promise and books ONE
+     trailing refresh 2 s after it lands - triaging 20 Inbox cards used to queue
+     20 full bootstraps on the bridge.
+   • MERGE, don't replace. Within MIRROR_LEAD_MS of a mirror-first write the
+     sheet is behind, so `groups` stay the mirror's (Fund used to snap the pool
+     back to its pre-fund balance - one tap from funding twice). And a payload
+     without `attention` never erases the one we have.
+   Callers that must not fail use refreshBootSafe_(); fire-and-forget callers
+   use refreshBootSoon_(). */
+var rbInFlight_ = null, rbAgain_ = false, rbStartedAt_ = 0, RB_DEAD_MS = 40000;   // > the 30 s read timeout
+function rbDone_(){
+  rbInFlight_ = null;
+  if(rbAgain_){ rbAgain_ = false; setTimeout(refreshBootSoon_, 2000); }
+}
+function refreshBootSoon_(){
+  return refreshBoot().catch(function(e){ try{ console.warn('SBC refreshBoot:', e && e.message || e); }catch(x){} });
+}
+function refreshBootSafe_(){
+  return refreshBoot().catch(function(e){
+    try{ console.warn('SBC refreshBoot:', e && e.message || e); }catch(x){}
+    toast('Saved ✓ — the list is still catching up; it will refresh on its own.');
+    setTimeout(refreshBootSoon_, 5000);
+  });
+}
+function bootMerge_(b){
+  var prev = state.boot;
+  if(!b || !prev) return b;
+  if(Date.now() - lastMirrorWriteAt_ < MIRROR_LEAD_MS && prev.groups) b.groups = prev.groups;
+  if(b.attention == null && prev.attention != null) b.attention = prev.attention;
+  return b;
+}
+/* v3.78.1: after a mirror-first write, the FRESH balances are one fast mirror
+   read away. Never rejects: its only job is the screen. */
+function mirrorBootRefresh_(){
+  if(!supaOn_()) return Promise.resolve(false);
+  return run('apiBoot').then(function(res){
+    if(res && res.boot && res.boot.groups && state.boot){
+      state.boot.groups = res.boot.groups;
+      if(res.boot.incomePoolId) state.boot.incomePoolId = res.boot.incomePoolId;
+      if(res.picker) state.picker = res.picker;
+      return true;
+    }
+    return false;
+  }).catch(function(){ return false; });
+}
 function refreshBoot(){
-  return run('apiBootstrap').then(function(b){
-    state.boot=b;
+  // v3.78.1: one in flight - unless it is older than any real call can be
+  if(rbInFlight_ && Date.now() - rbStartedAt_ < RB_DEAD_MS){ rbAgain_ = true; return rbInFlight_; }
+  rbStartedAt_ = Date.now();
+  rbInFlight_ = run('apiBootstrap').then(function(b){
+    state.boot=bootMerge_(b);   // v3.78.1: merged, not replaced wholesale
     // v3.32: while mirror-approved rows await their write-back, Apps Script's
     // inboxCount is stale-high — trust the filtered local inbox instead.
     // v3.49: that correction lived HERE, on the badge only, while the Home
@@ -1971,7 +2025,8 @@ function refreshBoot(){
     // time, so a save that refreshed boot without redrawing left the old
     // numbers sitting there — Scott: "the numbers are not updating."
     if(state.view==='obligations' && state.oblConfig) drawObligations();
-  });
+  }).then(function(v){ rbDone_(); return v; }, function(e){ rbDone_(); throw e; });
+  return rbInFlight_;
 }
 /* v3.49: the ONE place "how many are waiting in the inbox" is decided, used by
    the nav badges AND the Home inbox card. They disagreed before: an approve
@@ -2750,7 +2805,11 @@ var DASH_WIDGETS = {
         (o.estimated?' <span style="opacity:.7">(estimated)</span>':'')+
         '</span><span class="v"><button class="btn ghost sm" data-act="obl-snooze" data-arg="'+esc(o.id)+'">I moved it</button></span></div>';
     }).join('');
-    if(!neg.length && !obl.length && !gl.length) return head+'<div class="dwmiss">✓ Nothing needs attention</div>';
+    if(!neg.length && !obl.length && !gl.length){
+      if(!oblKnown_()) return head+'<div class="dwmiss">Obligations not checked yet — '+
+        '<button class="lnk" data-act="attn-recheck">check now</button></div>';
+      return head+'<div class="dwmiss">✓ Nothing needs attention</div>';
+    }
     if(!neg.length) return head+'<div class="dscroll">'+oblHtml+glHtml+'</div>';
     var rows=neg.slice(0,8).map(function(e){
       return '<div class="dkv"><span class="k">'+esc(e.name)+'</span><span class="v neg">'+money(e.balance)+'</span></div>'; }).join('');
@@ -3331,7 +3390,7 @@ function envNewSave(){
   var btn = document.querySelector('[data-act="env-new-save"]');
   if(btn){ btn.disabled=true; btn.textContent='Creating…'; }
   run('apiCreateEnvelope', { name:name, group:group||'Other', type:type })
-  .then(function(r){ toast(tillerCatNote('Envelope created ✓', r)); state.envNew=null; invalidateData(); return refreshBoot(); })
+  .then(function(r){ toast(tillerCatNote('Envelope created ✓', r)); state.envNew=null; invalidateData(); return refreshBootSafe_(); })
   .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Create'; } toast('⚠ '+(e.message||e)); });
 }
@@ -3348,7 +3407,7 @@ function envRenameSave(){
   if(name !== r.name) p = p.then(function(){ return run('apiRenameEnvelope', { envelopeId:r.id, name:name }).then(function(x){ results.push(x); }); });
   if(group !== r.group) p = p.then(function(){ return run('apiSetEnvelopeGroup', { envelopeId:r.id, group:group }).then(function(x){ results.push(x); }); });
   p.then(function(){ toast(tillerCatNote('Saved ✓', results)); state.envRename=null; invalidateData();
-    if(state.envDetail) state.envDetail.txns=null; return refreshBoot(); })
+    if(state.envDetail) state.envDetail.txns=null; return refreshBootSafe_(); })
   .then(function(){ if(state.view==='envdetail') renderEnvDetail(); })
   .catch(function(e){ if(btn){ btn.disabled=false; btn.textContent='Save'; } toast('⚠ '+(e.message||e)); });
 }
@@ -3357,7 +3416,7 @@ function envArchive(id){
   .then(function(ok){
     if(!ok) return;
     run('apiArchiveEnvelope', { envelopeId:id, archive:true })
-    .then(function(r){ toast(tillerCatNote('Archived ✓', r)); state.archived=null; invalidateData(); return refreshBoot(); })
+    .then(function(r){ toast(tillerCatNote('Archived ✓', r)); state.archived=null; invalidateData(); return refreshBootSafe_(); })
     .then(function(){ go('envelopes'); })
     .catch(function(e){ toast('⚠ '+(e.message||e)); });
   });
@@ -3372,20 +3431,20 @@ function envHide(id){
   .then(function(ok){
     if(!ok) return;
     run('apiSetEnvelopeHidden', { envelopeId:id, hidden:true })
-    .then(function(){ toast('Hidden \u2713'); state.showHidden=true; invalidateData(); return refreshBoot(); })
+    .then(function(){ toast('Hidden \u2713'); state.showHidden=true; invalidateData(); return refreshBootSafe_(); })
     .then(function(){ go('envelopes'); })
     .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
   });
 }
 function envUnhide(id){
   run('apiSetEnvelopeHidden', { envelopeId:id, hidden:false })
-  .then(function(){ toast('Unhidden \u2713'); invalidateData(); return refreshBoot(); })
+  .then(function(){ toast('Unhidden \u2713'); invalidateData(); return refreshBootSafe_(); })
   .then(function(){ if(state.view==='envdetail') renderEnvDetail(); else if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
 }
 function envUnarchive(id){
   run('apiArchiveEnvelope', { envelopeId:id, archive:false })
-  .then(function(r){ toast(tillerCatNote('Unarchived ✓', r)); state.archived=null; invalidateData(); return refreshBoot(); })
+  .then(function(r){ toast(tillerCatNote('Unarchived ✓', r)); state.archived=null; invalidateData(); return refreshBootSafe_(); })
   .then(function(){ if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
@@ -3905,7 +3964,11 @@ function fundGo(){
     toast('Funded ✓', opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'funding'); } } : null);
     delete state.fund['pool'];
     invalidateData();
-    return refreshBoot();
+    // v3.78.1: fresh balances from the MIRROR (fast, never rejects); the slow
+    // Apps Script reconcile runs in the background and can no longer turn
+    // "Funded ✓" into an error, or put the old pool balance back on screen.
+    refreshBootSoon_();
+    return mirrorBootRefresh_();
   }).then(function(){ if(state.view==='fund') drawFund(); })
   .catch(function(e){ toast('⚠ '+(e.message||e)); drawFund(); });
 }
@@ -4747,6 +4810,12 @@ function oblSnoozed_(id){
    given user — so Home waited behind seconds of Balance-History I/O. Scott,
    8/26: "it takes way tooo long to load." The pulse scans; boot carries the
    answer; the UI paints it. Nothing on the render path touches the network. */
+/* v3.78.1: have obligations been checked at all this session? Unknown is not
+   "all clear" - the Home card must not say "Nothing needs attention" on the
+   strength of a reconcile that timed out. */
+function oblKnown_(){
+  return !!((state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations);
+}
 function oblRows_(){
   var f = (state.boot && state.boot.attention && state.boot.attention.obligations) || state.obligations;
   if(!f || !f.anyFlagged || !f.flagged) return [];
@@ -5120,7 +5189,7 @@ function wbRetry(id){
     if(r && r.status==='ok'){ toast('Landed in your sheet ✓'); markMirrorDirty_(); invalidateData(); }
     else if(r && r.status==='busy') toast('⏳ '+(r.error || 'Already being sent — check again in a minute.'));   // v3.65: a forward holds the lease
     else toast('⚠ Still not there: '+((r && r.error) || (r && r.status) || 'unknown'));
-    return wbRefresh_().then(function(){ if(r && r.status==='ok') return refreshBoot(); });
+    return wbRefresh_().then(function(){ if(r && r.status==='ok') refreshBootSoon_(); });
   }).catch(function(e){ actBusy('wb-retry', false); toast('⚠ '+(e.message||e)); });
 }
 function wbDiscard(id){
@@ -5185,7 +5254,8 @@ function healthLedgerCard_(H, sz, head, d){
   } else if(!zero(gap)){
     note=sub('Bank is '+money(Math.abs(gap))+' '+(gap>0?'above':'below')+' your envelopes, and every dollar is accounted for'+
       (!zero(inbox)?' — approve the Inbox to close '+money(inbox)+' of it':'')+
-      (accts.length?(zero(inbox)?' — ':'; ')+'the rest settles as the bank feeds catch up':'')+'.');
+      /* v3.78.1: "the rest" only when the Inbox took a share (9/23 screenshot) */
+      (accts.length?(zero(inbox)?', and it settles as the bank feeds catch up':'; the rest settles as the bank feeds catch up'):'')+'.');
   }
 
   var row=function(k,v,cls,style){ return '<div class="dkv'+(cls?' '+cls:'')+'"><span class="k"'+(style?' style="'+style+'"':'')+'>'+k+'</span><span class="v">'+money(v)+'</span></div>'; };
@@ -5570,7 +5640,7 @@ function goalNewSave_(){
     var name = String(n.name||'').trim();
     if(!name){ toast('Name the new envelope'); if(btn){ btn.disabled=false; btn.textContent='Start saving'; } return; }
     p = run('apiCreateEnvelope', { name:name, group:(n.group||'').trim()||'Other', type:'Expense' })
-      .then(function(r){ invalidateData(); return refreshBoot().then(function(){ return r.id; }); });
+      .then(function(r){ invalidateData(); return refreshBootSafe_().then(function(){ return r.id; }); });
   } else p = Promise.resolve(n.envelopeId);
   p.then(function(envId){
     return run('apiSetGoal', { envelopeId: envId, amount: amt, date: n.date||'', note: (n.note||'').trim() })
@@ -5929,7 +5999,13 @@ function importNowUi(){
       : 'No new transactions in Tiller');
     state.inbox = null;
     setInboxCount_(r.inboxCount);   // v3.49
-    refreshBoot();
+    // v3.78.1 (Scott, 9/23): new rows change Budget health - a transaction the
+    // card was waiting on now sits in the Inbox. invalidateData() drops the
+    // cached dashboard and homeReval_() refetches it (mirror refreshes the
+    // Inbox from the sheet first, because the import marked it dirty), so the
+    // pill updates without a page reload.
+    if(r && r.newCount > 0){ markMirrorDirty_(); invalidateData(); }
+    refreshBootSoon_();
     if(state.view==='inbox') renderInbox();
   }).catch(function(e){
     state.importing = false;
@@ -7383,7 +7459,7 @@ function renderHowTo(){
     '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? As of <b>v3.78.0</b> it always shows the answer to the dollar: <b>✓ 100% accounted for</b>, with every part of any difference named.</p>'+
     '<p style="margin:0 0 8px">How it knows: for each account, SBC compares the balance with every transaction Tiller has for it. On a healthy account that comparison stays the same for weeks. When it changes, SBC knows which account, which day, and which side moved first.</p>'+
     '<p style="margin:0 0 6px">• <b>Awaiting approval</b>: transactions in your Inbox. Approve them and that part closes.</p>'+
-    '<p style="margin:0 0 6px">• <b>Not imported yet</b>: transactions Tiller has that haven’t reached your Inbox. They arrive on the next hourly sync.</p>'+
+    '<p style="margin:0 0 6px">• <b>Not imported yet</b>: transactions Tiller has that haven’t reached your Inbox. They arrive on the next hourly sync, or right away with <b>Check for new</b>. The card updates as soon as they land.</p>'+
     '<p style="margin:0 0 6px">• <b>An account “in the balance, transaction not in yet”</b> (or the reverse): normal bank timing. Banks post the balance and the transaction on different days. It settles by itself and needs nothing from you.</p>'+
     '<p style="margin:0 0 6px">• <b>Amber</b>: an account has been out of step longer than a few days (<i>Health Stuck Days</i>, default 5). Usually a feed that stopped updating. Refresh it at my.tiller.com, or set the balance on Balances.</p>'+
     '<p style="margin:0">• <b>Red, “not traced yet”</b>: money SBC can’t tie to any account or transaction, with the day it started. Look at what changed that day, such as a deleted or edited transaction, an envelope adjustment, or an account moved in or out of the budget.</p>');
@@ -7671,6 +7747,7 @@ document.addEventListener('click', function(ev){
   switch(act){
     case 'goview': go(arg); break;
     case 'about-recheck': probeServerVersion_(true); renderAbout(); break;   // v3.77.2
+    case 'attn-recheck': toast('Checking…'); refreshBootSoon_().then(function(){ if(state.view==='dash') renderDash(); }); break;   // v3.78.1
     case 'app-reload': appReload_(); break;   // v3.69.0 (U4)
     case 'retry-view': render(); break;       // v3.69.0 (U7)
     case 'density': applyDensity(arg, true); break;
@@ -8090,6 +8167,10 @@ SBC.cssVar_ = cssVar_;
 SBC.DASH_WIDGETS = DASH_WIDGETS;
 SBC.dashFetchRecent = dashFetchRecent;   // v3.77.1: the guard is the fix - drive it
 SBC.probeServerVersion_ = probeServerVersion_; SBC.abServerVer_ = abServerVer_; SBC.renderAbout = renderAbout;   // v3.77.2
+SBC.refreshBoot = refreshBoot; SBC.refreshBootSafe_ = refreshBootSafe_; SBC.bootMerge_ = bootMerge_;   // v3.78.1
+SBC.oblKnown_ = oblKnown_; SBC.mirrorBootRefresh_ = mirrorBootRefresh_; SBC.importNowUi = importNowUi;
+SBC.setLastMirrorWrite_ = function(t){ lastMirrorWriteAt_ = t; };
+SBC.rbReset_ = function(){ rbInFlight_ = null; rbAgain_ = false; rbStartedAt_ = 0; };   // tests: forget a stub that never answered
 SBC.renderHealthCard_ = function(health, sz, freeze){
   var prevDash = state.dash, prevFreeze = state.freeze;
   state.dash = { health: health };
