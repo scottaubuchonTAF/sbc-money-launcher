@@ -6,7 +6,11 @@
    version, answers those requests cache-first, and quietly refreshes the copy
    of index.html in the background so the NEXT open has the newest shell.
 
-   ★ SW_VERSION must equal FE_VERSION in index.html (tests pin it). A new
+   ★ SW_VERSION must equal FE_VERSION in index.html (tests pin it), and
+   BUILD_ID must equal index.html's BUILD_ID. v3.78.7: both are stamped from
+   the VERSION file by deploy/set-version.mjs - never hand-edit them. The cache
+   is named after BUILD_ID, so every RELEASE (a fresh build stamp) gets a fresh
+   cache even if two builds ever wore the same number. A new
    deploy changes this file, the browser installs the new worker, the new
    cache is filled with the new files, and activate() deletes every older
    "sbc-" cache. The "Update available" banner in the app (U4) calls
@@ -16,8 +20,9 @@
    Never cached: anything that is not GET, anything cross-origin except the
    pinned Chart.js build, the Google Identity script, and every API call
    (Apps Script / Supabase are POSTs — they never touch this file). */
-var SW_VERSION = 'v3.78.6';
-var CACHE = 'sbc-' + SW_VERSION;
+var SW_VERSION = 'v3.78.7';
+var BUILD_ID = 'v3.78.7+20260923.1533';   // v3.78.7: stamped by deploy/set-version.mjs
+var CACHE = 'sbc-' + BUILD_ID;
 var CHART_JS = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 var SHELL = ['./', './index.html', './manifest.json'];                        // required — install fails without these
 var EXTRAS = ['./icon-192.png', './icon-512.png', './apple-touch-icon.png'];  // best-effort — a missing icon must never block the shell

@@ -1254,7 +1254,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.78.6';
+var FE_VERSION = 'v3.78.7';
+// v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
+// deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
+// About prints it; sw.js carries the same value and names its cache after it.
+var BUILD_ID = 'v3.78.7+20260923.1533';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7350,6 +7354,8 @@ function renderAbout(){
     '<div class="abver">Server '+abServerVer_()+' · UI '+esc(FE_VERSION)+
       ' · Mirror '+esc(state.mirrorVersion||'(not used yet)')+
       (b.versionDate ? ' · '+esc(b.versionDate) : '')+'</div>'+
+    // v3.78.7: the exact build this screen is running - Release-Log.txt has the same value.
+    '<div class="abver" style="opacity:.7">Build '+esc(BUILD_ID)+'</div>'+
     // v3.35: only warn on a REAL mismatch. A mirror-served boot has version=null
     // until the background apiBootstrap reconcile lands — that's not a deploy skew.
     ((b.version && b.version!==FE_VERSION)?'<div class="abver" style="color:#f59e0b">⚠ UI and server versions differ — one side of the deploy didn’t take</div>':'')+
@@ -7542,7 +7548,7 @@ function renderHowTo(){
 
   h += S('⬆️','Keeping the app current',
     '<p style="margin:0 0 8px">SBC Money is a web page you\u2019ve added to your home screen, and it now keeps a copy of itself on your device so it opens instantly, even on a bad connection. When Scott ships an update, a teal <b>Update available — tap to reload</b> banner appears at the top of Home within an hour or so. Tap it; the app reloads on the new version and nothing you\u2019ve done is lost.</p>'+
-    '<p style="margin:0"><b>Settings → About</b> shows the version on both halves of the app — <b>Server</b> and <b>UI</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will.</p>');
+    '<p style="margin:0"><b>Settings → About</b> shows the version on each part of the app — <b>Server</b>, <b>UI</b> and <b>Mirror</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will. The <b>Build</b> line under them names the exact release this screen is running.</p>');
 
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
@@ -8139,6 +8145,7 @@ document.addEventListener('change', function(ev){
    block can sit here at the end. */
 var SBC = (typeof module!=='undefined' && module.exports) ? module.exports : (window.SBC = {});
 SBC.FE_VERSION = FE_VERSION;
+SBC.BUILD_ID = BUILD_ID;
 SBC.state = state;
 SBC.money = money; SBC.cents = cents; SBC.esc = esc;
 SBC.toastMs = toastMs; SBC.toast = toast;
