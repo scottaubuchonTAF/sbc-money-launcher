@@ -377,6 +377,13 @@ aside.side{display:none}
 .rprev .it span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2);min-width:0}
 .rprev .it span:last-child{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 .rprev .it.new span:first-child{color:var(--ink);font-weight:600}
+.rbusy{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--teal-50);border:1px solid var(--teal-100);color:var(--teal-700);font-weight:700;font-size:13.5px;border-radius:12px;padding:10px 12px;margin:0 0 12px}
+.rbusy .rsec{font-weight:600;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.rbusy .rbnote{flex-basis:100%;font-weight:500;color:var(--ink-2);font-size:12px}
+.rspin{width:14px;height:14px;flex:none;border:2px solid var(--teal-100);border-top-color:var(--teal-600);border-radius:50%;animation:rspin .8s linear infinite}
+@keyframes rspin{to{transform:rotate(360deg)}}
+.rulerow.pending{opacity:.6;cursor:default}
+.rulerow.pending:hover{background:none}
 .rpos{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-2);margin-top:12px}
 .toast .tact.alt{background:transparent;color:var(--teal-300,#5eead4);padding-left:6px;padding-right:6px}
 
@@ -1273,6 +1280,7 @@ var state = {
      not loaded); ruleEdit = the open editor's draft; rulePrev = its history preview. */
   rules:null, rulesLoading:null, rulesInboxAsked:false, ruleEdit:null, rulePrev:null,
   ruleQ:'', ruleFilter:'all', ruleSaving:false,
+  ruleBusy:null,   // v3.79.2: {ruleId, text, at} while a rule write is on its way to the sheet
   /* v3.74.0: which EDGE FUNCTION build answered. Deliberately OUTSIDE state.boot
      — refreshBoot() replaces state.boot wholesale with the Apps Script
      bootstrap, which knows nothing about the mirror and would drop it (the same
@@ -1302,11 +1310,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.79.1';
+var FE_VERSION = 'v3.79.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.79.1+20260925.1241';
+var BUILD_ID = 'v3.79.2+20260925.1341';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7167,6 +7175,7 @@ function drawRules(){
   h += '<div class="rchips">'+chip('all','All '+rules.length)+
     (nApp?chip('approval','From approvals '+nApp):'')+(nTil?chip('tiller','From Tiller '+nTil):'')+
     (nOv?chip('overlap','⚠ Overlap '+nOv):'')+'</div>';
+  if(state.ruleBusy) h += '<div class="rbusy" id="ruleBusy">'+ruleBusyHtml_()+'</div>';   // v3.79.2
   h += '<div class="card" id="ruleList">'+ruleListRowsHtml_(rules, ov, q, f)+'</div>';
   $('#shell').innerHTML = h;
 }
@@ -7187,7 +7196,9 @@ function ruleListRowsHtml_(rules, ov, q, f){
       : 'never reached, #'+o.hiddenBy.position+' catches it first')+'</span>');
     else if(o.hides.length) meta.push('<span class="rw">⚠ hides #'+o.hides.map(function(x){ return x.position; }).join(', #')+'</span>');
     meta.push(ruleSource_(r));
-    h += '<div class="rulerow" data-act="rule-open" data-arg="'+esc(r.ruleId)+'">'+
+    var pend = state.ruleBusy && state.ruleBusy.ruleId===r.ruleId;   // v3.79.2: the row being written
+    if(pend) meta = ['<b>'+esc(state.ruleBusy.text)+'</b>'];
+    h += '<div class="rulerow'+(pend?' pending':'')+'"'+(pend?'':' data-act="rule-open" data-arg="'+esc(r.ruleId)+'"')+'>'+
       '<span class="rn">'+r.position+'</span><div class="rb">'+
       '<div class="rm">'+ruleWhatHtml_(r)+'</div>'+
       '<div class="rto">→ '+esc(r.envelopeName || '(missing envelope)')+'</div>'+
@@ -7333,13 +7344,40 @@ function drawRuleEditor_(){
     if(e.position>1) mv.push('<button class="rlink" data-act="rule-move" data-arg="1">Move to top</button>',
       '<button class="rlink" data-act="rule-move" data-arg="'+(e.position-1)+'">Up</button>');
     if(e.position<n) mv.push('<button class="rlink" data-act="rule-move" data-arg="'+(e.position+1)+'">Down</button>');
-    h += '<div class="rpos"><span>Order</span><span>'+mv.join(' · ')+'</span></div>';
+    h += '<div class="rpos"><span>Order</span><span>'+(state.ruleBusy ? '<span style="color:var(--ink-3)">wait…</span>' : mv.join(' · '))+'</span></div>';
   }
-  h += '<div class="actions"><button class="btn" data-act="rule-save"'+(state.ruleSaving?' disabled':'')+'>'+(state.ruleSaving?'Saving…':'Save')+'</button>'+
+  if(state.ruleBusy) h += '<div class="rbusy" id="ruleBusy" style="margin-top:12px">'+ruleBusyHtml_()+'</div>';   // v3.79.2
+  var off = (state.ruleSaving || state.ruleBusy) ? ' disabled' : '';
+  h += '<div class="actions"><button class="btn" data-act="rule-save"'+off+'>'+(state.ruleSaving?'Saving…':'Save')+'</button>'+
     '<button class="btn ghost" data-act="rule-back">Cancel</button>'+
-    (e.ruleId?'<button class="btn danger sm" data-act="rule-delete" style="margin-left:auto">Delete</button>':'')+'</div>';
+    (e.ruleId?'<button class="btn danger sm" data-act="rule-delete" style="margin-left:auto"'+off+'>Delete</button>':'')+'</div>';
   h += '</div>';
   $('#shell').innerHTML = h;
+}
+/* v3.79.2 - Scott, 9/25: "it takes a long time to delete a rule and the user
+   doesn't really know something is happening." A rule write goes to the sheet
+   through Apps Script (seconds, sometimes many). While it does, the page says so
+   - a working line with a spinner and a seconds counter, the row greyed out, the
+   buttons off - and says it is fine to leave: the write finishes either way. */
+var ruleBusyTimer_ = null;
+function ruleBusyStart_(ruleId, text){
+  state.ruleBusy = { ruleId:ruleId||'', text:text, at:Date.now() };
+  clearInterval(ruleBusyTimer_);
+  ruleBusyTimer_ = setInterval(function(){
+    if(!state.ruleBusy){ clearInterval(ruleBusyTimer_); return; }
+    var el = $('#ruleBusy'); if(el) el.innerHTML = ruleBusyHtml_();
+  }, 1000);
+}
+function ruleBusyEnd_(){ state.ruleBusy = null; clearInterval(ruleBusyTimer_); ruleBusyTimer_ = null; }
+function ruleBusyHtml_(now){
+  var b = state.ruleBusy; if(!b) return '';
+  var s = Math.max(0, Math.round(((now||Date.now()) - b.at)/1000));
+  return '<span class="rspin"></span><span>'+esc(b.text)+'</span><span class="rsec">'+(s>=2 ? s+'s' : '')+'</span>'+
+    '<div class="rbnote">Saving to your sheet usually takes a few seconds. You can leave this page \u2014 it finishes either way.</div>';
+}
+function ruleBusyBlock_(){
+  if(!state.ruleBusy) return false;
+  toast('Still saving the last change\u2026'); return true;
 }
 /* After any rule write: the list, the Inbox's suggestions and Home are stale. */
 function ruleAfterWrite_(msg, r){
@@ -7347,23 +7385,26 @@ function ruleAfterWrite_(msg, r){
   state.rules = null; state.inbox = null; state.rulesInboxAsked = false;
   invalidateData();
   var opId = r && r.opId, n = r && r.resuggested;
+  if(r && r.ms){ state.ruleLastMs = r.ms; try{ console.info('SBC rule write timing (ms): '+JSON.stringify(r.ms)); }catch(eL){} }   // v3.79.2
   toast(msg + (n ? ' · '+n+' Inbox row'+(n===1?'':'s')+' re-suggested' : ''),
     opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'rule change'); } } : null);
 }
 function ruleSave_(){
-  var e = state.ruleEdit; if(!e || state.ruleSaving) return;
+  var e = state.ruleEdit; if(!e || state.ruleSaving || ruleBusyBlock_()) return;
   ruleFormCapture_();
   var conds = e.conds.filter(function(c){ return !c.unknown; }).map(function(c){ return { field:c.field, op:c.op, value:String(c.value||'').trim() }; });
   if(!e.envelopeId){ toast('Pick an envelope for this rule'); return; }
   if(!conds.length || conds.some(function(c){ return !c.value; })){ toast('Fill in every condition, or remove the empty one'); return; }
-  state.ruleSaving = true; drawRules();
   var wasId = e.ruleId;
+  state.ruleSaving = true; ruleBusyStart_(wasId, wasId ? 'Saving your change…' : 'Adding the rule…'); drawRules();
   run('apiSaveRule', { ruleId:wasId, conditions:conds, envelopeId:e.envelopeId }).then(function(r){
+    ruleBusyEnd_();
     ruleAfterWrite_('Rule saved ✓', r);
     state.ruleEdit = null;
     rulesInboxRefresh_();
     loadRules_().then(function(){ if(state.view==='rules') drawRules(); }).catch(fail);
   }).catch(function(err){
+    ruleBusyEnd_();
     var want = JSON.stringify(ruleCriteriaFromConds_(conds));
     ruleWriteFailed_(err, function(rules){
       return rules.some(function(x){ return (!wasId || x.ruleId===wasId) && x.envelopeId===e.envelopeId && JSON.stringify(x.criteria)===want; })
@@ -7401,19 +7442,26 @@ function ruleWriteFailed_(err, landed){
   });
 }
 function ruleDelete_(){
-  var e = state.ruleEdit; if(!e || !e.ruleId) return;
+  var e = state.ruleEdit; if(!e || !e.ruleId || ruleBusyBlock_()) return;
   var r = (state.rules||[]).filter(function(x){ return x.ruleId===e.ruleId; })[0];
   confirmUi('Delete this rule?\n\n'+(r ? ruleLabel_(r)+' → '+(r.envelopeName||'') : e.ruleId)+
     '\n\nNew transactions won’t be suggested by it any more. Undo is on the message that follows, and in Settings → History & undo.', 'Delete')
   .then(function(ok){
     if(!ok) return;
     var id = e.ruleId;
+    // v3.79.2: back to the list at once, the row greyed "Deleting…", a counter running
+    ruleBusyStart_(id, 'Deleting '+(r ? ruleLabel_(r) : 'the rule')+'…');
+    state.ruleEdit = null; state.rulePrev = null;
+    if(state.view==='rules') drawRules();
+    toast('Deleting…');
     run('apiDeleteRule', { ruleId:id }).then(function(res){
+      ruleBusyEnd_();
       ruleAfterWrite_(res && res.alreadyGone ? 'That rule was already deleted \u2713' : 'Rule deleted \u2713', res);
       state.ruleEdit = null;
       rulesInboxRefresh_();
       if(state.view==='rules') renderRules();
     }).catch(function(err){
+      ruleBusyEnd_();
       ruleWriteFailed_(err, function(rules){
         return rules.some(function(x){ return x.ruleId===id; }) ? '' : 'Rule deleted \u2713';
       });
@@ -7423,10 +7471,12 @@ function ruleDelete_(){
 /* Order changes save at once (the toast has Undo); an unsaved edit in the form
    rides along untouched. */
 function ruleMove_(to){
-  var e = state.ruleEdit; if(!e || !e.ruleId) return;
+  var e = state.ruleEdit; if(!e || !e.ruleId || ruleBusyBlock_()) return;
   ruleFormCapture_();
   var draft = { conds:e.conds, envelopeId:e.envelopeId }, id = e.ruleId;
+  ruleBusyStart_(id, 'Moving to #'+to+'…'); drawRules();
   run('apiMoveRule', { ruleId:id, to:to }).then(function(res){
+    ruleBusyEnd_();
     ruleAfterWrite_(res && res.opId===''? 'Already at #'+to+' \u2713' : 'Moved to #'+to+' \u2713', res);
     rulesInboxRefresh_();
     loadRules_().then(function(){
@@ -7435,6 +7485,7 @@ function ruleMove_(to){
       if(state.ruleEdit){ state.ruleEdit.conds = draft.conds; state.ruleEdit.envelopeId = draft.envelopeId; drawRules(); }
     }).catch(fail);
   }).catch(function(err){
+    ruleBusyEnd_();
     ruleWriteFailed_(err, function(rules){
       var x = rules.filter(function(y){ return y.ruleId===id; })[0];
       return x && x.position===to ? 'Moved to #'+to+' \u2713' : '';
@@ -8862,6 +8913,7 @@ SBC.ruleCriteriaFromConds_ = ruleCriteriaFromConds_; SBC.ruleSource_ = ruleSourc
 SBC.rulePreviewQuery_ = rulePreviewQuery_; SBC.SETTINGS_VIEWS = SETTINGS_VIEWS;
 SBC.state_ = function(){ return state; };
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
+SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
 SBC.ruleDelete_ = ruleDelete_; SBC.ruleSave_ = ruleSave_; SBC.ruleWriteFailed_ = ruleWriteFailed_;   // v3.79.1
 SBC.renderSettings = renderSettings; SBC.toast = toast; SBC.afterApprove = afterApprove; SBC.approve = approve;
 SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_VIEWS = MORE_VIEWS; SBC.NAV_LABELS = NAV_LABELS; SBC.ICONS = ICONS;
