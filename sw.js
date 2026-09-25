@@ -20,8 +20,8 @@
    Never cached: anything that is not GET, anything cross-origin except the
    pinned Chart.js build, the Google Identity script, and every API call
    (Apps Script / Supabase are POSTs — they never touch this file). */
-var SW_VERSION = 'v3.79.0';
-var BUILD_ID = 'v3.79.0+20260925.1158';   // v3.78.7: stamped by deploy/set-version.mjs
+var SW_VERSION = 'v3.79.1';
+var BUILD_ID = 'v3.79.1+20260925.1241';   // v3.78.7: stamped by deploy/set-version.mjs
 var CACHE = 'sbc-' + BUILD_ID;
 var CHART_JS = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 var SHELL = ['./', './index.html', './manifest.json'];                        // required — install fails without these

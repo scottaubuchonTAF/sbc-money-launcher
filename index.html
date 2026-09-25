@@ -1302,11 +1302,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.79.0';
+var FE_VERSION = 'v3.79.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.79.0+20260925.1158';
+var BUILD_ID = 'v3.79.1+20260925.1241';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7363,7 +7363,42 @@ function ruleSave_(){
     state.ruleEdit = null;
     rulesInboxRefresh_();
     loadRules_().then(function(){ if(state.view==='rules') drawRules(); }).catch(fail);
-  }).catch(function(err){ state.ruleSaving = false; toast('⚠ '+(err.message||err)); if(state.view==='rules') drawRules(); });
+  }).catch(function(err){
+    var want = JSON.stringify(ruleCriteriaFromConds_(conds));
+    ruleWriteFailed_(err, function(rules){
+      return rules.some(function(x){ return (!wasId || x.ruleId===wasId) && x.envelopeId===e.envelopeId && JSON.stringify(x.criteria)===want; })
+        ? 'Rule saved \u2713' : '';
+    });
+  });
+}
+/* v3.79.1 - a rule write whose ANSWER got lost. Scott, 9/25: "Delete" came back
+   "Network error (404)" twice, yet the delete had landed - Apps Script sometimes
+   loses the reply to a write that finished (the 9/2 approve did the same) - and
+   the page kept showing the rule from its cache, so it looked like nothing
+   happened. Now: never trust the cache after a failed write. Re-read the list
+   from the sheet; if the change is there, say it saved; if not, say plainly
+   that it didn't, over the list as the sheet has it. */
+function ruleWriteFailed_(err, landed){
+  state.ruleSaving = false;
+  state.rules = null; state.inbox = null; state.rulesInboxAsked = false;
+  var msg = String(err && err.message || err);
+  if(/Network error \(\d+\)/.test(msg)) msg = 'Google didn\u2019t send an answer back';
+  toast('Checking whether that saved\u2026');
+  return loadRules_().then(function(rules){
+    var ok = landed(rules);
+    if(ok){
+      toast(ok);
+      state.ruleEdit = null;
+      invalidateData();
+      rulesInboxRefresh_();
+    } else {
+      toast('\u26a0 That didn\u2019t save ('+msg+'). The list below is fresh from your sheet \u2014 try again.');
+      if(state.ruleEdit && state.ruleEdit.ruleId && !rules.some(function(x){ return x.ruleId===state.ruleEdit.ruleId; })) state.ruleEdit = null;
+    }
+    if(state.view==='rules') drawRules();
+  }).catch(function(e2){
+    toast('\u26a0 '+msg+' \u2014 and the list didn\u2019t reload. Open Suggestion rules again before retrying.');
+  });
 }
 function ruleDelete_(){
   var e = state.ruleEdit; if(!e || !e.ruleId) return;
@@ -7372,12 +7407,17 @@ function ruleDelete_(){
     '\n\nNew transactions won’t be suggested by it any more. Undo is on the message that follows, and in Settings → History & undo.', 'Delete')
   .then(function(ok){
     if(!ok) return;
-    run('apiDeleteRule', { ruleId:e.ruleId }).then(function(res){
-      ruleAfterWrite_('Rule deleted ✓', res);
+    var id = e.ruleId;
+    run('apiDeleteRule', { ruleId:id }).then(function(res){
+      ruleAfterWrite_(res && res.alreadyGone ? 'That rule was already deleted \u2713' : 'Rule deleted \u2713', res);
       state.ruleEdit = null;
       rulesInboxRefresh_();
       if(state.view==='rules') renderRules();
-    }).catch(function(err){ toast('⚠ '+(err.message||err)); });
+    }).catch(function(err){
+      ruleWriteFailed_(err, function(rules){
+        return rules.some(function(x){ return x.ruleId===id; }) ? '' : 'Rule deleted \u2713';
+      });
+    });
   });
 }
 /* Order changes save at once (the toast has Undo); an unsaved edit in the form
@@ -7387,14 +7427,21 @@ function ruleMove_(to){
   ruleFormCapture_();
   var draft = { conds:e.conds, envelopeId:e.envelopeId }, id = e.ruleId;
   run('apiMoveRule', { ruleId:id, to:to }).then(function(res){
-    ruleAfterWrite_('Moved to #'+to+' ✓', res);
+    ruleAfterWrite_(res && res.opId===''? 'Already at #'+to+' \u2713' : 'Moved to #'+to+' \u2713', res);
     rulesInboxRefresh_();
     loadRules_().then(function(){
       if(state.view!=='rules') return;
       ruleOpen_(id);
       if(state.ruleEdit){ state.ruleEdit.conds = draft.conds; state.ruleEdit.envelopeId = draft.envelopeId; drawRules(); }
     }).catch(fail);
-  }).catch(function(err){ toast('⚠ '+(err.message||err)); });
+  }).catch(function(err){
+    ruleWriteFailed_(err, function(rules){
+      var x = rules.filter(function(y){ return y.ruleId===id; })[0];
+      return x && x.position===to ? 'Moved to #'+to+' \u2713' : '';
+    }).then(function(){
+      if(state.view==='rules' && (state.rules||[]).some(function(y){ return y.ruleId===id; })){ ruleOpen_(id); if(state.ruleEdit){ state.ruleEdit.conds = draft.conds; state.ruleEdit.envelopeId = draft.envelopeId; drawRules(); } }
+    });
+  });
 }
 /* Screen 4: "Suggested by rule … · edit ›" on an Inbox card opens that rule. */
 function ruleOpenFrom_(ruleId){
@@ -8815,6 +8862,7 @@ SBC.ruleCriteriaFromConds_ = ruleCriteriaFromConds_; SBC.ruleSource_ = ruleSourc
 SBC.rulePreviewQuery_ = rulePreviewQuery_; SBC.SETTINGS_VIEWS = SETTINGS_VIEWS;
 SBC.state_ = function(){ return state; };
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
+SBC.ruleDelete_ = ruleDelete_; SBC.ruleSave_ = ruleSave_; SBC.ruleWriteFailed_ = ruleWriteFailed_;   // v3.79.1
 SBC.renderSettings = renderSettings; SBC.toast = toast; SBC.afterApprove = afterApprove; SBC.approve = approve;
 SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_VIEWS = MORE_VIEWS; SBC.NAV_LABELS = NAV_LABELS; SBC.ICONS = ICONS;
 
