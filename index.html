@@ -335,6 +335,50 @@ aside.side{display:none}
 .btn.danger{background:var(--red-bg);color:var(--red)}
 .btn.sm{padding:7px 14px;font-size:13px}
 .rulechk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);margin-left:auto}
+/* ================= v3.79.0 suggestion rules ================= */
+.rulechk .rulewords{color:var(--ink-3);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rwhy{margin-top:8px;font-size:12px;color:var(--ink-3)}
+.rwhy b{color:var(--ink-2);font-weight:700}
+.rlink{color:var(--teal-700);font-weight:700;font-size:inherit;padding:0}
+.rsearch{width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:10px}
+.rsearch:focus{outline:none;border-color:var(--teal-500)}
+.rchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.rchip{border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;font-size:12.5px;font-weight:600;background:var(--card);color:var(--ink-2)}
+.rchip.on{background:var(--teal-600);border-color:var(--teal-600);color:#fff}
+.rchip.warn{border-color:#fcd34d;background:#fffbeb;color:#92400e}
+.rchip.warn.on{background:var(--amber);border-color:var(--amber);color:#fff}
+.rulerow{display:flex;gap:10px;align-items:center;padding:11px 14px 11px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.rulerow:last-child{border-bottom:none}
+.rulerow:hover{background:var(--teal-50)}
+.rulerow .rn{width:22px;text-align:center;font-size:11.5px;font-weight:800;color:var(--ink-3);flex:none;font-variant-numeric:tabular-nums}
+.rulerow .rb{flex:1;min-width:0}
+.rulerow .rm{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rulerow .rto{font-size:13px;color:var(--teal-700);font-weight:600;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rulerow .rmeta{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.rulerow .rmeta b{color:var(--teal-700)}
+.rw{color:var(--amber);font-weight:700}
+.rchev{color:var(--ink-3);flex:none}
+.rxtra{display:inline-block;font-size:11px;font-weight:700;background:var(--bg);border:1px solid var(--line);color:var(--ink-2);border-radius:6px;padding:0 5px;vertical-align:1px}
+.rform{padding:14px 16px 16px}
+.rform .rsub{font-size:12px;color:var(--ink-3);margin-bottom:4px}
+.rform .rfl{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;margin:14px 0 6px}
+.rcond{display:flex;gap:6px;align-items:center;margin:8px 0 6px}
+.rcond select{font-size:13px;font-weight:600}
+.rrm{color:var(--ink-3);font-size:18px;padding:0 6px;margin-left:auto}
+.rval{width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);font-weight:600}
+.rval:focus{outline:none;border-color:var(--teal-500)}
+.rtip{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 10px;font-size:12.5px;color:#78350f;margin:8px 0 2px}
+.renv{display:flex;justify-content:space-between;align-items:center;width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px;background:var(--bg);text-align:left}
+.renv.unset{color:var(--ink-3);font-weight:500}
+.rprev{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rprev .hd{padding:8px 12px;background:var(--teal-50);font-size:12.5px;font-weight:700;color:var(--teal-700)}
+.rprev .went{padding:6px 12px;font-size:12px;color:var(--ink-2);border-top:1px solid var(--line)}
+.rprev .it{display:flex;justify-content:space-between;gap:8px;padding:7px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.rprev .it span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2);min-width:0}
+.rprev .it span:last-child{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.rprev .it.new span:first-child{color:var(--ink);font-weight:600}
+.rpos{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-2);margin-top:12px}
+.toast .tact.alt{background:transparent;color:var(--teal-300,#5eead4);padding-left:6px;padding-right:6px}
 
 /* ================= split editor ================= */
 .splitbox{margin-top:14px;border:1.5px dashed var(--line);border-radius:12px;padding:12px}
@@ -1225,6 +1269,10 @@ var state = {
   report:null, reportData:null, reportLoading:false, reportErr:null,
   tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{}, // v3.58 tags UI
   inboxTags:{}, // v3.73.0: tags typed on an Inbox card, applied BY the approve
+  /* v3.79.0: Suggestion rules page. rules = apiRules list in CHECK ORDER (null =
+     not loaded); ruleEdit = the open editor's draft; rulePrev = its history preview. */
+  rules:null, rulesLoading:null, rulesInboxAsked:false, ruleEdit:null, rulePrev:null,
+  ruleQ:'', ruleFilter:'all', ruleSaving:false,
   /* v3.74.0: which EDGE FUNCTION build answered. Deliberately OUTSIDE state.boot
      — refreshBoot() replaces state.boot wholesale with the Apps Script
      bootstrap, which knows nothing about the mirror and would drop it (the same
@@ -1254,11 +1302,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.78.7';
+var FE_VERSION = 'v3.79.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.78.7+20260923.1533';
+var BUILD_ID = 'v3.79.0+20260925.1158';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1292,6 +1340,13 @@ function toastMs(msg){
    action is held at least TOAST_ACTION_MIN_MS; tapping the message still
    dismisses it, tapping the button runs fn once and dismisses. */
 var TOAST_ACTION_MIN_MS = 6000;
+/* v3.79.0: the optional second toast button ({label, fn, also:{label, fn}}) -
+   e.g. "Edit rule" next to "Undo". Same one-shot, dismiss-on-tap contract. */
+function toastAlt_(t, a){
+  var b=document.createElement('button'); b.type='button'; b.className='tact alt'; b.textContent=a.label||'Edit';
+  b.onclick=function(ev){ ev.stopPropagation(); clearTimeout(t._h); t.classList.remove('show'); b.disabled=true; try{ a.fn(); }catch(e){ console.warn('toast action:', e && e.message || e); } };
+  return b;
+}
 function toast(msg, opts){
   var t=$('#toast'); t.textContent=msg; t.classList.add('show');
   var ms = toastMs(msg);
@@ -1301,6 +1356,7 @@ function toast(msg, opts){
     var b=document.createElement('button'); b.type='button'; b.className='tact'; b.textContent=act.label||'Undo';
     b.onclick=function(ev){ ev.stopPropagation(); clearTimeout(t._h); t.classList.remove('show'); b.disabled=true; try{ act.fn(); }catch(e){ console.warn('toast action:', e && e.message || e); } };
     t.appendChild(b);
+    if(act.also && typeof act.also.fn==='function') t.insertBefore(toastAlt_(t, act.also), b);   // v3.79.0: second action, before the main one
   }
   clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');}, ms);
   t.onclick=function(){ clearTimeout(t._h); t.classList.remove('show'); };
@@ -1315,10 +1371,11 @@ function undoNow_(opId, what){
   toast('Undoing'+(what?' '+what:'')+'…');
   run('apiUndo', opId).then(function(){
     toast('Undone ✓');
-    state.inbox=null; state.history=null;
+    state.inbox=null; state.history=null; state.rules=null;   // v3.79.0: +rules
     invalidateData();
     refreshBoot().catch(function(){});
     if(state.view==='inbox') renderInbox();
+    else if(state.view==='rules'){ state.ruleEdit=null; state.rulesInboxAsked=false; renderRules(); }   // v3.79.0
     else if(state.view==='envdetail'){ state.envDetail && delete state.envTxnCache[state.envDetail.id]; renderEnvDetail(); }
     else if(state.view==='envelopes') renderEnvelopes();
     else if(state.view==='fund') renderFund();
@@ -1441,6 +1498,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
   apiSetEnvelopeHidden:1, // v3.51
+  apiSaveRule:1, apiDeleteRule:1, apiMoveRule:1, // v3.79.0 — Apps-Script-only rule writes (the rules page reads from Apps Script too)
   apiSetGoal:1, apiClearGoal:1, apiSetMax:1, apiClearMax:1, // v3.75.0 — Apps-Script-only writes; marking dirty is what makes apiGoals refresh `targets`
   apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
@@ -1657,7 +1715,8 @@ var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envel
   plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   reports:'Reports', sync:'Sync', history:'History', more:'More', settings:'Settings',
   admin:'Access', about:'About', howto:'How to use', activity:'Sign-ins & activity',
-  obligations:'Obligations', goals:'Goals'};   // v3.75.0
+  obligations:'Obligations', goals:'Goals',   // v3.75.0
+  rules:'Suggestion rules'};                  // v3.79.0 (a Settings page; no sidebar button)
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
 $all('aside.side button.nav').forEach(function(b){
@@ -1687,7 +1746,7 @@ $all('nav.tabs button').forEach(function(b){
    the same reason Transactions was: the phone had nowhere else to put it. It
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
-  'removetxn','reconcile','howto','activity','personal'];
+  'removetxn','reconcile','howto','activity','personal','rules'];   // v3.79.0: +rules
 var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
@@ -2202,7 +2261,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 ? ' narrow':'');
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' ? ' narrow':'');   // v3.79.0: +rules
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -2222,6 +2281,7 @@ function render(){
   else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='personal') renderPersonal();     // v3.57.3
+  else if(state.view==='rules') renderRules();           // v3.79.0
   else if(state.view==='obligations') renderObligations();
   else if(state.view==='goals') renderGoals();          // v3.75.0
   else if(state.view==='about') renderAbout();
@@ -3544,6 +3604,7 @@ function sweepToPool(){
 
 /* ============================ inbox + splits ============================ */
 function renderInbox(){
+  ensureRulesForInbox_();   // v3.79.0: background, for the "Suggested by rule" line
   if(state.inbox){ drawInbox(); if(freshEnough('inbox')) return; } // v3.27: warm+fresh → no network
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Inbox</h2><div class="spin"></div>'; }
   run('apiGetInbox').then(function(rows){ // …refresh in background
@@ -3632,9 +3693,11 @@ function inboxCardHtml(t){
         '<button class="pill" data-act="split-on" data-arg="'+esc(t.txnId)+'">Split…</button>';
       // v3.6.9: no per-txn funding — deposits are approved into the Income
       // Cash Pool like everything else; funding happens on the Fund page.
-      h += '</div>'+inboxTagsHtml(t)+'<div class="actions">'+
+      h += '</div>'+ruleWhyHtml_(t)+inboxTagsHtml(t)+'<div class="actions">'+   // v3.79.0: which rule suggested it
         '<button class="btn" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
-        '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this</label>'+
+        // v3.79.0 (decision 4): say WHICH words the rule will match - the short form, not the whole description
+        '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this'+
+          '<span class="rulewords">\u201c'+esc(ruleMatchText_(t.description))+'\u201d</span></label>'+
         '</div>';
     }
     h += '</div>';
@@ -3809,12 +3872,14 @@ function approve(txnId){
   var envId = state.sel[txnId] || (t&&t.suggestedId);
   if(!envId || !t) return;
   var ruleEl = $('#rule-'+cssId(txnId));
-  var createRule = ruleEl && ruleEl.checked ? t.description : null;
+  // v3.79.0 (Scott's decision 4): the SHORT match - "Hannaford Supermarket",
+  // not "Hannaford Supermarket 8123" - so the next store number still matches.
+  var createRule = ruleEl && ruleEl.checked ? ruleMatchText_(t.description) : null;
   busyButtons(true);
   approvePending_(txnId);
   run('apiApprove', { txnId:txnId, key:t.key, envelopeId:envId, createRule:createRule,
     tags:inboxTagsOf(txnId) })   // v3.73.0
-    .then(afterApprove(txnId, t.key)).catch(approveErr);
+    .then(afterApprove(txnId, t.key, createRule ? { text:createRule, envelopeId:envId } : null)).catch(approveErr);
 }
 /* v3.29.1: immediate feedback — an approve takes the server 3-4s and the old
    flow showed NOTHING until the final toast. Now the clicked button says so
@@ -3837,11 +3902,12 @@ function approveSplit(txnId){
     splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
     .then(afterApprove(txnId, t.key)).catch(approveErr);
 }
-function afterApprove(txnId, key){
+function afterApprove(txnId, key, ruleInfo){
   return function(r){
     markPendingApproved([key || txnId]); // v3.32: hide from refetches until write-back lands
     var opId = r && r.opId;              // v3.69.0 (U5): one tap undo, right here
-    toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval'); } } : null);
+    if(!ruleInfo) toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval'); } } : null);
+    else afterApproveRuleToast_(r, opId, ruleInfo);   // v3.79.0 (screen 5)
     state.inbox = state.inbox.filter(function(x){ return x.txnId!==txnId; });
     delete state.sel[txnId]; delete state.split[txnId];
     clearInboxTags_([txnId]);   // v3.73.0
@@ -3851,6 +3917,15 @@ function afterApprove(txnId, key){
     refreshBoot();
     drawInbox();
   };
+}
+/* v3.79.0 (screen 5): a new "Always suggest this" rule says which words it
+   matches, and the toast offers Edit rule next to Undo. The rule list is
+   stale from here on. */
+function afterApproveRuleToast_(r, opId, ruleInfo){
+  state.rules = null;
+  toast(tillerNote('Approved \u2713 \u00b7 rule \u201c'+ruleInfo.text+'\u201d', r), {
+    label:'Undo', fn: opId ? function(){ undoNow_(opId, 'approval'); } : function(){ toast('\u26a0 Nothing to undo \u2014 open Settings \u2192 History & undo'); },
+    also:{ label:'Edit rule', fn:function(){ ruleOpenByText_(ruleInfo.text, ruleInfo.envelopeId); } } });
 }
 function approveErr(e){ toast('⚠ '+(e.message||e)); drawInbox(); }
 function busyButtons(b){ $all('.txncard .btn').forEach(function(x){ x.disabled=b; }); }
@@ -6862,6 +6937,7 @@ function renderSettings(){
   var h = '<h2 class="viewtitle">Settings</h2>';
   h += settingsSectionLabel('SET UP')+settingsList([
     ['healthset','Health settings'],
+    ['rules','Suggestion rules'],            // v3.79.0 — see + edit "Always suggest this"
     ['personal','Personal information']]);
   h += settingsSectionLabel('RECORDS')+settingsList([
     ['history','History & undo'],
@@ -6873,6 +6949,482 @@ function renderSettings(){
     ['maint','Maintenance'],
     ['about','About']]);
   $('#shell').innerHTML = h;
+}
+
+/* ============================ suggestion rules (v3.79.0) ============================
+   Scott, 9/25/26: "add a section where we can see the rules for 'always suggest'
+   so that we can edit them." Ticking "Always suggest this" used to create a rule
+   that no screen ever showed again, so a wrong rule pre-filled the wrong envelope
+   forever. His decisions: ONE list in the order the rules are checked (first
+   match wins, so the order is the behaviour); no Pause - a rule is there or it
+   is deleted; a save re-suggests what is already waiting in the Inbox; "Always
+   suggest this" saves a shorter match; the Inbox says which rule suggested an
+   envelope and the approve toast offers Edit.
+   Served by Apps Script (apiRules) - the order is the Rules tab's row order,
+   which the mirror does not keep. */
+var RULE_FIELDS = ['Description','Account','Institution','Amount'];
+var RULE_FIELD_WORDS = { Description:'Description', Account:'Account', Institution:'Bank', Amount:'Amount' };
+
+/* ⚠ KEEP IN LOCKSTEP with ruleMatches_ in apps-script/Ledger.gs - same keys,
+   same case-folding, same "unknown key never matches", amounts on absolute
+   cents. tests/v3790_suggestion_rules_test.js runs BOTH on the same cases.
+   opts.noInst: skip Institution keys (the Inbox and the register don't carry
+   the bank name, so a preview can't judge them). */
+function ruleMatchesJs_(criteria, txn, opts){
+  var keys = Object.keys(criteria||{});
+  for(var i=0;i<keys.length;i++){
+    var m = keys[i].match(/^(Description|Account|Institution|Amount)\s+(Contains|Equals)$/i);
+    if(!m) return false;
+    var field = m[1].toLowerCase(), op = m[2].toLowerCase();
+    if(field==='institution' && opts && opts.noInst) continue;
+    var want = String(criteria[keys[i]]).trim();
+    if(field==='amount'){
+      if(op!=='equals' || Math.abs(Math.round(ruleAmt_(txn.amount)*100)) !== Math.abs(Math.round(ruleAmt_(want)*100))) return false;
+      continue;
+    }
+    var hay = String(txn[field]||'').toLowerCase(), needle = want.toLowerCase();
+    if(op==='contains' ? hay.indexOf(needle)===-1 : hay!==needle) return false;
+  }
+  return true;
+}
+/* parseAmount_ (Config.gs): "$1,234.50", "(90.00)", 90 → a number. */
+function ruleAmt_(v){
+  if(v===null || v===undefined || v==='') return 0;
+  if(typeof v==='number') return v;
+  var s = String(v).replace(/[$,\s]/g,''), neg = /^\(.*\)$/.test(s);
+  var n = parseFloat(s.replace(/[()]/g,''));
+  return isNaN(n) ? 0 : (neg ? -n : n);
+}
+/* activeRules_ drops a rule with no criteria before matching; so do we. */
+function ruleFirstMatch_(rules, txn, opts){
+  for(var i=0;i<(rules||[]).length;i++){
+    var c = rules[i].criteria;
+    if(c && Object.keys(c).length && ruleMatchesJs_(c, txn, opts)) return rules[i];
+  }
+  return null;
+}
+/* Does rule A catch EVERYTHING rule B catches? True when each of A's conditions
+   is implied by one of B's: "contains a" by "contains b" or "is b" when b
+   includes a; "is a" by "is a"; the same exact amount. Sound, not complete: it
+   never cries wolf, it may miss an exotic overlap. */
+function ruleShadows_(a, b){
+  var ka = Object.keys(a.criteria||{}), kb = Object.keys(b.criteria||{});
+  if(!ka.length) return false;
+  return ka.every(function(k){
+    var m = k.match(/^(\w+)\s+(Contains|Equals)$/i); if(!m) return false;
+    var f = m[1].toLowerCase(), op = m[2].toLowerCase(), va = String(a.criteria[k]).trim().toLowerCase();
+    return kb.some(function(k2){
+      var m2 = k2.match(/^(\w+)\s+(Contains|Equals)$/i); if(!m2 || m2[1].toLowerCase()!==f) return false;
+      var op2 = m2[2].toLowerCase(), vb = String(b.criteria[k2]).trim().toLowerCase();
+      if(f==='amount') return op==='equals' && op2==='equals' && Math.abs(Math.round(ruleAmt_(va)*100))===Math.abs(Math.round(ruleAmt_(vb)*100));
+      if(op==='contains') return vb.indexOf(va)!==-1;
+      return op2==='equals' && vb===va;
+    });
+  });
+}
+/* ruleId → { hiddenBy: the earlier rule that catches it first, hides: [later rules it catches] } */
+function ruleOverlaps_(rules){
+  var out = {};
+  (rules||[]).forEach(function(r){ out[r.ruleId] = { hiddenBy:null, hides:[] }; });
+  for(var j=0;j<(rules||[]).length;j++){
+    for(var i=0;i<j;i++){
+      if(ruleShadows_(rules[i], rules[j])){
+        out[rules[j].ruleId].hiddenBy = rules[i];
+        out[rules[i].ruleId].hides.push(rules[j]);
+        break;
+      }
+    }
+  }
+  return out;
+}
+/* Decision 4 - the words "Always suggest this" saves. Store and card numbers
+   change between charges ("Hannaford Supermarket 8123", "…acct x-x-5144 NY"),
+   so the whole description rarely matches twice. Keep the words before the first
+   word that has a digit in it (plus that word's leading letters when there are
+   3+: "Amazon Prime*RT4K2" → "Amazon Prime"), then drop trailing one-letter
+   crumbs and punctuation. Fewer than 3 letters left → the whole description,
+   exactly as before. */
+function ruleMatchText_(desc){
+  // Cut the ORIGINAL text (spacing untouched) so the result is always a
+  // substring of it - the rule must match the transaction it came from.
+  var full = String(desc||'').trim(), end = 0, m, re = /\S+/g;
+  while((m = re.exec(full))){
+    if(/\d/.test(m[0])){
+      var lead = (m[0].match(/^[A-Za-z]+/)||[''])[0];
+      if(lead.length>=3) end = m.index + lead.length;
+      break;
+    }
+    end = m.index + m[0].length;
+  }
+  var s = full.slice(0, end);
+  // trailing one-letter crumbs ("MA x") and punctuation (", -" "*")
+  for(var guard=0; guard<10; guard++){
+    var t = s.replace(/[\s,;:*#\/\-.]+$/,'').replace(/(^|\s)[A-Za-z]$/,'').replace(/[\s,;:*#\/\-.]+$/,'');
+    if(t===s) break; s = t;
+  }
+  return (s.replace(/[^A-Za-z]/g,'').length>=3 && full.toLowerCase().indexOf(s.toLowerCase())!==-1) ? s : full;
+}
+function ruleCondsFrom_(criteria){
+  return Object.keys(criteria||{}).map(function(k){
+    var m = k.match(/^(Description|Account|Institution|Amount)\s+(Contains|Equals)$/i);
+    if(!m) return { field:k, op:'', value:String(criteria[k]), unknown:true };
+    var f = RULE_FIELDS.filter(function(x){ return x.toLowerCase()===m[1].toLowerCase(); })[0];
+    return { field:f, op:(m[2].toLowerCase()==='equals' || f==='Amount' ? 'Equals' : 'Contains'), value:String(criteria[k]) };
+  });
+}
+function ruleCriteriaFromConds_(conds){
+  var o = {};
+  (conds||[]).forEach(function(c){ if(!c.unknown && String(c.value||'').trim()) o[c.field+' '+c.op] = String(c.value).trim(); });
+  return o;
+}
+function ruleSource_(r){
+  var f = String(r && r.createdFrom || '');
+  if(/rules page/i.test(f)) return 'added here';
+  if(!f || /autocat|tiller|migrat|seed/i.test(f)) return 'from Tiller';
+  return 'from an approval';
+}
+/* "Spotify Usa" + extras ("+ $90.00", "account is …") as HTML */
+function ruleWhatHtml_(r){
+  var conds = ruleCondsFrom_(r.criteria), main = null, extra = [];
+  conds.forEach(function(c){
+    if(!main && c.field==='Description') main = c;
+    else extra.push(c);
+  });
+  var h = main ? '<q>'+esc(main.value)+'</q>'+(main.op==='Equals'?' <span class="rxtra">exact</span>':'') : '';
+  extra.forEach(function(c){
+    var w = c.unknown ? esc(c.field)+' (not used)' :
+      c.field==='Amount' ? money(Math.abs(ruleAmt_(c.value))) :
+      esc(RULE_FIELD_WORDS[c.field].toLowerCase())+(c.op==='Equals'?' is ':' has ')+'<q>'+esc(c.value)+'</q>';
+    h += (h?' ':'')+'<span class="rxtra">'+(h?'+ ':'')+w+'</span>';
+  });
+  return h || '<span class="rxtra">(no conditions)</span>';
+}
+function ruleLabel_(r){
+  var d = ruleCondsFrom_(r.criteria).filter(function(c){ return c.field==='Description'; })[0];
+  return d ? '“'+d.value+'”' : ('#'+r.position);
+}
+/* Inbox rows a rule catches (Inbox rows carry no bank name → noInst). */
+function ruleInboxHits_(criteria){
+  if(!criteria || !Object.keys(criteria).length) return [];
+  return (state.inbox||[]).filter(function(t){ return ruleMatchesJs_(criteria, t, {noInst:true}); });
+}
+/* Which rule put this suggestion on an Inbox row: the first match, and only if
+   it points at the envelope actually suggested (otherwise a default did it). */
+function ruleForInboxRow_(t){
+  if(!state.rules || !t || !t.suggestedId) return null;
+  var r = ruleFirstMatch_(state.rules, t, {noInst:true});
+  return (r && r.envelopeId===t.suggestedId) ? r : null;
+}
+
+function loadRules_(){
+  if(state.rulesLoading) return state.rulesLoading;
+  state.rulesLoading = run('apiRules').then(function(res){
+    state.rules = (res && res.rules) || [];
+    state.rulesLoading = null;
+    return state.rules;
+  }, function(e){ state.rulesLoading = null; throw e; });
+  return state.rulesLoading;
+}
+/* Background load for the Inbox's "Suggested by rule" line - never blocks the
+   Inbox, never redraws under the user's thumb. */
+function ensureRulesForInbox_(){
+  if(state.rules || state.rulesLoading) return;
+  loadRules_().then(function(){
+    if(state.view==='inbox' && state.inbox && !userBusy()) drawInbox();
+  }).catch(function(){});
+}
+/* The "N in Inbox" counts need state.inbox; it is mirror-served and cheap. */
+function rulesInboxRefresh_(){
+  state.rulesInboxAsked = true;
+  run('apiGetInbox').then(function(rows){
+    state.inbox = filterInbox(rows);
+    if(state.view==='rules' && !userBusy()){ if(state.ruleEdit) ruleDrawPreview_(); else drawRules(); }
+  }).catch(function(){});
+}
+function renderRules(){
+  if(!state.inbox && !state.rulesInboxAsked) rulesInboxRefresh_();
+  if(state.rules){ drawRules(); return; }
+  $('#shell').innerHTML = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Suggestion rules</h2><div class="spin"></div>';
+  loadRules_().then(function(){ if(state.view==='rules') drawRules(); }).catch(fail);
+}
+function drawRules(){
+  if(state.ruleEdit){ drawRuleEditor_(); return; }
+  var rules = state.rules || [], ov = ruleOverlaps_(rules);
+  var q = String(state.ruleQ||'').toLowerCase(), f = state.ruleFilter||'all';
+  var nApp = rules.filter(function(r){ return ruleSource_(r)==='from an approval'; }).length;
+  var nTil = rules.filter(function(r){ return ruleSource_(r)==='from Tiller'; }).length;
+  var nOv = rules.filter(function(r){ return ov[r.ruleId].hiddenBy; }).length;
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<div class="viewhead"><h2>Suggestion rules</h2><button class="btn ghost sm" data-act="rule-new">+ New rule</button></div>'+
+    '<div class="note" style="padding:0 2px 12px">When a new transaction arrives, SBC checks these <b>top to bottom</b> and pre-fills the envelope of the first one that matches. You still approve every transaction.</div>';
+  if(!rules.length){
+    h += '<div class="empty">No rules yet. Tick <b>Always suggest this</b> when you approve, or tap <b>+ New rule</b>.</div>';
+    $('#shell').innerHTML = h; return;
+  }
+  h += '<input class="rsearch" id="ruleQ" data-act="rule-q" placeholder="Search store or envelope" autocomplete="off" value="'+esc(state.ruleQ||'')+'">';
+  var chip = function(k, label){ return '<button class="rchip'+(f===k?' on':'')+(k==='overlap'?' warn':'')+'" data-act="rule-filter" data-arg="'+k+'">'+label+'</button>'; };
+  h += '<div class="rchips">'+chip('all','All '+rules.length)+
+    (nApp?chip('approval','From approvals '+nApp):'')+(nTil?chip('tiller','From Tiller '+nTil):'')+
+    (nOv?chip('overlap','⚠ Overlap '+nOv):'')+'</div>';
+  h += '<div class="card" id="ruleList">'+ruleListRowsHtml_(rules, ov, q, f)+'</div>';
+  $('#shell').innerHTML = h;
+}
+function ruleListRowsHtml_(rules, ov, q, f){
+  var shown = rules.filter(function(r){
+    if(f==='approval' && ruleSource_(r)!=='from an approval') return false;
+    if(f==='tiller' && ruleSource_(r)!=='from Tiller') return false;
+    if(f==='overlap' && !ov[r.ruleId].hiddenBy && !ov[r.ruleId].hides.length) return false;
+    if(!q) return true;
+    return JSON.stringify(r.criteria).toLowerCase().indexOf(q)!==-1 || String(r.envelopeName).toLowerCase().indexOf(q)!==-1;
+  });
+  var h = '';
+  shown.forEach(function(r){
+    var o = ov[r.ruleId], meta = [];
+    if(state.inbox){ var n = ruleInboxHits_(r.criteria).length; meta.push(n ? '<b>'+n+' in Inbox</b>' : '0 in Inbox'); }
+    if(o.hiddenBy) meta.push('<span class="rw">⚠ '+(o.hiddenBy.envelopeId===r.envelopeId
+      ? 'same as #'+o.hiddenBy.position+' — never used'
+      : 'never reached, #'+o.hiddenBy.position+' catches it first')+'</span>');
+    else if(o.hides.length) meta.push('<span class="rw">⚠ hides #'+o.hides.map(function(x){ return x.position; }).join(', #')+'</span>');
+    meta.push(ruleSource_(r));
+    h += '<div class="rulerow" data-act="rule-open" data-arg="'+esc(r.ruleId)+'">'+
+      '<span class="rn">'+r.position+'</span><div class="rb">'+
+      '<div class="rm">'+ruleWhatHtml_(r)+'</div>'+
+      '<div class="rto">→ '+esc(r.envelopeName || '(missing envelope)')+'</div>'+
+      '<div class="rmeta">'+meta.join(' · ')+'</div></div><span class="rchev">›</span></div>';
+  });
+  return h || '<div class="empty" style="padding:18px">No rules match.</div>';
+}
+
+/* ---- the editor: a page state, not an overlay (the envelope picker needs #ovl) ---- */
+function ruleOpen_(ruleId){
+  var r = (state.rules||[]).filter(function(x){ return x.ruleId===ruleId; })[0];
+  if(!r){ toast('That rule is gone — reloading the list'); state.rules=null; state.ruleEdit=null; renderRules(); return; }
+  var conds = ruleCondsFrom_(r.criteria);
+  state.ruleEdit = { ruleId:r.ruleId, position:r.position, envelopeId:r.envelopeId,
+    conds: conds.length ? conds : [{field:'Description', op:'Contains', value:''}] };
+  state.rulePrev = null;
+  drawRules();
+  rulePreviewFetch_();
+}
+function ruleNew_(){
+  state.ruleEdit = { ruleId:'', position:0, envelopeId:'', conds:[{field:'Description', op:'Contains', value:''}] };
+  state.rulePrev = null;
+  drawRules();
+}
+function ruleFormCapture_(){
+  var e = state.ruleEdit; if(!e) return;
+  $all('[data-act="rule-val"]').forEach(function(inp){
+    var i = Number(inp.getAttribute('data-arg')); if(e.conds[i]) e.conds[i].value = inp.value;
+  });
+}
+/* Past-12-months preview: ask the (mirror-served) register for rows whose text
+   contains the rule's main words, then apply the real matcher here. */
+function rulePreviewQuery_(conds){
+  var d = (conds||[]).filter(function(c){ return c.field==='Description' && String(c.value||'').trim().length>=3; })[0];
+  if(d) return { q:String(d.value).trim(), limit:500 };
+  var a = (conds||[]).filter(function(c){ return c.field==='Account' && c.op==='Equals' && String(c.value||'').trim(); })[0];
+  if(a) return { account:String(a.value).trim(), limit:500 };
+  return null;
+}
+var rulePrevTimer_ = null;
+function rulePreviewFetch_(){
+  clearTimeout(rulePrevTimer_);
+  rulePrevTimer_ = setTimeout(function(){
+    var e = state.ruleEdit; if(!e) return;
+    var qa = rulePreviewQuery_(e.conds), sig = JSON.stringify(qa);
+    if(!qa){ state.rulePrev = { sig:sig, items:null }; ruleDrawPreview_(); return; }
+    if(state.rulePrev && state.rulePrev.sig===sig && (state.rulePrev.items || state.rulePrev.loading)){ ruleDrawPreview_(); return; }
+    state.rulePrev = { sig:sig, items:null, loading:true };
+    ruleDrawPreview_();
+    run('apiRegister', qa).then(function(items){
+      if(!state.rulePrev || state.rulePrev.sig!==sig) return;
+      state.rulePrev = { sig:sig, items:items||[] };
+      ruleDrawPreview_();
+    }).catch(function(){ if(state.rulePrev && state.rulePrev.sig===sig){ state.rulePrev = { sig:sig, items:null, err:true }; ruleDrawPreview_(); } });
+  }, 450);
+}
+var RULE_PREVIEW_DAYS = 365;
+function rulePreviewHtml_(now){
+  var e = state.ruleEdit; if(!e) return '';
+  var crit = ruleCriteriaFromConds_(e.conds);
+  if(!Object.keys(crit).length) return '<div class="rprev"><div class="hd">Fill in a condition to see what it would catch.</div></div>';
+  var inbox = state.inbox ? ruleInboxHits_(crit) : null;
+  var p = state.rulePrev || {}, past = null, since = (now || Date.now()) - RULE_PREVIEW_DAYS*86400000;
+  if(p.items) past = p.items.filter(function(t){ return (t.dateMs||0)>=since && ruleMatchesJs_(crit, t, {noInst:true}); });
+  var hd = (inbox ? inbox.length+' in the Inbox' : 'Inbox not loaded')+' · '+
+    (p.loading ? 'checking the last 12 months…' : p.err ? 'history didn’t load' :
+     past ? past.length+' in the last 12 months' : 'history needs description words or an exact account');
+  var h = '<div class="rprev"><div class="hd">'+hd+'</div>';
+  if(past && past.length){
+    var by = {};
+    past.forEach(function(t){ (t.legs||[]).forEach(function(l){ var k=l.envelopeName||l.envelopeId; by[k]=(by[k]||0)+1; }); });
+    var went = Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).slice(0,3)
+      .map(function(k){ return by[k]+' → '+esc(k); }).join(', ');
+    h += '<div class="went">Went to: '+went+'</div>';
+  }
+  var nIn = Math.min(3, (inbox||[]).length);
+  (inbox||[]).slice(0,nIn).forEach(function(t){
+    h += '<div class="it new"><span>'+esc(t.description)+' · Inbox</span><span>'+money(t.amount)+'</span></div>';
+  });
+  (past||[]).slice(0, 4-nIn).forEach(function(t){
+    h += '<div class="it"><span>'+esc(t.description)+' · '+esc(t.date)+'</span><span>'+money(t.amount)+'</span></div>';
+  });
+  if(e.conds.some(function(c){ return c.field==='Institution' && String(c.value||'').trim(); }))
+    h += '<div class="went">The bank condition isn’t checked in this preview — Inbox and register rows don’t carry the bank name.</div>';
+  return h+'</div>';
+}
+function ruleDrawPreview_(){
+  var box = $('#rulePrev'); if(box) box.innerHTML = rulePreviewHtml_();
+  var w = $('#ruleWarn'); if(w) w.innerHTML = ruleEditWarnHtml_();
+}
+/* The draft against the other rules, in the order they are checked. */
+function ruleEditWarnHtml_(){
+  var e = state.ruleEdit; if(!e) return '';
+  var draft = { ruleId:e.ruleId||'(new)', criteria:ruleCriteriaFromConds_(e.conds), envelopeId:e.envelopeId };
+  if(!Object.keys(draft.criteria).length) return '';
+  var rules = state.rules||[], pos = e.ruleId ? e.position : rules.length+1, out = [];
+  rules.forEach(function(r){
+    if(r.ruleId===e.ruleId) return;
+    if(r.position<pos && ruleShadows_(r, draft)) out.push(r.envelopeId===draft.envelopeId
+      ? '#'+r.position+' '+esc(ruleLabel_(r))+' already suggests the same envelope for all of these — this rule adds nothing.'
+      : '#'+r.position+' '+esc(ruleLabel_(r))+' catches all of these first, so this rule would never be used. Move it above #'+r.position+'.');
+    else if(r.position>pos && ruleShadows_(draft, r)) out.push('This rule also catches everything #'+r.position+' '+esc(ruleLabel_(r))+' would, so #'+r.position+' is never used.');
+  });
+  return out.map(function(s){ return '<div class="rtip">⚠ '+s+'</div>'; }).join('');
+}
+
+function drawRuleEditor_(){
+  var e = state.ruleEdit, n = (state.rules||[]).length;
+  var h = '<button class="backlink" data-act="rule-back">‹ All rules</button>'+
+    '<h2 class="viewtitle">'+(e.ruleId ? 'Edit rule' : 'New rule')+'</h2>';
+  h += '<div class="card rform">';
+  if(e.ruleId) h += '<div class="rsub">Checked <b>#'+e.position+'</b> of '+n+'</div>';
+  h += '<div class="rfl">When a transaction’s</div>';
+  e.conds.forEach(function(c, i){
+    if(c.unknown){
+      h += '<div class="rcond"><span class="rxtra">'+esc(c.field)+' = '+esc(c.value)+' (SBC doesn’t use this)</span>'+
+        '<button class="rrm" data-act="rule-cond-rm" data-arg="'+i+'" aria-label="Remove">×</button></div>';
+      return;
+    }
+    h += '<div class="rcond"><select class="amt" data-act="rule-field" data-arg="'+i+'">'+
+      RULE_FIELDS.map(function(f){ return '<option value="'+f+'"'+(f===c.field?' selected':'')+'>'+RULE_FIELD_WORDS[f]+'</option>'; }).join('')+
+      '</select><select class="amt" data-act="rule-op" data-arg="'+i+'">'+
+      (c.field==='Amount' ? '<option value="Equals" selected>is exactly</option>' :
+        '<option value="Contains"'+(c.op==='Contains'?' selected':'')+'>contains</option>'+
+        '<option value="Equals"'+(c.op==='Equals'?' selected':'')+'>is exactly</option>')+
+      '</select>'+(e.conds.length>1?'<button class="rrm" data-act="rule-cond-rm" data-arg="'+i+'" aria-label="Remove">×</button>':'')+'</div>'+
+      '<input class="rval" data-act="rule-val" data-arg="'+i+'" autocomplete="off" value="'+esc(c.value)+'"'+
+      (c.field==='Amount'?' inputmode="decimal" placeholder="90.00"':' placeholder="words from the bank description"')+'>';
+    if(c.field==='Description'){
+      var sh = ruleMatchText_(c.value);
+      if(/\d/.test(c.value||'') && sh && sh!==String(c.value).trim()) h += '<div class="rtip">The numbers in this text usually change from one charge to the next, so it may never match again. '+
+        '<button class="rlink" data-act="rule-shorten" data-arg="'+i+'">Use “'+esc(sh)+'”</button></div>';
+    }
+  });
+  if(e.conds.length<4) h += '<button class="rlink" data-act="rule-cond-add" style="margin-top:6px">+ Add a condition</button>';
+  h += '<div class="rfl">Suggest this envelope</div>'+
+    '<button class="renv'+(e.envelopeId?'':' unset')+'" data-act="rule-env">'+
+    '<span>'+(e.envelopeId ? esc(envName(e.envelopeId)) : 'Choose envelope…')+'</span><span class="rchev">Change ›</span></button>';
+  h += '<div id="ruleWarn">'+ruleEditWarnHtml_()+'</div>';
+  h += '<div class="rfl">What it would catch</div><div id="rulePrev">'+rulePreviewHtml_()+'</div>';
+  if(e.ruleId && n>1){
+    var mv = [];
+    if(e.position>1) mv.push('<button class="rlink" data-act="rule-move" data-arg="1">Move to top</button>',
+      '<button class="rlink" data-act="rule-move" data-arg="'+(e.position-1)+'">Up</button>');
+    if(e.position<n) mv.push('<button class="rlink" data-act="rule-move" data-arg="'+(e.position+1)+'">Down</button>');
+    h += '<div class="rpos"><span>Order</span><span>'+mv.join(' · ')+'</span></div>';
+  }
+  h += '<div class="actions"><button class="btn" data-act="rule-save"'+(state.ruleSaving?' disabled':'')+'>'+(state.ruleSaving?'Saving…':'Save')+'</button>'+
+    '<button class="btn ghost" data-act="rule-back">Cancel</button>'+
+    (e.ruleId?'<button class="btn danger sm" data-act="rule-delete" style="margin-left:auto">Delete</button>':'')+'</div>';
+  h += '</div>';
+  $('#shell').innerHTML = h;
+}
+/* After any rule write: the list, the Inbox's suggestions and Home are stale. */
+function ruleAfterWrite_(msg, r){
+  state.ruleSaving = false;
+  state.rules = null; state.inbox = null; state.rulesInboxAsked = false;
+  invalidateData();
+  var opId = r && r.opId, n = r && r.resuggested;
+  toast(msg + (n ? ' · '+n+' Inbox row'+(n===1?'':'s')+' re-suggested' : ''),
+    opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'rule change'); } } : null);
+}
+function ruleSave_(){
+  var e = state.ruleEdit; if(!e || state.ruleSaving) return;
+  ruleFormCapture_();
+  var conds = e.conds.filter(function(c){ return !c.unknown; }).map(function(c){ return { field:c.field, op:c.op, value:String(c.value||'').trim() }; });
+  if(!e.envelopeId){ toast('Pick an envelope for this rule'); return; }
+  if(!conds.length || conds.some(function(c){ return !c.value; })){ toast('Fill in every condition, or remove the empty one'); return; }
+  state.ruleSaving = true; drawRules();
+  var wasId = e.ruleId;
+  run('apiSaveRule', { ruleId:wasId, conditions:conds, envelopeId:e.envelopeId }).then(function(r){
+    ruleAfterWrite_('Rule saved ✓', r);
+    state.ruleEdit = null;
+    rulesInboxRefresh_();
+    loadRules_().then(function(){ if(state.view==='rules') drawRules(); }).catch(fail);
+  }).catch(function(err){ state.ruleSaving = false; toast('⚠ '+(err.message||err)); if(state.view==='rules') drawRules(); });
+}
+function ruleDelete_(){
+  var e = state.ruleEdit; if(!e || !e.ruleId) return;
+  var r = (state.rules||[]).filter(function(x){ return x.ruleId===e.ruleId; })[0];
+  confirmUi('Delete this rule?\n\n'+(r ? ruleLabel_(r)+' → '+(r.envelopeName||'') : e.ruleId)+
+    '\n\nNew transactions won’t be suggested by it any more. Undo is on the message that follows, and in Settings → History & undo.', 'Delete')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiDeleteRule', { ruleId:e.ruleId }).then(function(res){
+      ruleAfterWrite_('Rule deleted ✓', res);
+      state.ruleEdit = null;
+      rulesInboxRefresh_();
+      if(state.view==='rules') renderRules();
+    }).catch(function(err){ toast('⚠ '+(err.message||err)); });
+  });
+}
+/* Order changes save at once (the toast has Undo); an unsaved edit in the form
+   rides along untouched. */
+function ruleMove_(to){
+  var e = state.ruleEdit; if(!e || !e.ruleId) return;
+  ruleFormCapture_();
+  var draft = { conds:e.conds, envelopeId:e.envelopeId }, id = e.ruleId;
+  run('apiMoveRule', { ruleId:id, to:to }).then(function(res){
+    ruleAfterWrite_('Moved to #'+to+' ✓', res);
+    rulesInboxRefresh_();
+    loadRules_().then(function(){
+      if(state.view!=='rules') return;
+      ruleOpen_(id);
+      if(state.ruleEdit){ state.ruleEdit.conds = draft.conds; state.ruleEdit.envelopeId = draft.envelopeId; drawRules(); }
+    }).catch(fail);
+  }).catch(function(err){ toast('⚠ '+(err.message||err)); });
+}
+/* Screen 4: "Suggested by rule … · edit ›" on an Inbox card opens that rule. */
+function ruleOpenFrom_(ruleId){
+  state.ruleEdit = null; go('rules');
+  loadRules_().then(function(){ if(state.view==='rules') ruleOpen_(ruleId); }).catch(fail);
+}
+/* Screen 5: Edit on the approve toast. The rule is written by the Apps Script
+   forward a few seconds AFTER the mirror-first approve answered, so look for
+   it, and look again before saying it isn't there yet. */
+function ruleOpenByText_(text, envelopeId, tries){
+  state.ruleEdit = null; state.rules = null;
+  if(state.view!=='rules') go('rules');
+  loadRules_().then(function(rules){
+    var hit = rules.filter(function(r){
+      var k = Object.keys(r.criteria||{});
+      return k.length===1 && k[0]==='Description Contains' && String(r.criteria[k[0]]).trim()===String(text).trim() &&
+        (!envelopeId || r.envelopeId===envelopeId);
+    }).pop();
+    if(hit){ if(state.view==='rules') ruleOpen_(hit.ruleId); return; }
+    if(state.view==='rules') drawRules();
+    if((tries||0)<2){ toast('That rule is still saving…'); setTimeout(function(){ if(state.view==='rules' && !state.ruleEdit) ruleOpenByText_(text, envelopeId, (tries||0)+1); }, 4000); return; }
+    toast('That rule hasn’t reached the list yet — it will show here in a minute.');
+  }).catch(fail);
+}
+/* Inbox card line (screen 4). '' when no rule explains the suggestion. */
+function ruleWhyHtml_(t){
+  var r = ruleForInboxRow_(t);
+  if(!r) return '';
+  return '<div class="rwhy">Suggested by rule <b>'+esc(ruleLabel_(r))+'</b> · '+
+    '<button class="rlink" data-act="rule-open-from" data-arg="'+esc(r.ruleId)+'">edit ›</button></div>';
 }
 
 /* v3.72.0: was `settingsMaintenance_()`, a disclosure that expanded into a
@@ -7428,7 +7980,8 @@ function renderHowTo(){
   h += S('🧾','During the week — approve your spending',
     '<p style="margin:0 0 8px">As you spend, transactions flow into the <b>Inbox</b> automatically (it syncs from your bank every hour). A few times a week, clear it:</p>'+
     '<p style="margin:0 0 6px">• Most items arrive with a <b>suggestion pill</b> — one tap to approve if it’s right.</p>'+
-    '<p style="margin:0 0 6px">• Tick <b>"Always suggest this"</b> when approving and that store will be suggested automatically forever.</p>'+
+    '<p style="margin:0 0 6px">• Tick <b>"Always suggest this"</b> when approving and that store will be suggested automatically from then on. The card shows the words the rule will look for \u2014 the store name without the changing numbers (\u201cHannaford Supermarket\u201d, not \u201cHannaford Supermarket 8123\u201d) \u2014 and the message that follows has <b>Edit rule</b>.</p>'+
+    '<p style="margin:0 0 6px">• <b>Settings \u2192 Suggestion rules</b> lists every rule in the order SBC checks them (the first one that matches wins). Tap a rule to change its words or envelope, move it up or down, or delete it; the preview shows what it would catch in the Inbox and in the last 12 months before you save. Saving also re-suggests everything already waiting in the Inbox. A \u26a0 means one rule catches everything another would, so the lower one never gets used. An Inbox card that was filled in by a rule says <b>Suggested by rule \u2026</b> \u2014 tap <b>edit</b> to fix a wrong one right there.</p>'+
     '<p style="margin:0 0 6px">• <b>"✓ Approve all"</b> takes care of everything that already has a suggestion.</p>'+
     '<p style="margin:0 0 8px">• One purchase, two jobs? Use <b>Split</b> to spread it across envelopes (the Walmart run that was half groceries, half a game).</p>'+
     '<p style="margin:0">Approving isn’t busywork — it’s the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.</p>');
@@ -7626,7 +8179,7 @@ function doUndo(opId){
     actBusy('undo', true, 'Undoing…'); // v3.27: instant feedback
     run('apiUndo', opId).then(function(){
       toast('Undone ✓');
-      state.inbox=null;
+      state.inbox=null; state.rules=null;   // v3.79.0: an undone rule change must not show from cache
       invalidateData();
       refreshBoot();
       renderHistory();
@@ -7732,6 +8285,8 @@ function pickerPicked(envId){
   if(!c) return;
   if(c.kind==='sel'){
     state.sel[c.key]=envId; drawInbox();
+  } else if(c.kind==='rule'){          // v3.79.0: the rule editor's envelope
+    if(state.ruleEdit){ ruleFormCapture_(); state.ruleEdit.envelopeId = envId; drawRules(); }
   } else if(c.kind==='planline'){
     planFormCapture();
     state.planEdit.lines[c.idx].envelopeId = envId; drawPlans();
@@ -7758,6 +8313,20 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    /* v3.79.0 — Suggestion rules */
+    case 'rule-open': ruleOpen_(arg); break;
+    case 'rule-open-from': ruleOpenFrom_(arg); break;
+    case 'rule-new': ruleNew_(); break;
+    case 'rule-back': state.ruleEdit = null; state.rulePrev = null; drawRules(); break;
+    case 'rule-filter': state.ruleFilter = arg; drawRules(); break;
+    case 'rule-cond-add': ruleFormCapture_(); state.ruleEdit.conds.push({field:'Description', op:'Contains', value:''}); drawRules(); break;
+    case 'rule-cond-rm': ruleFormCapture_(); state.ruleEdit.conds.splice(Number(arg),1); drawRules(); rulePreviewFetch_(); break;
+    case 'rule-shorten': (function(){ ruleFormCapture_(); var c = state.ruleEdit.conds[Number(arg)];
+      if(c){ c.value = ruleMatchText_(c.value); drawRules(); rulePreviewFetch_(); } })(); break;
+    case 'rule-env': ruleFormCapture_(); openPicker({kind:'rule', key:'', idx:0}); break;
+    case 'rule-save': ruleSave_(); break;
+    case 'rule-delete': ruleDelete_(); break;
+    case 'rule-move': ruleMove_(Number(arg)); break;
     case 'about-recheck': probeServerVersion_(true); renderAbout(); break;   // v3.77.2
     case 'attn-recheck': toast('Checking…'); refreshBootSoon_().then(function(){ if(state.view==='dash') renderDash(); }); break;   // v3.78.1
     case 'app-reload': appReload_(); break;   // v3.69.0 (U4)
@@ -8143,6 +8712,31 @@ document.addEventListener('change', function(ev){
    it is module.exports. Add a line here when you add a helper worth testing;
    tests pin the WIRING, not this list. Function declarations hoist, so the
    block can sit here at the end. */
+/* v3.79.0 — Suggestion rules: typing updates the draft and the preview in place
+   (no redraw, so the cursor stays put); a select change redraws the form. */
+document.addEventListener('input', function(ev){
+  var el = ev.target && ev.target.closest && ev.target.closest('[data-act]');
+  if(!el) return;
+  if(el.dataset.act==='rule-q'){
+    state.ruleQ = el.value;
+    var box = $('#ruleList'); if(box){ var rs = state.rules||[]; box.innerHTML = ruleListRowsHtml_(rs, ruleOverlaps_(rs), String(el.value).toLowerCase(), state.ruleFilter||'all'); }
+  } else if(el.dataset.act==='rule-val' && state.ruleEdit){
+    var c = state.ruleEdit.conds[Number(el.dataset.arg)];
+    if(c){ c.value = el.value; ruleDrawPreview_(); rulePreviewFetch_(); }
+  }
+});
+document.addEventListener('change', function(ev){
+  var el = ev.target && ev.target.closest && ev.target.closest('[data-act]');
+  if(!el || !state.ruleEdit) return;
+  var c = state.ruleEdit.conds[Number(el.dataset.arg)];
+  if(!c) return;
+  if(el.dataset.act==='rule-field'){
+    ruleFormCapture_(); c.field = el.value; if(c.field==='Amount') c.op = 'Equals';
+    drawRules(); rulePreviewFetch_();
+  } else if(el.dataset.act==='rule-op'){
+    ruleFormCapture_(); c.op = el.value; drawRules(); rulePreviewFetch_();
+  }
+});
 var SBC = (typeof module!=='undefined' && module.exports) ? module.exports : (window.SBC = {});
 SBC.FE_VERSION = FE_VERSION;
 SBC.BUILD_ID = BUILD_ID;
@@ -8213,6 +8807,15 @@ SBC.userBusy = userBusy;
 SBC.goalCalc_ = goalCalc_; SBC.goalSort_ = goalSort_; SBC.goalParseDay_ = goalParseDay_;
 SBC.goalMonthsLeft_ = goalMonthsLeft_; SBC.goalCardHtml_ = goalCardHtml_; SBC.goalAttentionRows_ = goalAttentionRows_;
 SBC.goalRowBadges_ = goalRowBadges_; SBC.goalsData_ = goalsData_; SBC.goalPatch_ = goalPatch_;
+/* v3.79.0: suggestion rules - the matcher (pinned against ruleMatches_), the
+   short match, the overlap finder, and the rendered pages. */
+SBC.ruleMatchesJs_ = ruleMatchesJs_; SBC.ruleFirstMatch_ = ruleFirstMatch_; SBC.ruleShadows_ = ruleShadows_;
+SBC.ruleOverlaps_ = ruleOverlaps_; SBC.ruleMatchText_ = ruleMatchText_; SBC.ruleCondsFrom_ = ruleCondsFrom_;
+SBC.ruleCriteriaFromConds_ = ruleCriteriaFromConds_; SBC.ruleSource_ = ruleSource_; SBC.ruleWhyHtml_ = ruleWhyHtml_;
+SBC.rulePreviewQuery_ = rulePreviewQuery_; SBC.SETTINGS_VIEWS = SETTINGS_VIEWS;
+SBC.state_ = function(){ return state; };
+SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
+SBC.renderSettings = renderSettings; SBC.toast = toast; SBC.afterApprove = afterApprove; SBC.approve = approve;
 SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_VIEWS = MORE_VIEWS; SBC.NAV_LABELS = NAV_LABELS; SBC.ICONS = ICONS;
 
 (function start(){
