@@ -1312,11 +1312,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.80.0';
+var FE_VERSION = 'v3.80.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.80.0+20260929.1317';
+var BUILD_ID = 'v3.80.1+20260929.1844';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7161,7 +7161,7 @@ function renderNotify(){
     h += '</div></div>';
   }
   h += '<div class="note" style="padding:12px 2px;font-size:12.5px;line-height:1.6">'+
-    'Checked once an hour, right after the sync. Each problem is announced once, not every hour it stays true. '+
+    'Checked every time SBC Money brings in new transactions from Tiller (about once an hour), with the hourly sync as a backup. Each problem is announced once, not every hour it stays true. '+
     'Nothing is sent between 9 PM and 7 AM — what the night finds arrives in the morning. '+
     (pushIsIOS_() ? '' : 'On a computer the browser has to be running (it can be minimized, and the SBC Money tab can be closed). ')+
     'Each browser and phone is turned on separately'+(cfg.devices ? ' — you have <b>'+cfg.devices+'</b> signed up' : '')+'.</div>';
