@@ -20,8 +20,8 @@
    Never cached: anything that is not GET, anything cross-origin except the
    pinned Chart.js build, the Google Identity script, and every API call
    (Apps Script / Supabase are POSTs — they never touch this file). */
-var SW_VERSION = 'v3.79.3';
-var BUILD_ID = 'v3.79.3+20260928.2010';   // v3.78.7: stamped by deploy/set-version.mjs
+var SW_VERSION = 'v3.80.0';
+var BUILD_ID = 'v3.80.0+20260929.1317';   // v3.78.7: stamped by deploy/set-version.mjs
 var CACHE = 'sbc-' + BUILD_ID;
 var CHART_JS = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 var SHELL = ['./', './index.html', './manifest.json'];                        // required — install fails without these
@@ -51,6 +51,58 @@ self.addEventListener('activate', function (ev) {
         .map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
   );
+});
+
+/* v3.80.0 - push notifications. The server encrypts each alert to this
+   browser (supabase/functions/_shared/webpush.ts); the push service wakes this
+   worker even with no SBC Money tab open.
+   - A window of the app is in front -> hand the alert to it (it shows a toast)
+     and show nothing here: a Windows popup about the screen you are already
+     looking at is noise. Chrome/Edge allow that when a window is visible.
+   - ⚠ Except Apple: Safari revokes a subscription whose pushes don't produce a
+     notification, so on an Apple push endpoint we ALWAYS show it.
+   - The Inbox count also goes on the Home Screen badge. */
+function pushShowOpts_(d) {
+  return {
+    body: d.body || '',
+    tag: 'sbc-' + String(d.tag || d.kind || 'note'),
+    renotify: true,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    data: { view: d.view || 'dash', kind: d.kind || '' }
+  };
+}
+self.addEventListener('push', function (ev) {
+  var d = {};
+  try { d = ev.data ? ev.data.json() : {}; } catch (e) { d = { title: 'SBC Money', body: ev.data ? ev.data.text() : '' }; }
+  ev.waitUntil(Promise.all([
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+    self.registration.pushManager.getSubscription().catch(function () { return null; })
+  ]).then(function (r) {
+    var wins = r[0] || [], sub = r[1];
+    var apple = !!(sub && /push\.apple\.com/.test(sub.endpoint));
+    var front = wins.some(function (w) { return w.focused && w.visibilityState === 'visible'; });
+    var show = apple || !front;
+    if (d.kind === 'inbox' && typeof d.count === 'number' && self.navigator && self.navigator.setAppBadge) {
+      self.navigator.setAppBadge(d.count).catch(function () {});
+    }
+    wins.forEach(function (w) { try { w.postMessage({ type: 'sbc-push', note: d, shown: show }); } catch (e) { /* closed */ } });
+    if (show) return self.registration.showNotification(d.title || 'SBC Money', pushShowOpts_(d));
+  }));
+});
+self.addEventListener('notificationclick', function (ev) {
+  ev.notification.close();
+  var view = (ev.notification.data && ev.notification.data.view) || 'dash';
+  var url = new URL('./?open=' + encodeURIComponent(view), self.registration.scope).href;
+  ev.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (wins) {
+    for (var i = 0; i < wins.length; i++) {
+      if ('focus' in wins[i]) {
+        try { wins[i].postMessage({ type: 'sbc-open', view: view }); } catch (e) { /* ignore */ }
+        return wins[i].focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  }));
 });
 
 function isShell_(req) {

@@ -1156,6 +1156,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
   apiWriteBackStatus:1, // v3.60: failed write-backs (mirror-only)
   apiGoals:1,           // v3.75.0: goals + max (targets rows; its write is Apps-Script-only → MIRROR_REFRESH_ONE)
+  apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1181,7 +1182,8 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    Apps Script has never heard of it). A definitive mirror error must NOT fall
    back to Apps Script — it would just answer "unknown function" after a slow
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
-var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1 }; // v3.62: +apiRefreshMirror
+var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1, // v3.62: +apiRefreshMirror
+  apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1 }; // v3.80.0: notifications live only in the mirror
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
    8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
@@ -1310,11 +1312,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.79.3';
+var FE_VERSION = 'v3.80.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.79.3+20260928.2010';
+var BUILD_ID = 'v3.80.0+20260929.1317';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1754,7 +1756,7 @@ $all('nav.tabs button').forEach(function(b){
    the same reason Transactions was: the phone had nowhere else to put it. It
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
-  'removetxn','reconcile','howto','activity','personal','rules'];   // v3.79.0: +rules
+  'removetxn','reconcile','howto','activity','personal','rules','notify'];   // v3.79.0: +rules   // v3.80.0: +notify
 var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
@@ -1850,6 +1852,7 @@ function bootApply_(res){
     // to swallow the rejection in a console.warn, and About then showed
     // "(checking…)" for the rest of the session against a probe that was dead.
     if(res && res.boot && !res.boot.version) probeServerVersion_();
+    setTimeout(pushHeal_, 8000);           // v3.80.0: re-sign a device whose browser dropped it (daily, silent)
 }
 /* v3.28: instant-open helpers. We cache the last successful boot + dashboard so the
    next open paints immediately instead of waiting on the cold apiBoot round trip. */
@@ -2148,6 +2151,7 @@ function updateBadges(n){
   ['#tabBadge','#sideBadge'].forEach(function(s){
     var el=$(s); if(el){ el.textContent=n; el.style.display = n>0?'':'none'; }
   });
+  tabBadge_(n);   // v3.80.0: tab title, tab-icon dot, Home Screen badge
 }
 /* After any mutation: drop derived caches so views refetch fresh data.
    v3.27: the register keeps its items+sig — views now draw the (possibly
@@ -2269,7 +2273,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' ? ' narrow':'');   // v3.79.0: +rules
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' || state.view==='notify' ? ' narrow':'');   // v3.79.0: +rules   // v3.80.0: +notify
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -2290,6 +2294,7 @@ function render(){
   else if(state.view==='healthset') renderHealthSettings();
   else if(state.view==='personal') renderPersonal();     // v3.57.3
   else if(state.view==='rules') renderRules();           // v3.79.0
+  else if(state.view==='notify') renderNotify();         // v3.80.0
   else if(state.view==='obligations') renderObligations();
   else if(state.view==='goals') renderGoals();          // v3.75.0
   else if(state.view==='about') renderAbout();
@@ -6946,6 +6951,7 @@ function renderSettings(){
   h += settingsSectionLabel('SET UP')+settingsList([
     ['healthset','Health settings'],
     ['rules','Suggestion rules'],            // v3.79.0 — see + edit "Always suggest this"
+    ['notify','Notifications'],              // v3.80.0
     ['personal','Personal information']]);
   h += settingsSectionLabel('RECORDS')+settingsList([
     ['history','History & undo'],
@@ -6957,6 +6963,280 @@ function renderSettings(){
     ['maint','Maintenance'],
     ['about','About']]);
   $('#shell').innerHTML = h;
+}
+
+/* ============================ notifications (v3.80.0) ============================
+   Scott, 9/29/26: "Is there a way that we can enable notifications with the
+   app?" ... "i don't want to set it up as an app on the computer". So: web push,
+   which works in a plain Edge/Chrome tab on a PC and from the Home Screen app on
+   an iPhone. Each browser signs up on its own (Settings -> Notifications); the
+   server announces from the hourly sync (supabase/functions/_shared/notify.ts).
+
+   Where an alert shows up:
+     app not in front  -> a normal Windows / iPhone notification; a tap opens the
+                          page it is about (sw.js notificationclick -> ?open=view)
+     app in front      -> sw.js hands it to this page instead and it becomes a
+                          toast with an Open button (never on iPhone: Safari
+                          revokes a subscription that receives silent pushes)
+     always            -> the Inbox count rides the tab title "(3) SBC Money",
+                          a dot on the tab icon, and the Home Screen badge
+   The push calls are mirror-only READS on purpose: they touch no budget data,
+   are idempotent (upsert by endpoint) and must not wait behind a 15 s Tiller
+   write in the mutation queue. */
+var PUSH_KIND_LABELS = {
+  inbox: ['Transactions to approve', 'When new transactions land in the Inbox.'],
+  freeze: ['A bank balance stops updating', 'When Tiller keeps posting transactions but an account’s balance is stuck.'],
+  obligations: ['A bill coming due is short', 'When an obligation is due soon and the account it comes from can’t cover it.'],
+  sync: ['Sync or save problems', 'When the hourly sync keeps failing, or a change didn’t reach your Tiller sheet.']
+};
+var PUSH_KINDS_ALL = ['inbox','freeze','obligations','sync'];
+var PUSH_OPEN_VIEWS = { dash:1, inbox:1, obligations:1 };
+var PUSH_ON_KEY = 'sbcPushOn', PUSH_KINDS_KEY = 'sbcPushKinds', PUSH_HEAL_KEY = 'sbcPushHealAt';
+
+function pushIsIOS_(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1); }
+function pushStandalone_(){ try{ return !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone===true; }catch(e){ return false; } }
+/** 'ok' | 'ios-install' (Safari tab: push exists only in the Home Screen app) | 'unsupported' */
+function pushSupport_(){
+  if(!('serviceWorker' in navigator)) return 'unsupported';
+  if(!('PushManager' in window) || !('Notification' in window)) return (pushIsIOS_() && !pushStandalone_()) ? 'ios-install' : 'unsupported';
+  return 'ok';
+}
+function pushDeviceLabel_(){
+  var ua = navigator.userAgent, os = /iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android':/Windows/.test(ua)?'Windows':/Mac OS X/.test(ua)?'Mac':'Device';
+  var br = /Edg\//.test(ua)?'Edge':/Firefox\//.test(ua)?'Firefox':/Chrome\//.test(ua)?'Chrome':/Safari\//.test(ua)?'Safari':'browser';
+  return os + ' · ' + (pushStandalone_() ? 'Home Screen app' : br);
+}
+function pushKey_(b64){
+  var s = String(b64||'').replace(/-/g,'+').replace(/_/g,'/'); s += '==='.slice((s.length+3)%4);
+  var bin = atob(s), out = new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function pushStoredKinds_(){
+  try{ var k = JSON.parse(localStorage.getItem(PUSH_KINDS_KEY)||'null'); if(Array.isArray(k)) return k.filter(function(x){ return PUSH_KINDS_ALL.indexOf(x)!==-1; }); }catch(e){}
+  return PUSH_KINDS_ALL.slice();
+}
+function pushReg_(){ return navigator.serviceWorker.ready; }
+function pushCurrentSub_(){
+  if(pushSupport_()!=='ok') return Promise.resolve(null);
+  return pushReg_().then(function(r){ return r.pushManager.getSubscription(); }).catch(function(){ return null; });
+}
+/** Load this device's state for the page. */
+function pushLoad_(){
+  var p = state.push = state.push || {};
+  p.loading = true; p.err = '';
+  return pushCurrentSub_().then(function(sub){
+    p.endpoint = sub ? sub.endpoint : '';
+    return run('apiPushConfig', { endpoint:p.endpoint });
+  }).then(function(cfg){
+    p.cfg = cfg || {}; p.loading = false;
+    if(p.cfg.device && Array.isArray(p.cfg.device.kinds)){ try{ localStorage.setItem(PUSH_KINDS_KEY, JSON.stringify(p.cfg.device.kinds)); }catch(e){} }
+    if(state.view==='notify') renderNotify();
+  }, function(e){
+    p.loading = false; p.err = (e && e.message) || String(e);
+    if(state.view==='notify') renderNotify();
+  });
+}
+function pushSubscribe_(publicKey){
+  return pushReg_().then(function(reg){
+    var go_ = function(){ return reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:pushKey_(publicKey) }); };
+    return go_().catch(function(e){
+      // a subscription made under an older key blocks a new one: drop it, try once more
+      return reg.pushManager.getSubscription().then(function(old){ if(!old) throw e; return old.unsubscribe().then(go_); });
+    });
+  });
+}
+function pushSave_(sub, kinds){
+  return run('apiPushSubscribe', { subscription: sub.toJSON(), kinds: kinds, label: pushDeviceLabel_() }).then(function(r){
+    try{ localStorage.setItem(PUSH_ON_KEY, '1'); localStorage.setItem(PUSH_KINDS_KEY, JSON.stringify(kinds)); }catch(e){}
+    return r;
+  });
+}
+/* Turn on. ⚠ Notification.requestPermission() is the FIRST call in the click:
+   Safari only shows the prompt from inside the tap itself, not after an await. */
+function pushEnable_(){
+  var p = state.push || {};
+  if(!p.cfg || !p.cfg.publicKey){ toast('⚠ '+((p.cfg && p.cfg.notReady) || 'Still loading — try again in a second.')); return; }
+  var ask;
+  try{ ask = Notification.requestPermission(); }catch(e){ ask = null; }
+  Promise.resolve(ask).then(function(perm){
+    perm = perm || Notification.permission;
+    if(perm!=='granted') throw new Error(perm==='denied' ? 'blocked' : 'You didn’t allow notifications.');
+    p.busy = true; renderNotify();
+    return pushSubscribe_(p.cfg.publicKey);
+  }).then(function(sub){
+    return pushSave_(sub, pushStoredKinds_()).then(function(){ p.endpoint = sub.endpoint; });
+  }).then(function(){
+    p.busy = false; toast('Notifications are on for this device');
+    return pushLoad_();
+  }).catch(function(e){
+    p.busy = false;
+    var m = (e && e.message) || String(e);
+    if(m!=='blocked') toast('⚠ Notifications not turned on: '+m);
+    renderNotify();
+  });
+}
+function pushDisable_(){
+  var p = state.push || {};
+  p.busy = true; renderNotify();
+  pushCurrentSub_().then(function(sub){
+    var ep = sub ? sub.endpoint : p.endpoint;
+    return (sub ? sub.unsubscribe().catch(function(){}) : Promise.resolve()).then(function(){
+      return ep ? run('apiPushUnsubscribe', { endpoint:ep }) : null;
+    });
+  }).then(function(){
+    try{ localStorage.removeItem(PUSH_ON_KEY); }catch(e){}
+    p.busy = false; p.endpoint = ''; toast('Notifications are off for this device');
+    return pushLoad_();
+  }).catch(function(e){ p.busy = false; toast('⚠ '+((e && e.message) || e)); renderNotify(); });
+}
+function pushSetKind_(kind, on){
+  var p = state.push || {};
+  var kinds = pushStoredKinds_().filter(function(k){ return k!==kind; });
+  if(on) kinds.push(kind);
+  kinds = PUSH_KINDS_ALL.filter(function(k){ return kinds.indexOf(k)!==-1; });
+  try{ localStorage.setItem(PUSH_KINDS_KEY, JSON.stringify(kinds)); }catch(e){}
+  if(p.cfg && p.cfg.device) p.cfg.device.kinds = kinds;
+  pushCurrentSub_().then(function(sub){
+    if(!sub) throw new Error('This device isn’t signed up any more — turn notifications on again.');
+    return pushSave_(sub, kinds);
+  }).then(function(){ toast('Saved ✓'); }, function(e){ toast('⚠ Not saved: '+((e && e.message) || e)); pushLoad_(); });
+}
+function pushTest_(){
+  var p = state.push || {};
+  toast('Sending a test…');
+  run('apiPushTest', { endpoint:p.endpoint }).then(function(){
+    toast('Test sent ✓ — it should appear in a few seconds');
+  }, function(e){ toast('⚠ '+((e && e.message) || e)); });
+}
+function renderNotify(){
+  var p = state.push = state.push || {};
+  var sup = pushSupport_();
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Notifications</h2>';
+  if(sup==='ios-install'){
+    h += '<div class="card" style="padding:14px 16px;line-height:1.6">On iPhone, notifications only work from the Home Screen app. In Safari tap <b>Share → Add to Home Screen</b>, open SBC Money from the new icon, then come back here.</div>';
+    $('#shell').innerHTML = h; return;
+  }
+  if(sup!=='ok'){
+    h += '<div class="card" style="padding:14px 16px;line-height:1.6">This browser can’t show notifications from a web page. Edge, Chrome and Firefox on a computer, and the Home Screen app on an iPhone (iOS 16.4 or later), all can.</div>';
+    $('#shell').innerHTML = h; return;
+  }
+  if(!p.cfg && !p.loading && !p.err){ pushLoad_(); }
+  if(!p.cfg){
+    h += p.err ? '<div class="card" style="padding:14px 16px">⚠ '+esc(p.err)+' <button class="btn ghost sm" data-act="push-reload">Try again</button></div>'
+               : '<div class="empty">Checking this device…</div>';
+    $('#shell').innerHTML = h; return;
+  }
+  var cfg = p.cfg, dev = cfg.device, perm = (window.Notification && Notification.permission) || 'default';
+  var on = !!dev && perm==='granted';
+  h += '<div class="card" style="padding:14px 16px">';
+  if(!cfg.ready){
+    h += '<div style="line-height:1.6">⚠ '+esc(cfg.notReady || 'Notifications aren’t set up on the server yet.')+'</div>';
+  } else if(perm==='denied'){
+    h += '<div style="font-weight:700;margin-bottom:6px">Blocked in this browser</div>'+
+      '<div style="line-height:1.6;font-size:13.5px">'+(pushIsIOS_()
+        ? 'Open the iPhone <b>Settings → Notifications → SBC Money</b> and turn on <b>Allow Notifications</b>, then come back.'
+        : 'Click the icon at the left end of the address bar (the lock or sliders), set <b>Notifications</b> to <b>Allow</b>, then reload this page.')+'</div>';
+  } else {
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+      '<div style="flex:1;min-width:180px"><div style="font-weight:700">'+(on?'On for this device':'Off for this device')+'</div>'+
+      '<div style="font-size:12.5px;opacity:.75">'+esc(on && dev.label ? dev.label : pushDeviceLabel_())+'</div></div>'+
+      (p.busy ? '<span style="opacity:.7">Working…</span>'
+        : (on ? '<span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="push-test">Send a test</button><button class="btn ghost sm" data-act="push-off">Turn off</button></span>'
+              : '<button class="btn sm" style="background:var(--green)" data-act="push-on">Turn on</button>'))+
+      '</div>';
+    if(on && dev.lastError) h += '<div style="margin-top:8px;font-size:12.5px;color:#f59e0b">⚠ The last alert to this device failed: '+esc(dev.lastError)+'</div>';
+  }
+  h += '</div>';
+  if(on){
+    var kinds = Array.isArray(dev.kinds) ? dev.kinds : PUSH_KINDS_ALL;
+    h += '<div class="grp" style="margin-top:14px"><h3>Tell me when</h3><div class="card" style="padding:4px 16px">';
+    PUSH_KINDS_ALL.forEach(function(k, i){
+      var L = PUSH_KIND_LABELS[k];
+      h += '<label style="display:flex;gap:12px;align-items:flex-start;padding:11px 0;cursor:pointer'+(i?';border-top:1px solid var(--line)':'')+'">'+
+        '<input type="checkbox" data-act="push-kind" data-arg="'+k+'"'+(kinds.indexOf(k)!==-1?' checked':'')+' style="margin-top:3px;width:18px;height:18px;flex:none">'+
+        '<span><span style="font-weight:600">'+esc(L[0])+'</span><br><span style="font-size:12.5px;opacity:.75">'+esc(L[1])+'</span></span></label>';
+    });
+    h += '</div></div>';
+  }
+  h += '<div class="note" style="padding:12px 2px;font-size:12.5px;line-height:1.6">'+
+    'Checked once an hour, right after the sync. Each problem is announced once, not every hour it stays true. '+
+    'Nothing is sent between 9 PM and 7 AM — what the night finds arrives in the morning. '+
+    (pushIsIOS_() ? '' : 'On a computer the browser has to be running (it can be minimized, and the SBC Money tab can be closed). ')+
+    'Each browser and phone is turned on separately'+(cfg.devices ? ' — you have <b>'+cfg.devices+'</b> signed up' : '')+'.</div>';
+  $('#shell').innerHTML = h;
+}
+/* The Inbox count everywhere a person might glance: tab title, a dot on the
+   tab icon, the Home Screen / taskbar badge. updateBadges calls it with the count. */
+var tabBadgeShown_ = null, faviconHref_ = null;
+function tabBadge_(n){
+  n = Number(n)||0;
+  try{ document.title = (n>0 ? '('+n+') ' : '') + 'SBC Money'; }catch(e){}
+  try{ if(navigator.setAppBadge){ if(n>0) navigator.setAppBadge(n).catch(function(){}); else navigator.clearAppBadge().catch(function(){}); } }catch(e){}
+  var want = n>0;
+  if(tabBadgeShown_===want) return;
+  tabBadgeShown_ = want;
+  try{
+    var link = document.querySelector('link[rel="icon"]');
+    if(!link) return;
+    if(faviconHref_===null) faviconHref_ = link.getAttribute('href');
+    if(!want){ link.setAttribute('href', faviconHref_); return; }
+    var img = new Image();
+    img.onload = function(){
+      if(!tabBadgeShown_) return;
+      var c = document.createElement('canvas'); c.width = c.height = 64;
+      var x = c.getContext('2d'); x.drawImage(img, 0, 0, 64, 64);
+      x.beginPath(); x.arc(48, 16, 14, 0, 2*Math.PI); x.fillStyle = '#e5484d'; x.fill();
+      x.lineWidth = 4; x.strokeStyle = '#ffffff'; x.stroke();
+      try{ link.setAttribute('href', c.toDataURL('image/png')); }catch(e){}
+    };
+    img.src = faviconHref_;
+  }catch(e){}
+}
+/* sw.js -> page. 'sbc-push' = an alert arrived; when the worker did NOT show
+   it (this window was in front) it becomes a toast. 'sbc-open' = a tapped
+   notification found this window already open. */
+function pushOnMessage_(ev){
+  var m = ev && ev.data;
+  if(!m || !m.type) return;
+  if(m.type==='sbc-open'){ if(PUSH_OPEN_VIEWS[m.view] && state.boot) go(m.view); return; }
+  if(m.type!=='sbc-push') return;
+  var n = m.note || {};
+  if(!m.shown){
+    var view = PUSH_OPEN_VIEWS[n.view] ? n.view : 'dash';
+    toast('🔔 '+(n.title||'SBC Money')+(n.body ? ' — '+n.body : ''), { label:'Open', fn:function(){ go(view); } });
+  }
+  if(state.boot && (n.kind==='inbox' || n.kind==='sync')) refreshBootSoon_().then(function(){ if(state.view==='dash') renderDash(); });
+}
+/* A notification tap opens ?open=<view>. Honour it once, then drop it from the URL. */
+function pushOpenFromUrl_(){
+  try{
+    var m = String(location.search||'').match(/[?&]open=([a-z]+)/);
+    if(!m) return;
+    if(PUSH_OPEN_VIEWS[m[1]]) state.view = m[1];
+    history.replaceState(null, '', location.pathname + location.hash);
+  }catch(e){}
+}
+/* Once a day, quietly: if this device said yes but the browser has dropped the
+   subscription (they do - storage clears, key rotation), sign it up again with
+   the same choices. Never prompts; a revoked permission just clears the flag. */
+function pushHeal_(){
+  try{
+    if(localStorage.getItem(PUSH_ON_KEY)!=='1' || pushSupport_()!=='ok') return;
+    if(Notification.permission!=='granted'){ localStorage.removeItem(PUSH_ON_KEY); return; }
+    var last = Number(localStorage.getItem(PUSH_HEAL_KEY)||0);
+    if(Date.now()-last < 20*3600*1000) return;
+    localStorage.setItem(PUSH_HEAL_KEY, String(Date.now()));
+  }catch(e){ return; }
+  var endpoint = '';
+  pushCurrentSub_().then(function(sub){
+    endpoint = sub ? sub.endpoint : '';
+    return run('apiPushConfig', { endpoint:endpoint }).then(function(cfg){
+      if(!cfg || !cfg.ready || !cfg.publicKey || (sub && cfg.device)) return null;
+      return (sub ? Promise.resolve(sub) : pushSubscribe_(cfg.publicKey)).then(function(s){ return pushSave_(s, pushStoredKinds_()); });
+    });
+  }).catch(function(e){ try{ console.info('SBC push heal:', e && e.message || e); }catch(x){} });
 }
 
 /* ============================ suggestion rules (v3.79.0) ============================
@@ -8201,10 +8481,16 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">SBC Money is a web page you\u2019ve added to your home screen, and it now keeps a copy of itself on your device so it opens instantly, even on a bad connection. When Scott ships an update, a teal <b>Update available — tap to reload</b> banner appears at the top of Home within an hour or so. Tap it; the app reloads on the new version and nothing you\u2019ve done is lost.</p>'+
     '<p style="margin:0"><b>Settings → About</b> shows the version on each part of the app — <b>Server</b>, <b>UI</b> and <b>Mirror</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will. The <b>Build</b> line under them names the exact release this screen is running.</p>');
 
+  h += S('🔔','Notifications',
+    '<p style="margin:0 0 8px">SBC Money can tap you on the shoulder instead of waiting for you to open it. Turn it on once per device in <b>Settings → Notifications</b> — on a computer it works in a normal Edge or Chrome tab (no install), on an iPhone from the Home Screen app.</p>'+
+    '<p style="margin:0 0 8px">You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each one is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM.</p>'+
+    '<p style="margin:0">Tap a notification and the app opens on the page it is about. If SBC Money is already in front of you, the alert shows as a message at the bottom of the screen instead. The Inbox count also shows in the browser tab — <b>(3) SBC Money</b> — and on the Home Screen icon.</p>');
+
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
     '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
     '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes, glance at <b>Goals</b> \u2014 are you on pace?</p>'+
+    '<p style="margin:0 0 6px"><b>Once per device (1 min):</b> <b>Settings → Notifications → Turn on</b>, so the app tells you when something needs you.</p>'+
     '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>More → Obligations</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
     '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
 
@@ -8426,6 +8712,11 @@ document.addEventListener('click', function(ev){
     case 'rule-delete': ruleDelete_(); break;
     case 'rule-move': ruleMove_(Number(arg)); break;
     case 'about-recheck': probeServerVersion_(true); renderAbout(); break;   // v3.77.2
+    case 'push-on': pushEnable_(); break;                                   // v3.80.0
+    case 'push-off': pushDisable_(); break;
+    case 'push-test': pushTest_(); break;
+    case 'push-reload': state.push = null; renderNotify(); break;
+    case 'push-kind': pushSetKind_(arg, !!el.checked); break;
     case 'attn-recheck': toast('Checking…'); refreshBootSoon_().then(function(){ if(state.view==='dash') renderDash(); }); break;   // v3.78.1
     case 'app-reload': appReload_(); break;   // v3.69.0 (U4)
     case 'retry-view': render(); break;       // v3.69.0 (U7)
@@ -8926,8 +9217,10 @@ SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_V
   if(window._gsiEarly === 'ok' && !gsiUp) gsiReady();
   else if(window._gsiEarly === 'fail' && !gsiUp) gsiFailed();
   applySeason();   // v3.57: dress the sidebar brand before anything paints
+  pushOpenFromUrl_();           // v3.80.0: a tapped notification opens ?open=<view>
   goPushHistory_(state.view);   // v3.69.0 (U3): the first entry is Home, so the first Back returns to it
   swRegister_();                // v3.69.0 (F15): cache-first shell for the home-screen app
+  try{ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', pushOnMessage_); }catch(e){}   // v3.80.0
   var hydrated = hydrateSnapshot_();
   if(hydrated){
     setGreeting_();
