@@ -1312,11 +1312,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.82.0';
+var FE_VERSION = 'v3.83.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.82.0+20260929.2120';
+var BUILD_ID = 'v3.83.0+20260929.2213';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1811,6 +1811,13 @@ function boot(){
   if(state._booting) return;              // v3.28: avoid a double apiBoot (start + GSI credential)
   state._booting = true;
   setRefreshing_(true);
+  // v3.83.0 - HOME'S NUMBERS NO LONGER WAIT FOR apiBoot. Measured 9/29: the bar
+  // was apiBoot (0.5-1 s) THEN apiDashboard - one after the other, although the
+  // dashboard read needs nothing from boot. When Home is already painted from
+  // the saved snapshot, ask for both at once. Not when the mirror is dirty: then
+  // the Home read carries refreshMirror and one refresh at a time is the rule,
+  // so the old order (boot first) stays. prewarm() will not ask a second time.
+  if(state.view==='dash' && state.boot && !mirrorDirty_()) dashFetchDash(true);
   run('apiBoot').then(function(res){ state._booting=false; bootApply_(res); })
     .catch(function(e){
       state._booting = false; setRefreshing_(false);
@@ -1842,7 +1849,7 @@ function bootApply_(res){
     applySeason();                         // v3.57: dress for the season/birthday
     saveSnapshot_();                       // v3.28: persist for the next instant open
     render();
-    if(state.view!=='dash') setRefreshing_(false); // dash clears when its data lands (dashFetchDash)
+    if(state.view!=='dash' || (state.dash && !state.dashLoading)) setRefreshing_(false); // dash clears when its data lands (dashFetchDash); v3.83.0: or already has
     prewarm();
     // v3.35 Phase 3 slice 1: a mirror-served boot has no server version (and its
     // inbox count / group order can lag the hourly sync). Reconcile authoritatively
@@ -1959,7 +1966,8 @@ function prewarm(){
     state.inbox=filterInbox(r); setInboxCount_(state.inbox.length); markFetched('inbox'); // v3.27; v3.32 pending filter
     if(state.view==='inbox' && !userBusy()) drawInbox();
   }).catch(warn('apiGetInbox'));
-  dashFetchDash(true); // v3.22: shared loader — renderDash() fired the same call in
+  if(!(state._dashAskedAt && Date.now()-state._dashAskedAt < 5000)) dashFetchDash(true); // v3.83.0: not again right behind boot()'s early ask
+  // v3.22: shared loader — renderDash() fired the same call in
                    // parallel on every cold load (apiDashboard ran TWICE).
                    // v3.28: force=true so a hydrated (cached) dashboard still revalidates.
   if(!state.plans) run('apiPlans').then(function(p){ state.plans=p; }).catch(warn('apiPlans'));
@@ -2938,8 +2946,10 @@ function dashFetchDash(force){
   if(state.dashLoading) return;
   if(state.dash && !force) return;       // v3.28: force=true revalidates cached (hydrated) data
   state.dashLoading = true;
+  state._dashAskedAt = Date.now();   // v3.83.0: prewarm skips a second ask right behind the early one
   run('apiDashboard').then(function(d){
-    state.dash=d; state.dashLoading=false; saveSnapshot_(); setRefreshing_(false); // v3.28
+    state.dash=d; state.dashLoading=false; saveSnapshot_();
+    if(!state._booting) setRefreshing_(false); // v3.28; v3.83.0: the bar waits for boot too
     if(state.view==='dash') renderDash();
     dashRevalHealth_(); // v3.31: mirror lacks feed lag — re-check health on a real gap
   }).catch(function(e){ state.dashLoading=false; setRefreshing_(false); console.warn('apiDashboard:', e&&e.message||e); });
@@ -9185,6 +9195,7 @@ SBC.MIRROR_REFRESH_FNS = MIRROR_REFRESH_FNS; SBC.MIRROR_REFRESH_ONE = MIRROR_REF
 SBC.withMirrorRefresh_ = withMirrorRefresh_;
 SBC.markMirrorDirty_ = markMirrorDirty_; SBC.clearMirrorDirty_ = clearMirrorDirty_;
 SBC.mirrorDirty_ = mirrorDirty_;
+SBC.boot = boot; SBC.prewarm = prewarm; SBC.dashFetchDash = dashFetchDash;   // v3.83.0
 SBC.cssVar_ = cssVar_;
 /* v3.70.0: the Budget health card is what lied on 9/10/26, so it gets a seam.
    Tests feed it a health payload and read the rendered HTML back — the WORDING
