@@ -1312,11 +1312,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.80.1';
+var FE_VERSION = 'v3.81.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.80.1+20260929.1844';
+var BUILD_ID = 'v3.81.0+20260929.2042';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1521,7 +1521,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   // actually ran), a 30 s client abort on a write (v3.22 rule), no dirty flag,
   // no double-click dedupe.
   apiSetTxnTags:1, apiAddTagBatch:1, apiSaveObligation:1, apiRemoveObligation:1,
-  apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1,
+  apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1, apiSetTimeZone:1, // v3.81.0
   apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
 // v3.64: the routing tables must agree — a mirror-first write that isn't MUTATING
 // silently takes the read path. Loud in the console; pinned by tests/wiring_test.js.
@@ -6892,7 +6892,28 @@ function renderPersonal(){
       '<button class="btn ghost sm" data-act="bday-edit">Edit</button></div>';
   }
   h += '</div>';
+  h += tzCard_();   // v3.81.0
   $('#shell').innerHTML = h;
+}
+/* v3.81.0 — time zone (Scott 9/29: "default it to Eastern time"). The value IS
+   the person's SBC sheet's time zone: Apps Script dates everything with it, and
+   the hourly sync copies it to the mirror (Budget Health "today", alert quiet
+   hours). One source - never a second Settings row that could disagree. */
+var TZ_LABELS = { 'America/New_York':'Eastern', 'America/Chicago':'Central', 'America/Denver':'Mountain',
+  'America/Phoenix':'Arizona (no daylight saving)', 'America/Los_Angeles':'Pacific', 'America/Anchorage':'Alaska',
+  'Pacific/Honolulu':'Hawaii' };
+function tzCurrent_(){ return (state.boot && state.boot.timeZone) || 'America/New_York'; }
+function tzCard_(){
+  var cur = tzCurrent_(), opts = '';
+  Object.keys(TZ_LABELS).forEach(function(z){ opts += '<option value="'+z+'"'+(z===cur?' selected':'')+'>'+esc(TZ_LABELS[z])+'</option>'; });
+  if(!TZ_LABELS[cur]) opts = '<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>' + opts;
+  return '<div class="card" style="padding:14px 16px;margin-top:12px">'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+    '<label for="tzSel" style="font-weight:600">Time zone</label>'+
+    '<select id="tzSel" style="padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--card);color:inherit;font-size:16px">'+opts+'</select>'+
+    '<button class="btn sm" style="background:var(--green)" data-act="tz-save">Save</button></div>'+
+    '<div style="margin-top:8px;font-size:12.5px;opacity:.75;line-height:1.5">Sets when your day starts and ends: dates on new transactions and funding, Budget Health’s “today”, and the 9 PM–7 AM quiet hours for notifications. Eastern unless you change it.</div>'+
+    '</div>';
 }
 /* ============================ v3.72.0 — MORE vs SETTINGS ====================
  * Scott, 9/10/26: "Certain things should be easy to get into - especially when
@@ -7162,7 +7183,7 @@ function renderNotify(){
   }
   h += '<div class="note" style="padding:12px 2px;font-size:12.5px;line-height:1.6">'+
     'Checked every time SBC Money brings in new transactions from Tiller (about once an hour), with the hourly sync as a backup. Each problem is announced once, not every hour it stays true. '+
-    'Nothing is sent between 9 PM and 7 AM — what the night finds arrives in the morning. '+
+    'Nothing is sent between 9 PM and 7 AM your time (Settings → Personal information) — what the night finds arrives in the morning. '+
     (pushIsIOS_() ? '' : 'On a computer the browser has to be running (it can be minimized, and the SBC Money tab can be closed). ')+
     'Each browser and phone is turned on separately'+(cfg.devices ? ' — you have <b>'+cfg.devices+'</b> signed up' : '')+'.</div>';
   $('#shell').innerHTML = h;
@@ -8483,7 +8504,7 @@ function renderHowTo(){
 
   h += S('🔔','Notifications',
     '<p style="margin:0 0 8px">SBC Money can tap you on the shoulder instead of waiting for you to open it. Turn it on once per device in <b>Settings → Notifications</b> — on a computer it works in a normal Edge or Chrome tab (no install), on an iPhone from the Home Screen app.</p>'+
-    '<p style="margin:0 0 8px">You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each one is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM.</p>'+
+    '<p style="margin:0 0 8px">You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each one is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM in your time zone (<b>Settings \u2192 Personal information</b>; Eastern unless you change it).</p>'+
     '<p style="margin:0">Tap a notification and the app opens on the page it is about. If SBC Money is already in front of you, the alert shows as a message at the bottom of the screen instead. The Inbox count also shows in the browser tab — <b>(3) SBC Money</b> — and on the Home Screen icon.</p>');
 
   h += S('📅','Your routines, on one card',
@@ -8727,6 +8748,15 @@ document.addEventListener('click', function(ev){
       if(state.view==='settings' || state.view==='more') renderSettings();
     })(); break;
     case 'bday-edit': state.bdayEdit = true; renderPersonal(); break;   // v3.57.3
+    case 'tz-save': (function(){ // v3.81.0
+      var sel = $('#tzSel'), v = sel ? String(sel.value||'') : '';
+      if(!v || v===tzCurrent_()){ toast('Time zone unchanged'); return; }
+      run('apiSetTimeZone', {value:v}).then(function(r){
+        if(state.boot) state.boot.timeZone = (r && r.value) || v;
+        toast('Time zone saved — '+(TZ_LABELS[v]||v));
+        if(state.view==='personal') renderPersonal();
+      }).catch(function(e2){ toast('⚠ Time zone not saved: '+(e2 && e2.message || e2)); });
+    })(); break;
     case 'bday-cancel': state.bdayEdit = false; renderPersonal(); break; // v3.57.3
     case 'bday-save': (function(){ // v3.57 — save full DOB to the account
       var inp = $('#bdayInp');
