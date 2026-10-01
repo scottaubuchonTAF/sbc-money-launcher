@@ -1434,11 +1434,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.91.0';
+var FE_VERSION = 'v3.91.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.91.0+20261001.1125';
+var BUILD_ID = 'v3.91.1+20261001.1236';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2796,7 +2796,7 @@ WEALTH_VIEWS.growth = function(P){
     if(emp) st.push(['Since '+since+' · employer added', wK_(emp), wPct_(Math.abs(emp)/mov*100)+' of the movement', '']);
     st.push(['Since '+since+' · market did', wSigned_(mkt, true), mov ? wPct_(Math.abs(mkt)/mov*100)+' of the movement' : '', mkt>=0?'pos':'neg']);
     h += '<div class="w-srow">'+st.map(wStat_).join('')+wGrowthStats_(P)+'</div>';
-    h += wAddedTable_(C);
+    h += wAddedTable_(C) + wFeedGaps_(P);
   } else {
     h += '<div class="w-empty">No feed labels a contribution yet, so the change cannot be split honestly. It appears here from the first month a feed does.</div>';
     var gs = wGrowthStats_(P); if(gs) h += '<div class="w-srow">'+gs+'</div>';
@@ -2838,7 +2838,14 @@ function wAddedTable_(C){
     (emp ? '<tr><td>Employer added <span class="w-n">not in You added</span></td>'+Y.map(function(y){ return '<td class="r">'+(y.employer ? wSigned_(y.employer) : '—')+'</td>'; }).join('')+'</tr>' : '')+
     '<tr><td>Market</td>'+Y.map(function(y){ return '<td class="r '+(y.market>=0?'pos':'neg')+'">'+wSigned_(y.market, true)+'</td>'; }).join('')+'</tr>'+
     '</tbody></table></div>'+
-    '<div class="w-foot">Contributions are what each custodian labels as money in (a 401k\'s include any match). Deferred comp counts its own fund purchases. Dividends and fund distributions stay in market.</div>';
+    '<div class="w-foot">Contributions are what each custodian labels as money in (a 401k\'s include any match). Deferred comp counts its own fund purchases. Dividends and fund distributions stay in market. An HSA whose provider shows one feed on two accounts (spending + investment) is one row.</div>';
+}
+/* v3.91.1: a feed that stopped labeling money in - its contributions since then can only show up as market */
+function wFeedGaps_(P){
+  var G = P.feedGaps || [];
+  if(!G.length) return '';
+  return '<div class="w-warn"><span>⚠</span><span>'+G.map(function(g){ return '<b>'+esc(g.account)+'</b>: no contribution lines since '+wMonth_(g.lastMonth+'-01'); }).join(' · ')+
+    '. Tiller still updates the balance, but without the transactions the money you put in since then is counted as <b>market</b>. Refresh or re-link that account in Tiller and it sorts itself out.</span></div>';
 }
 function wStat_(x){ return '<div class="w-stat"><div class="w-k">'+x[0]+'</div><div class="w-v '+(x[3]||'')+'">'+x[1]+'</div>'+(x[2]?'<div class="w-d">'+x[2]+'</div>':'')+'</div>'; }
 function wGrowthStats_(P){
