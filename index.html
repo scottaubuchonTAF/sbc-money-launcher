@@ -914,6 +914,120 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
   .splitline .envbtn{padding:11px 12px}
   .splitline .rm{padding:6px 2px;font-size:19px}
 }
+/* ================= v3.85.0 Wealth (all classes w-*; no density block touches them) ================= */
+.w-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 2px 12px}
+.w-head h2{font-size:22px;letter-spacing:-.02em}
+.w-head .w-sub{font-size:12.5px;color:var(--ink-3);margin-top:3px}
+.w-gear{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.w-gear svg{width:16px;height:16px}
+.w-tabs{display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.w-tabs button{font-size:14px;font-weight:700;color:var(--ink-2);padding:10px 14px;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.w-tabs button.on{color:var(--teal-700);border-bottom-color:var(--teal-600)}
+.w-panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 18px}
+@media(min-width:900px){.w-panel{padding:22px 24px}}
+.w-hero{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px}
+@media(min-width:900px){.w-hero{grid-template-columns:1.25fr 1fr}}
+.w-verdict{background:linear-gradient(135deg,var(--teal-900),var(--teal-700));color:#fff;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
+.w-verdict .w-k{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.78}
+.w-verdict .w-big{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:4px 0 2px}
+.w-verdict .w-big small{font-size:14px;font-weight:700;opacity:.82;margin-left:8px}
+.w-verdict .w-why{font-size:12.5px;opacity:.92;font-weight:600;line-height:1.5}
+.w-pills{display:flex;gap:7px;flex-wrap:wrap}
+.w-pill{font-size:11px;font-weight:800;border-radius:99px;padding:4px 11px;background:rgba(255,255,255,.14);color:#fff}
+.w-pill.ok{background:rgba(94,234,212,.28)} .w-pill.bad{background:rgba(254,202,202,.35)}
+button.w-pill{cursor:pointer;border:1px solid rgba(255,255,255,.4)}
+.w-split{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:600px){.w-split.c3{grid-template-columns:repeat(3,1fr)} .w-split.c4{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1100px){.w-split.c4{grid-template-columns:repeat(4,1fr)}}
+.w-kpi{background:var(--bg);border-radius:13px;padding:13px 15px;border-left:4px solid var(--teal-500);min-width:0}
+.w-kpi.warn{border-left-color:var(--amber)} .w-kpi.muted{border-left-color:var(--ink-3)}
+.w-kpi .w-k,.w-stat .w-k,.w-rung .w-k{font-size:10.5px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.w-kpi .w-v{font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.w-kpi .w-d{font-size:12px;font-weight:700;margin-top:3px;color:var(--ink-3);line-height:1.4}
+.w-d.pos{color:var(--green)} .w-d.neg{color:var(--red)} .w-d.warn{color:var(--amber)}
+.w-srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:12px}
+.w-stat{background:var(--bg);border-radius:11px;padding:10px 12px;min-width:0}
+.w-stat .w-v{font-size:17px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.w-stat .w-v.pos{color:var(--green)} .w-stat .w-v.neg{color:var(--red)} .w-stat .w-v.warn{color:var(--amber)}
+.w-stat .w-d{font-size:11px;color:var(--ink-3);font-weight:600;margin-top:1px;line-height:1.35}
+.w-sect{font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin:20px 0 9px}
+.w-sect .w-n{text-transform:none;letter-spacing:0;font-weight:600}
+.w-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-height:0;margin:0 -4px;padding:0 4px}
+table.w-t{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+table.w-t th{font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:7px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+table.w-t th.r,table.w-t td.r{text-align:right}
+table.w-t td{padding:8px;border-bottom:1px solid var(--line);font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
+table.w-t tr:last-child td{border-bottom:none}
+table.w-t td.strong{color:var(--ink);font-weight:800}
+table.w-t td.pos{color:var(--green)} table.w-t td.neg{color:var(--red)} table.w-t td.warn{color:var(--amber)}
+table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-weight:800}
+.w-badge{display:inline-block;font-size:10.5px;font-weight:800;border-radius:99px;padding:2px 9px;white-space:nowrap}
+.w-badge.g{background:#ecfdf5;color:var(--green)} .w-badge.a{background:#fffbeb;color:var(--amber)} .w-badge.r{background:#fef2f2;color:var(--red)} .w-badge.n{background:#f1f5f9;color:var(--ink-2)}
+.w-empty{padding:26px 10px;text-align:center;color:var(--ink-3);font-size:13.5px;line-height:1.6}
+.w-setup{background:var(--teal-50);border:1px dashed var(--teal-300);border-radius:12px;padding:14px 16px;font-size:13.5px;color:var(--teal-800);line-height:1.6}
+.w-i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:99px;border:1.5px solid var(--ink-3);color:var(--ink-3);font-size:10px;font-weight:800;line-height:1;margin-left:6px;cursor:help;vertical-align:middle;font-style:normal;text-transform:none;letter-spacing:0;flex:none}
+.w-i:hover,.w-i.on{border-color:var(--teal-600);color:var(--teal-700);background:var(--teal-50)}
+.w-verdict .w-i{border-color:rgba(255,255,255,.6);color:#fff} .w-verdict .w-i:hover,.w-verdict .w-i.on{background:rgba(255,255,255,.18);border-color:#fff}
+#wtip{position:fixed;z-index:70;max-width:min(340px,calc(100vw - 16px));background:var(--ink);color:#fff;border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.5;box-shadow:0 10px 30px rgba(15,23,42,.25);display:none;pointer-events:none}
+#wtip.show{display:block}
+#wtip b{display:block;font-size:13px;margin-bottom:4px;color:#5eead4}
+#wtip .row{display:flex;gap:8px;margin-top:5px}
+#wtip .row span:first-child{flex:none;width:52px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;padding-top:2px}
+#wtip .row span:last-child{color:#e2e8f0;font-weight:500}
+/* the Wealth settings sheet */
+.w-sheet .sheet{max-width:760px;max-height:86vh}
+.w-sheet details{border:1.5px solid var(--line);border-radius:12px;margin-bottom:8px;padding:9px 12px}
+.w-sheet summary{cursor:pointer;font-weight:700;font-size:13.5px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.w-sheet summary .w-sb{font-size:11.5px;color:var(--ink-3);font-weight:600}
+.w-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px 12px;margin-top:10px}
+.w-form label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.w-form input,.w-form select{border:1.5px solid var(--line);border-radius:9px;padding:7px 9px;font-size:13.5px;background:var(--card);color:var(--ink);min-width:0}
+.w-form label.chk{flex-direction:row;align-items:center;gap:8px}
+/* v3.86.0 Growth */
+.w-seg{display:inline-flex;background:var(--card);border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.w-seg button{padding:7px 12px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.w-seg button.on{background:var(--teal-600);color:#fff}
+.w-chart{position:relative;height:280px;margin-top:10px} .w-chart.short{height:220px}
+.w-two{display:grid;grid-template-columns:1fr;gap:14px;margin-top:18px}
+@media(min-width:900px){.w-two{grid-template-columns:1fr 1fr}}
+.w-mini{background:var(--bg);border-radius:13px;padding:14px 16px;min-width:0}
+.w-mini h4{font-size:12px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:9px}
+.w-obs{display:flex;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line);font-size:13.5px;align-items:flex-start}
+.w-obs:last-child{border-bottom:none}
+.w-obs .ic{width:30px;height:30px;border-radius:9px;background:var(--teal-50);display:grid;place-items:center;flex:none;font-size:15px}
+.w-obs b{color:var(--ink)} .w-obs .tx{color:var(--ink-2);line-height:1.5;font-weight:600}
+.w-obs .tx small{display:block;color:var(--ink-3);font-weight:600;margin-top:2px}
+.w-foot{font-size:11.5px;color:var(--ink-3);margin-top:6px}
+/* v3.87.0 Analysis */
+.w-ladder{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(min-width:900px){.w-ladder{grid-template-columns:repeat(var(--n),1fr)}}
+.w-rung{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;min-width:0}
+.w-rung .w-v{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.w-yrs{font-size:12px;font-weight:800;margin-top:4px;color:var(--teal-700)} .w-yrs.bad{color:var(--red)}
+.w-rung .w-d{font-size:11px;color:var(--ink-3);font-weight:600;margin-top:2px;line-height:1.4}
+.w-warn{display:flex;gap:10px;border-radius:12px;padding:12px 15px;margin-top:12px;font-weight:700;font-size:13px;line-height:1.5;background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.w-two.wide{grid-template-columns:1fr}
+@media(min-width:900px){.w-two.wide{grid-template-columns:1.4fr 1fr}}
+.w-hbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px}
+.w-hbar .nm{flex:0 1 230px;min-width:0;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-hbar .trk{flex:1;height:10px;background:var(--line);border-radius:99px;overflow:hidden;position:relative;min-width:60px}
+.w-hbar .trk i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
+.w-hbar .trk .tgt{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.w-hbar .amt{width:70px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.w-hbar .pct{width:48px;text-align:right;color:var(--ink-3);font-weight:700;font-size:12px}
+/* v3.88.0 Planning */
+.w-inp{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2);flex-wrap:wrap}
+.w-inp:last-of-type{border-bottom:none}
+.w-inp .w-f{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-weight:700;color:var(--ink-3)}
+.w-inp input,.w-inp select{border:1.5px solid var(--line);border-radius:8px;padding:5px 8px;font-weight:800;color:var(--ink);background:var(--card);text-align:right;font-size:13.5px}
+.w-verdict-bar{border-radius:12px;padding:12px 15px;margin-top:12px;font-weight:700;font-size:13px;line-height:1.5}
+.w-verdict-bar.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+.w-verdict-bar.mixed{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.w-verdict-bar.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+/* v3.89.0 Estate */
+.w-cov{height:12px;background:var(--line);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+.w-cov i{display:block;height:100%;background:var(--teal-500)}
+.w-sheet .w-acts{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;position:sticky;bottom:-26px;background:var(--card);padding:10px 0}
 </style>
 </head>
 <body data-d="mid">
@@ -962,6 +1076,7 @@ body[data-d="compact"] h2.viewtitle{font-size:16px;margin-bottom:8px}
     <button class="nav" data-v="goals"></button>
     <button class="nav" data-v="obligations"></button>
     <button class="nav" data-v="accounts"></button>
+    <button class="nav" data-v="wealth"></button>
     <button class="nav" data-v="reports"></button>
     </div>
     <!-- v3.76.5: Settings is not a destination you hunt for in a scrolling list -
@@ -1093,7 +1208,7 @@ var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
    answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
    nothing about envelopes / inbox / register / journal, and clearing here
    would tell Home it is fresh when it is not. */
-var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1 };   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
+var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1, apiWealth:1 };   // v3.85.0: +apiWealth (its spending reads register)   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -1156,6 +1271,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
   apiWriteBackStatus:1, // v3.60: failed write-backs (mirror-only)
   apiGoals:1,           // v3.75.0: goals + max (targets rows; its write is Apps-Script-only → MIRROR_REFRESH_ONE)
+  apiWealth:1,          // v3.85.0: the Wealth page's one call (mirror-only; SBC-owned tables + the mirror)
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
@@ -1183,7 +1299,8 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    back to Apps Script — it would just answer "unknown function" after a slow
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
 var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1, // v3.62: +apiRefreshMirror
-  apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1 }; // v3.80.0: notifications live only in the mirror
+  apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: notifications live only in the mirror
+  apiWealth:1, apiWealthSave:1 }; // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
    8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
@@ -1281,6 +1398,7 @@ var state = {
   /* v3.79.0: Suggestion rules page. rules = apiRules list in CHECK ORDER (null =
      not loaded); ruleEdit = the open editor's draft; rulePrev = its history preview. */
   rules:null, rulesLoading:null, rulesInboxAsked:false, ruleEdit:null, rulePrev:null,
+  wealth:null, wealthTab:'snap', wealthSheet:null, wealthLoading:null,   // v3.85.0: the Wealth page's OWN store (never state.boot)
   ruleQ:'', ruleFilter:'all', ruleSaving:false,
   ruleBusy:null,   // v3.79.2: {ruleId, text, at} while a rule write is on its way to the sheet
   /* v3.74.0: which EDGE FUNCTION build answered. Deliberately OUTSIDE state.boot
@@ -1299,7 +1417,7 @@ var RPT_DEFAULTS = { id:'summary', ptype:'month', anchor:null, custFrom:null, cu
 try{ var _rp=JSON.parse(localStorage.getItem('sbcReport2')||'null'); }catch(e){ var _rp=null; }
 state.report = Object.assign({}, RPT_DEFAULTS, (_rp&&typeof _rp==='object')?_rp:{});
 ['accounts','groups','envelopeIds','tags'].forEach(function(k){ if(!Array.isArray(state.report[k])) state.report[k]=[]; });
-if(['summary','spend','areas','inout','tags','txns','worth'].indexOf(state.report.id)===-1) state.report.id='summary';
+if(['summary','spend','areas','inout','tags','txns'].indexOf(state.report.id)===-1) state.report.id='summary';   // v3.86.0: 'worth' retired into Wealth → Growth
 try{ state.envOpen = JSON.parse(localStorage.getItem('sbcEnvOpen')||'{}'); }catch(e){ state.envOpen={}; }
 try{ var _dl=JSON.parse(localStorage.getItem('sbcDashLayout')||'null'); if(Array.isArray(_dl)) state.dashLayout=_dl; }catch(e){}
 /* v3.28: paint at the user's saved density before first render (server value from
@@ -1312,11 +1430,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.83.3';
+var FE_VERSION = 'v3.90.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.83.3+20260929.2251';
+var BUILD_ID = 'v3.90.0+20261001.0831';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1523,6 +1641,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiSetTxnTags:1, apiAddTagBatch:1, apiSaveObligation:1, apiRemoveObligation:1,
   apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1, apiSetTimeZone:1, // v3.81.0
   apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
+MUTATING.apiWealthSave = 1;   // v3.85.0: Wealth settings - mirror-only, SBC-owned tables (see MIRROR_ONLY)
 // v3.64: the routing tables must agree — a mirror-first write that isn't MUTATING
 // silently takes the read path. Loud in the console; pinned by tests/wiring_test.js.
 (function(){ try{
@@ -1719,13 +1838,15 @@ var ICONS = {
   settings:'<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H9.6l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L5.6 11a7.7 7.7 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8c.5.4 1.1.7 1.7 1l.3 2.1h4.8l.3-2.1c.6-.3 1.2-.6 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   admin:'<circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   logout:'<path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 12h9M16 9l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
-  about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'
+  about:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.5v.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  wealth:'<path d="M3 19h18M5 15l4.5-4.5 3.5 3.5L19 7.5M14.5 7.5H19V12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'   // v3.85.0
 };
 var NAV_LABELS = {dash:'Dashboard', inbox:'Inbox', fund:'Fund', envelopes:'Envelopes',
   plans:'Funding plans', txns:'Transactions', accounts:'Accounts', balances:'Balances',
   reports:'Reports', sync:'Sync', history:'History', more:'More', settings:'Settings',
   admin:'Access', about:'About', howto:'How to use', activity:'Sign-ins & activity',
   obligations:'Obligations', goals:'Goals',   // v3.75.0
+  wealth:'Wealth',                            // v3.85.0
   rules:'Suggestion rules'};                  // v3.79.0 (a Settings page; no sidebar button)
 function icon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[k]+'</svg>'; }
 
@@ -1757,16 +1878,18 @@ $all('nav.tabs button').forEach(function(b){
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
   'removetxn','reconcile','howto','activity','personal','rules','notify'];   // v3.79.0: +rules   // v3.80.0: +notify
-var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
+var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','wealth','reports'];   // v3.85.0: +wealth (right after Accounts)   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
   if(goReplaying_) return;
   try{
-    var st = { v:view, env:(view==='envdetail' && state.envDetail) ? state.envDetail.id : null };
+    var st = { v:view, env:(view==='envdetail' && state.envDetail) ? state.envDetail.id : null,
+               tab:(view==='wealth') ? wealthTab_() : null };      // v3.85.0: one entry per Wealth tab
     var cur = history.state;
-    if(cur && cur.v===st.v && cur.env===st.env) return;           // same page twice = one entry
-    if(!cur) history.replaceState(st, '', '#'+view);               // first paint claims the entry we're on
-    else history.pushState(st, '', '#'+view);
+    if(cur && cur.v===st.v && cur.env===st.env && (cur.tab||null)===st.tab) return;   // same page twice = one entry
+    var url = '#'+view+(st.tab ? '/'+st.tab : '');
+    if(!cur) history.replaceState(st, '', url);                    // first paint claims the entry we're on
+    else history.pushState(st, '', url);
   }catch(e){}
 }
 function goHistoryReplay_(st){
@@ -1775,6 +1898,7 @@ function goHistoryReplay_(st){
     if(!st.env || !findEnv(st.env)){ st = { v:'envelopes' }; }
     else if(!state.envDetail || state.envDetail.id!==st.env){ state.envDetail = { id:st.env, txns:null, filter:'all' }; state.move=null; }
   }
+  if(st.v==='wealth') state.wealthTab = st.tab || 'snap';        // v3.85.0
   goReplaying_ = true;
   try{ go(st.v); } finally { goReplaying_ = false; }
 }
@@ -2270,6 +2394,770 @@ function userBusy(){
     Object.keys(state.tagEdit).length > 0;   // v3.73.0: a background redraw would eat the half-typed tag
 }
 
+/* ============================ Wealth (v3.85.0 Snapshot) ============================
+   Spec: SBC-Wealth-Section-Plan-2026-09-30.md; visual spec: webapp/wealth-dashboard-mockup-v2.html.
+   ONE call per page load (apiWealth, mirror-only, SUPA_READS + MIRROR_ONLY), its OWN store
+   (state.wealth - never state.boot), every number computed server-side in
+   supabase/functions/_shared/wealth.ts; this file only formats.
+   ★ THE LIGHT-USER RULE (spec 1b): every section is driven by the payload and HIDES ITSELF when
+     it has nothing to say. No account names, no figures, no company name in here - the same
+     code draws Scott, Corey and Brady. A section that only works for one person is a bug.
+   ★ Home never calls apiWealth (Home must not fetch). v3.90 adds a Home card carried on apiDashboard.
+   Routes: #wealth/<tab> - one history entry per tab, so Back works and a reload lands on the tab. */
+var WEALTH_TABS = [['snap','📊','Snapshot']];   // a tab joins this list in the release that builds it
+var WEALTH_VIEWS = {};                            // tab -> function(P) returning HTML (+ optional .after)
+var WEALTH_DEFS = {
+'Can you retire when you want to?':['The one question the page exists to answer','Earliest retirement age at which the plan funds your annual spending to the plan-to age in the base case; the pills show the other two cases.','Planning inputs + the projection engine (edge fn); re-run on every input change and nightly'],
+'Net worth':['Everything you own minus everything you owe','Sum of latest balance per account (liabilities negated), Hide honored. Identical to the Balances page by construction.','Tiller Balance History (mirror) + manual accounts; imported history before Tiller'],
+'After-tax investable':['What the withdrawal math is allowed to count','Investable + Deferred − (pre-tax balances × your tax-rate input). Illiquid is excluded on purpose.','Account tax type (Wealth settings) + tax-rate input on Planning'],
+'Investable':['Money that can fund retirement without selling something hard to sell','Sum of accounts tagged Cash, Taxable or Retirement (tiers 1–3).','Liquidity tier per account — Wealth settings; defaults from Tiller class/type'],
+'Deferred · unsecured':['Deferred compensation','Accounts tagged tier 4. Counted separately because it is an unsecured promise paid on an election schedule, not an asset you hold.','Liquidity tier per account — Wealth settings'],
+'Illiquid':['Assets you cannot turn into cash on demand','Sum of accounts tagged Illiquid: home equity, insurance cash value, 529s.','Liquidity tier per account — Wealth settings'],
+'Semi-liquid · pays income':['Sellable, but only on the buyer\'s terms (a company buyback, say)','Accounts tagged tier 5 (semi-liquid). Counted apart from Investable because the sale is on someone else\'s terms and timing; dividends shown at the yield you set.','Liquidity tier + income yield per account — Wealth settings'],
+'Income from holdings':['Cash the holdings pay without selling anything','Σ balance × income yield per account (the yield you set in Wealth settings). Actual dividend lines from the feeds over the last 12 months are shown beside it.','Income yield per account (Wealth settings); dividend transactions (Tiller)'],
+'Spending covered by income':['How much of a retirement year dividends pay for','Income from holdings ÷ annual spending input.','Computed'],
+'Semi-liquid':['Sellable only on the buyer\'s terms','Tier 5 accounts. On someone else\'s terms and timing; may pay a dividend.','Tier 5 accounts'],
+'Dividend yield (semi-liquid)':['Income the semi-liquid holdings pay per year','% of value; deducted from income in the projection for each share sold.','Planning input; defaults from the account setting'],
+'Savings rate':['Share of your income you added to net worth','"You added" over the trailing 12 months ÷ (take-home income from Reports + payroll contributions into retirement accounts + your deferral).','Feed lines the custodians label as contributions + Balance History + Reports income'],
+'Real return · 1-yr':['Growth that was not your own deposits','12-month change in net worth minus 12-month contributions, divided by starting net worth.','Balance History + contribution transactions'],
+'Employer-correlated':['How much of your wealth falls with one company','Sum of accounts flagged employer-tied ÷ net worth. Salary is noted, not added (it is income, not a balance).','Employer-tied flag per account — Wealth settings; target % is a setting'],
+'Reachable before 59½':['How long money lasts before retirement accounts open','First figure: (Cash + Taxable) ÷ annual spending. Second: Semi-liquid ÷ spending — reachable, but through the buyback on the company\'s terms.','Tiers 1, 2 and 5 + the spending input on Planning'],
+'Years to Medicare':['Time until health coverage stops being your problem','65 − current age; "bridge" = 65 − target retirement age.','Birthday (Settings) + target age input'],
+'Estate coverage':['How much of the estate has a recorded plan','Balances of accounts with beneficiary / titling / trust status set ÷ net worth.','Estate tab per-account table'],
+'By account':['One row per account you have not hidden','Latest balance, share of net worth, liquidity tier, tax type, 12-month change, and flags.','Balance History + Wealth settings'],
+'Account':['Account name as it appears in Tiller','Display label can be overridden in Wealth settings.','Tiller Accounts tab'],
+'Balance':['Latest known balance','Most recent Balance History row for the account (date desc, time desc).','Tiller Balance History / manual balance'],
+'% NW':['Share of net worth','Balance ÷ net worth; liabilities show negative.','Computed'],
+'Reachable':['Liquidity tier, and yield if it pays one','Cash · Taxable · Retirement (penalty before 59½) · Deferred (election schedule) · Semi-liquid (company buyback) · Illiquid.','Wealth settings; defaults from Tiller class/type'],
+'Tax':['How a withdrawal is taxed','Pre-tax (ordinary income on the way out) · Taxable (gains) · Roth / HSA (tax-free) · — (not sold for income).','Wealth settings'],
+'1-yr':['Change over the last 12 months','Latest balance − balance 12 months ago (forward-filled if no row that day). Includes your contributions.','Balance History'],
+'Flags':['Things that need a decision','Employer-tied = counts toward exposure. No beneficiary = Estate tab has no designation recorded.','Wealth settings + Estate table'],
+'Net worth over time':['Month-end net worth','Last balance per account in each month, forward-filled across gaps, liabilities negated, summed. Imported history before Tiller.','Balance History + imported history (one-time)'],
+'Where the growth came from':['Deposits vs. market, per year','You added = contributions + match + principal paydown that year; Market = change in net worth − you added. Honest only from when each feed began (Tiller carries 1–2 years of history per account), so the chart starts there and says so.','Feed lines the custodians label (401k "- contribution", HSA Employee/Employer Contribution, 529 "You Bought Contribution"), mortgage balance series; deferred comp needs a payday rule or your deferral election'],
+'Since 2019 · you added':['Cumulative deposits','Sum of yearly "you added" since 2019.','Transactions tagged as contributions'],
+'Since 2019 · market did':['Cumulative growth that was not deposits','Sum of yearly "market" since 2019.','Computed'],
+'Real return · 5-yr':['Annualized return net of deposits','Money-weighted return over 5 years with contributions removed; compare to the headline CAGR which counts them.','Balance History + contributions'],
+'Worst drawdown':['Biggest peak-to-trough fall','Largest % decline in month-end net worth from a prior peak, and months until the peak was regained.','Balance History'],
+'Rolling 12-mo change':['Best and current 12-month change','Net worth today − 12 months ago; compared to the best prior 12-month window.','Balance History'],
+'Growth metrics':['Period returns, honest and headline','Each period: start, end, change, split into deposits vs market, headline CAGR, and real return.','Balance History + contributions'],
+'Period':['The window measured','All-time = since the first data point (imported history, where any was imported).','Computed'],
+'Years':['Length of the window in years','Days ÷ 365.25.','Computed'],
+'Start':['Net worth at the start of the window','Forward-filled month-end value.','Balance History'],
+'End':['Net worth at the end of the window','Latest value.','Balance History'],
+'Change':['End − Start','Dollars.','Computed'],
+'You added':['Deposits in the window','Contributions + match + principal paydown.','Transactions tagged as contributions'],
+'Market':['Change − You added','What the market and valuations did.','Computed'],
+'Headline CAGR':['Compound annual growth rate of the raw number','(End ÷ Start)^(1/years) − 1. Flattered by deposits.','Computed'],
+'Real return':['Annualized return with deposits removed','Money-weighted (modified Dietz): market ÷ (start + half of what you added), annualized.','Computed'],
+'Milestones':['Round-number crossings','First month-end at or above each threshold; projected ones use the trailing 3-year pace.','Balance History'],
+'Liquidity ladder':['What you can spend, in the order you can reach it','Each tier ÷ annual spending input = years of spending it covers.','Tiers from Wealth settings; spending from Planning inputs'],
+'1 · Cash':['Spendable today','Checking and savings minus credit-card balances.','Tier 1 accounts'],
+'2 · Taxable':['Sell any time, pay capital gains','Brokerage accounts.','Tier 2 accounts'],
+'4 · Retirement':['Reachable after 59½ without penalty','401k, IRA, HSA. Rule of 55 and 72(t) are exceptions the ladder ignores.','Tier 3 accounts'],
+'5 · Deferred comp':['Paid on the election schedule','Not on demand; timing set when you elected.','Tier 4 accounts'],
+'6 · Illiquid':['Needs a buyer or a sale process','Home, insurance cash value, 529s.','Tier 6 accounts'],
+'Employer-correlated exposure':['Everything that drops if the company does','Direct stock + deferred comp + related entities; salary listed for context.','Employer-tied flag per account + target setting'],
+'Net worth by what it can do':['The split as a picture','Investable / Deferred / Semi-liquid / Illiquid shares of net worth.','Liquidity tiers'],
+'Tax diversification':['Which tax treatment your money sits in','Balances grouped by tax type; embedded tax = pre-tax × your rate input.','Wealth settings + Planning tax-rate input'],
+'Embedded tax on pre-tax':['The bill inside the 401k and deferred comp','Pre-tax balances × the tax-rate input. Set the rate you expect to pay on withdrawal.','Planning input'],
+'Conversion window':['Low-income years for Roth conversions','Target retirement age → Social Security start age.','Planning inputs'],
+'Room per year at 24% bracket':['How much you could convert without jumping a bracket','Top of the 24% bracket + the standard deduction − dividends − deferred-comp payout in those years. An estimate: filing status and figures are a setting with a year (gear).','Planning inputs; tax brackets as a yearly setting'],
+'Your inputs':['Assumptions the whole Planning tab runs on','Edited here, saved per user. Nothing else needs changing when these do.','sbc.wealth_plan'],
+'Target retirement age':['When you want to stop','Used for the bridge, the conversion window and the side-by-side.','Planning input'],
+"Annual spending (today's $)":['What retirement costs per year, in today\'s dollars','Inflated by the inflation input each year of the projection.','Planning input'],
+'Plan to age':['How long the money must last','Projection horizon. 95 is the conservative default.','Planning input'],
+'Return pre / post retirement':['Expected nominal returns','Before retirement while still contributing; after, with a more conservative mix.','Planning input'],
+'Inflation':['Annual price growth','Applied to spending; also converts nominal to today\'s dollars.','Planning input'],
+'Annual savings until then':['What you add each year until retirement','Contributions + match. Defaults to the trailing 12-month figure from Growth.','Planning input; default from transactions'],
+'Social Security':['Benefit and start age','Added to income from the start age; indexed to inflation.','Planning input'],
+'Deferred comp payout':['How the deferred balance pays out','Years and start age per your election. Shapes the conversion window.','Planning input'],
+'Stock strategy':['What happens to the semi-liquid stock','Hold at an assumed growth, or sell a % per year from an age (with the tax hit on gains).','Planning input'],
+'Tax rate on pre-tax':['Blended rate on pre-tax withdrawals','Used for after-tax figures everywhere on Wealth.','Planning input'],
+'Results — three cases, all to 95':['Does the plan survive, under three sets of assumptions','Base = your inputs. Stress = −30% in the first year of retirement, then base. Low return = 2 points lower before and 1.5 after.','Projection engine'],
+'Case':['Which assumption set','See the three definitions above.','Computed'],
+'Earliest age that works':['First retirement age at which money lasts to the plan-to age','Searched year by year in the projection.','Projection engine'],
+"NW at 65 (today's $)":['Projected after-tax net worth at 65','Deflated to today\'s dollars.','Projection engine'],
+'Runs out':['Age at which after-tax investable hits zero','"never" if it lasts to the plan-to age.','Projection engine'],
+'Verdict':['OK / Tight / Fails','OK = still lasts to the plan-to age with 10% more spending; Tight = lasts at your spending but not +10%; Fails = runs out.','Projection engine'],
+'Projection to 95':['After-tax investable net worth by age, three cases','Each year: + savings (pre-retirement) + returns − inflated spending − taxes on withdrawals + Social Security.','Projection engine'],
+'Retire at — side by side':['The same plan at three retirement ages','Base-case numbers per age; the funded row shows all three cases.','Projection engine'],
+'Metric':['Row definition','See each row\'s hover.','—'],
+'Derived path':['Recommendations computed from the numbers','Each line fires on a rule (e.g. exposure > target, liquid years < bridge years) and restates the figures that triggered it. Changes when inputs change.','Rules in the edge fn; no hand-written advice'],
+'Coverage':['How much of the estate has a recorded plan','Balances of accounts with beneficiary / titling / trust status set ÷ net worth.','Estate per-account table'],
+'MA estate tax exposure':['Net worth vs the Massachusetts threshold','Threshold is a setting with a year so it never silently ages.','Estate settings'],
+'Federal exclusion':['Federal estate-tax exclusion for the year shown','A setting with a year; update when the law changes.','Estate settings'],
+'Passes by':['How the asset transfers at death','Beneficiary designation, TOD, joint title, deed/trust, successor owner, or share-transfer rules.','Estate per-account table'],
+'Beneficiary':['Is a designation recorded?','Set / Not set — recorded here, not read from the custodian.','Estate per-account table'],
+'In trust':['Is the asset titled to the trust?','Yes / n/a / Check (illiquid assets need a decision).','Estate per-account table'],
+'Status':['Covered or Gap','Covered = passes-by and beneficiary/titling recorded.','Computed'],
+'Debt':['What you owe, highest rate first','Balances from Balance History; rate and payment from the account settings (gear); payoff date at the current payment. "Pay first" = rate above the return input.','Balance History + Wealth settings'],
+'Rate':['Interest rate on the debt','Entered once in the account settings.','Wealth settings'],
+'Monthly':['Current payment','The payment you set in Wealth settings; otherwise the average balance decline over the last 3 months.','Wealth settings / Balance History'],
+'Paid off':['When the balance reaches zero at the current payment','Amortized at the rate; cards assume statement balance paid.','Computed'],
+'Order':['Which debt to put extra money on','Highest rate first (avalanche). The 401k match ranks ahead of all of them.','Computed'],
+'Concentration':['Single-holding risk','Appears when an account is marked employer-tied or any one position is over 25% of net worth; otherwise shows the order of operations for this stage.','Wealth settings + balances'],
+'Assets by what they can do':['Assets grouped by liquidity tier','Only tiers with money in them appear.','Liquidity tiers'],
+'Roth share':['Share of assets that are tax-free on the way out','Roth + HSA ÷ assets.','Computed'],
+'Months of runway':['How long cash lasts','Cash ÷ monthly spending (trailing 12 months ÷ 12). Target 3–6 months.','Balance History + Reports spending'],
+'Debt payoff':['When the biggest loan is gone at the current payment','Amortized from balance, rate and payment.','Balance History + Wealth settings'],
+'Next milestone':['Next round number for net worth','Projected from the trailing 12-month pace.','Balance History'],
+'Gaps':['Generated from the table above','One line per account with something unset, biggest first.','Computed']
+};/* v3.85.0: labels the page shows that the mockup did not - same what / how / source shape. */
+WEALTH_DEFS['Wealth settings'] = ['How each account counts on this page','Per account: liquidity tier, tax type, employer-tied, income yield, debt rate + payment, estate fields. Page: exposure target, tax rate, estate figures with their years.','sbc.wealth_accounts + sbc.wealth_settings (SBC-owned; Tiller is never changed)'];
+WEALTH_DEFS['Since · you added'] = ['Cumulative deposits since the feeds began','Sum of each year\'s "you added" from the first month a feed labeled a contribution.','Feed lines labeled as contributions + Balance History'];
+WEALTH_DEFS['Since · market did'] = ['Cumulative growth that was not deposits','Sum of each year\'s "market" over the same span.','Computed'];
+WEALTH_DEFS['What the split tells you'] = ['Observations computed from the numbers above','Each line fires on a rule (headline vs real return, the worst drawdown re-sized to today, where the split starts) and restates its figures.','Computed'];
+WEALTH_DEFS['Milestone'] = ['The round number crossed','Net worth, and your largest account, at each round number.','Balance History'];
+WEALTH_DEFS['Date'] = ['The month it was first crossed','First month-end at or above the line, after a month below it.','Balance History'];
+WEALTH_DEFS['Age'] = ['Your age that month','From the birthday in Settings → Personal information.','Settings'];
+WEALTH_DEFS['Since last'] = ['Time since the previous milestone','Years between the two month-ends.','Computed'];
+WEALTH_DEFS['Cash'] = ['Spendable today','Checking and savings, net of card balances.','Tier 1 accounts'];
+WEALTH_DEFS['Taxable'] = WEALTH_DEFS['2 · Taxable'];
+WEALTH_DEFS['Retirement'] = WEALTH_DEFS['4 · Retirement'];
+WEALTH_DEFS['Deferred comp'] = WEALTH_DEFS['5 · Deferred comp'];
+WEALTH_DEFS['Illiquid'] = WEALTH_DEFS['Illiquid'] || WEALTH_DEFS['6 · Illiquid'];
+WEALTH_DEFS['Source'] = ['What the exposure is','Each account you flagged employer-tied, plus salary for context.','Wealth settings'];
+WEALTH_DEFS['Value'] = ['Latest balance','From Balance History, like everywhere on this page.','Balance History'];
+WEALTH_DEFS['Why it moves together'] = ['The shared risk','Deferred comp = an unsecured claim on the company; semi-liquid stock = private, low-basis, sold on its terms.','Liquidity tier'];
+WEALTH_DEFS['Results'] = WEALTH_DEFS['Results — three cases, all to 95'];
+WEALTH_DEFS['Retire at'] = WEALTH_DEFS['Retire at — side by side'];   // the hover reads the text before the em dash
+WEALTH_DEFS['Annual deferral (deferred comp)'] = ['What you defer into deferred comp each year','Counted as your contribution to the deferred-comp account (its feed has no marker), and added to it in the projection until retirement.','Planning input'];
+WEALTH_DEFS['Capital-gains rate on stock sales'] = ['Tax on selling the semi-liquid stock','Applied to the whole sale (cost basis ignored - conservative for low-basis shares).','Planning input'];
+WEALTH_DEFS['Trust review'] = ['Is the trust still the right size?','Fires when net worth passes twice the state estate-tax threshold.','Estate settings'];
+WEALTH_DEFS['Debt'] = WEALTH_DEFS['Debt'] || ['What you owe','Every account with a negative balance.','Balance History'];
+function wealthDef_(label){
+  var k = String(label||'').replace(/\s+/g,' ').trim();
+  if(WEALTH_DEFS[k]) return { key:k, d:WEALTH_DEFS[k] };
+  var k2 = k.replace(/^\d+\s*·\s*/,'');                 // ladder rungs are numbered by position
+  if(WEALTH_DEFS[k2]) return { key:k2, d:WEALTH_DEFS[k2] };
+  var k5 = k.replace(/ to \d+$/,' to 95');                       // 'Projection to 90' when the plan runs to 90
+  if(WEALTH_DEFS[k5]) return { key:k5, d:WEALTH_DEFS[k5] };
+  var k4 = k.replace(/^Since [^·]+· /,'Since · ');                  // 'Since Jun 2024 · you added'
+  if(WEALTH_DEFS[k4]) return { key:k4, d:WEALTH_DEFS[k4] };
+  var k3 = k.replace(/\s+\(.*\)$/,'');
+  if(WEALTH_DEFS[k3]) return { key:k3, d:WEALTH_DEFS[k3] };
+  return null;
+}
+
+/* ---------- formatting (whole dollars on this page) ---------- */
+function wMoney_(n){ if(n===null||n===undefined||!isFinite(n)) return '—'; var r=Math.round(Number(n)); return (r<0?'-$':'$')+Math.abs(r).toLocaleString('en-US'); }
+function wK_(n){ if(n===null||n===undefined||!isFinite(n)) return '—'; var a=Math.abs(n), s=n<0?'-':'';
+  return a>=1e6 ? s+'$'+(a/1e6).toFixed(a>=1e7?1:2).replace(/\.?0+$/,'')+'M' : a>=1000 ? s+'$'+(a/1000).toFixed(a>=1e5?0:1).replace(/\.0$/,'')+'k' : s+'$'+Math.round(a); }
+function wSigned_(n, k){ if(n===null||n===undefined) return '—'; return (n>=0?'+':'−')+(k?wK_(Math.abs(n)):wMoney_(Math.abs(n))); }
+function wPct_(n, dp){ if(n===null||n===undefined||!isFinite(n)) return '—'; return Number(n).toFixed(dp===undefined?0:dp)+'%'; }
+var W_MON_ = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function wMonth_(iso){ if(!iso) return '—'; return W_MON_[Number(iso.slice(5,7))-1]+' '+iso.slice(0,4); }
+function wList_(names, max){ max=max||4; if(!names||!names.length) return ''; var a=names.slice(0,max).map(esc).join(' · '); return names.length>max ? a+' · and '+(names.length-max)+' more' : a; }
+var W_TIER_REACH_ = {1:'Cash',2:'Taxable',3:'Retirement · 59½',4:'Deferred · by election',5:'Semi-liquid',6:'Illiquid'};
+var W_TAX_ = {pre:'Pre-tax', tax:'Taxable', roth:'Roth / HSA', na:'—'};
+
+/* ---------- the store + the one call ---------- */
+function wealthTab_(){ var t = state.wealthTab; for(var i=0;i<WEALTH_TABS.length;i++) if(WEALTH_TABS[i][0]===t) return t; return 'snap'; }
+function wealthLoad_(force){
+  if(state.wealthLoading) return state.wealthLoading;
+  if(!force && state.wealth && freshEnough('wealth', 60000)) return Promise.resolve(state.wealth);
+  state.wealthLoading = run('apiWealth', { birthday: state.birthday || '' }).then(function(p){
+    state.wealth = p; markFetched('wealth');
+    if(state.view==='wealth' && !state.wealthSheet) drawWealth_();
+    return p;
+  }).catch(function(e){
+    if(state.view==='wealth' && !state.wealth) fail(e);
+    else console.warn('apiWealth:', e && e.message || e);
+  }).then(function(r){ state.wealthLoading = null; return r; });
+  return state.wealthLoading;
+}
+function renderWealth(){
+  if(state.wealth) drawWealth_();
+  else $('#shell').innerHTML = wealthHeadHtml_(null)+'<div class="spin"></div>';
+  wealthLoad_(false);
+}
+function wealthGo_(tab){ state.wealthTab = tab; go('wealth'); }
+
+/* ---------- page frame ---------- */
+function wealthHeadHtml_(P){
+  var sub = '';
+  if(P && !P.needsSetup){
+    var bits = [];
+    if(P.asOf) bits.push('As of '+esc(P.asOf));
+    if(P.age!==null && P.age!==undefined) bits.push('Age '+Number(P.age).toFixed(1));
+    if(P.tracked) bits.push(P.tracked.accounts+' account'+(P.tracked.accounts===1?'':'s'));
+    if(P.tracked && P.tracked.since) bits.push('tracked since '+wMonth_(P.tracked.since));
+    sub = bits.join(' · ');
+  }
+  return '<div class="w-head"><div><h2>Wealth</h2>'+(sub?'<div class="w-sub">'+sub+'</div>':'')+'</div>'+
+    (P && !P.needsSetup ? '<button class="w-gear" data-act="wealth-gear" title="Wealth settings">'+icon('settings')+'<span>Wealth settings</span></button>' : '')+'</div>';
+}
+function drawWealth_(){
+  var P = state.wealth;
+  if(!P) return;
+  var h = wealthHeadHtml_(P);
+  if(P.needsSetup){
+    h += '<div class="w-panel"><div class="w-setup"><b>Wealth needs a one-time database step.</b><br>'+
+      'Run <b>supabase\\Import Wealth History.cmd</b> on the PC that releases SBC Money (it creates Wealth\'s own tables first; '+
+      'with no SDA File history to import it simply stops after that). Net worth today: <b>'+wMoney_(P.current && P.current.netWorth)+'</b> - the same figure Balances shows.</div></div>';
+    $('#shell').innerHTML = h; return;
+  }
+  var tab = wealthTab_();
+  if(WEALTH_TABS.length > 1){
+    h += '<div class="w-tabs" role="tablist">'+WEALTH_TABS.map(function(t){
+      return '<button role="tab" data-act="wealth-tab" data-arg="'+t[0]+'" class="'+(t[0]===tab?'on':'')+'">'+t[1]+' '+esc(t[2])+'</button>'; }).join('')+'</div>';
+  }
+  var view = WEALTH_VIEWS[tab] || WEALTH_VIEWS.snap;
+  h += '<div class="w-panel" id="wpanel">'+view(P)+'</div>';
+  if(state.wealthSheet) h += wealthSheetHtml_(P);
+  wealthDestroyCharts_();
+  $('#shell').innerHTML = h;
+  wealthAddInfo_();
+  if(view.after) try{ view.after(P); }catch(e){ console.warn('wealth chart:', e && e.message || e); }
+}
+var wealthCharts_ = [];
+function wealthDestroyCharts_(){ wealthCharts_.forEach(function(c){ try{ c.destroy(); }catch(e){} }); wealthCharts_ = []; }
+
+/* ---------- info hovers: what · how · source (hover on desktop, tap on a phone) ---------- */
+function wealthTipEl_(){ var t = document.getElementById('wtip'); if(!t){ t = document.createElement('div'); t.id='wtip'; document.body.appendChild(t); } return t; }
+function wealthShowTip_(el){
+  var f = wealthDef_(el.getAttribute('data-k')); if(!f) return;
+  var tip = wealthTipEl_(), d = f.d;
+  tip.innerHTML = '<b>'+esc(f.key)+'</b><div class="row"><span>What</span><span>'+esc(d[0])+'</span></div><div class="row"><span>How</span><span>'+esc(d[1])+'</span></div><div class="row"><span>Source</span><span>'+esc(d[2])+'</span></div>';
+  tip.classList.add('show');
+  var r = el.getBoundingClientRect(), w = tip.offsetWidth, hh = tip.offsetHeight;
+  var vw = window.visualViewport ? window.visualViewport.width : document.documentElement.clientWidth;
+  var vh = window.visualViewport ? window.visualViewport.height : document.documentElement.clientHeight;
+  var x = Math.min(Math.max(8, r.left-10), vw-w-8), y = r.bottom+8;
+  if(y+hh > vh-8) y = r.top-hh-8; if(y < 8) y = 8;
+  tip.style.left = x+'px'; tip.style.top = y+'px';
+}
+function wealthHideTip_(){ var t = document.getElementById('wtip'); if(t) t.classList.remove('show'); $all('.w-i.on').forEach(function(e){ e.classList.remove('on'); }); }
+var WEALTH_INFO_SEL = '.w-kpi .w-k,.w-stat .w-k,.w-rung .w-k,.w-mini h4,.w-sect,table.w-t th,.w-inp>span:first-child,.w-verdict .w-k';
+function wealthAddInfo_(){
+  $all(WEALTH_INFO_SEL).forEach(function(el){
+    if(el.querySelector && el.querySelector('.w-i')) return;
+    var first = el.childNodes && el.childNodes[0];
+    var label = (first && first.nodeType===3 ? first.textContent : el.textContent).replace(/\s+[—–].*$/,'').trim();
+    if(!wealthDef_(label)) return;
+    var i = document.createElement('i'); i.className='w-i'; i.textContent='i'; i.setAttribute('data-k', label); i.setAttribute('tabindex','0');
+    var n = el.querySelector ? el.querySelector('.w-n') : null;
+    if(n) el.insertBefore(i, n); else el.appendChild(i);
+    i.onmouseenter = function(){ wealthShowTip_(i); };
+    i.onmouseleave = function(){ if(!i.classList.contains('on')) wealthHideTip_(); };
+    i.onclick = function(ev){ ev.stopPropagation(); var on = i.classList.contains('on'); wealthHideTip_(); if(!on){ i.classList.add('on'); wealthShowTip_(i); } };
+  });
+}
+try{
+  document.addEventListener('click', function(ev){ if(!(ev.target && ev.target.classList && ev.target.classList.contains('w-i'))) wealthHideTip_(); });
+  window.addEventListener('scroll', function(){ var on = document.querySelector('.w-i.on'); if(on) wealthShowTip_(on); else wealthHideTip_(); }, true);
+}catch(e){}
+
+/* ---------- Snapshot ---------- */
+/* The four-way split (investable / deferred / semi-liquid / illiquid) only when there IS
+   something beyond investable money (a deferred, semi-liquid or illiquid ASSET); otherwise the
+   light split - Investable / Debt / Months of runway (spec 1b). Decided by the data, never by who. */
+function wealthHeavy_(P){ return (P.byAccount||[]).some(function(a){ return a.tier>=4 && a.balance>0; }); }
+function wealthTierNames_(P, t){ return (P.byAccount||[]).filter(function(a){ return a.tier===t && a.balance!==0; }).map(function(a){ return a.label; }); }
+function wealthVerdictHtml_(P){
+  var h = '<div class="w-verdict"><div><div class="w-k">Can you retire when you want to?</div>';
+  var V = P.verdict, plan = P.plan && P.plan.inputs || {};
+  if(V && V.base){
+    var b = V.base, s = V.stress, l = V.low;
+    var age = function(c){ return c.earliestAge===null||c.earliestAge===undefined ? 'not by '+(plan.planToAge||95) : String(c.earliestAge); };
+    h += '<div class="w-big">'+(b.earliestAge!==null&&b.earliestAge!==undefined ? 'Age '+b.earliestAge : 'Not yet')+' <small>target '+esc(plan.targetAge)+' · base case</small></div>'+
+      '<div class="w-why">At the current pace the plan funds <b>'+wK_(plan.spending)+'/yr to age '+esc(plan.planToAge)+'</b>'+
+      (b.earliestAge!==null&&b.earliestAge!==undefined ? ' from age '+b.earliestAge : '')+'. The <b>stress case</b> (−30% in year one) moves that to <b>'+age(s)+'</b>; the <b>low-return case</b> to <b>'+age(l)+'</b>.'+
+      (P.path && P.path.length ? ' '+esc(P.path[0].title)+' is the first item on the derived path.' : '')+'</div></div>';
+    var cls = function(c){ return c.status==='OK' ? 'ok' : c.status==='Fails' ? 'bad' : ''; };
+    h += '<div class="w-pills"><span class="w-pill '+cls(b)+'">Base · '+esc(b.status)+'</span><span class="w-pill '+cls(s)+'">Stress · '+esc(s.status)+'</span><span class="w-pill '+cls(l)+'">Low return · '+esc(l.status)+'</span><span class="w-pill">At '+esc(plan.targetAge)+'</span></div>';
+  } else {
+    var needAge = P.age===null || P.age===undefined;
+    h += '<div class="w-big">Not set up <small>2 minutes on the Planning tab</small></div>'+
+      '<div class="w-why">The verdict needs '+(needAge?'your <b>birthday</b> (Settings → Personal information) and ':'')+'four inputs: target age, yearly spending, what you save each year, and expected return. Everything else on this page already works from your accounts.</div></div>';
+    var det = P.setup && P.setup.detected || {};
+    h += '<div class="w-pills">'+
+      (det.spending>0 ? '<span class="w-pill">Spending · '+wK_(det.spending)+'/yr from your Reports</span>' : '')+
+      (det.savings>0 ? '<span class="w-pill">Savings · '+wK_(det.savings)+'/yr detected</span>' : '')+
+      '<button class="w-pill ok" data-act="wealth-plan-setup">Set up plan →</button></div>';
+  }
+  return h+'</div>';
+}
+WEALTH_VIEWS.snap = function(P){
+  var s = P.split, q = P.quick, nw = P.current.netWorth, heavy = wealthHeavy_(P);
+  var one = q.oneYear;
+  var oneTxt = one ? (one.amt>=0?'▲ ':'▼ ')+wSigned_(one.amt, true)+' 1-yr' +
+      (one.contrib!==null && one.market!==null ? ' · of which you added '+wK_(one.contrib)+', market '+wSigned_(one.market, true) : '') : 'tracked since '+wMonth_(P.tracked.since);
+  var h = '<div class="w-hero">'+wealthVerdictHtml_(P)+
+    '<div class="w-split">'+
+      '<div class="w-kpi"><div class="w-k">Net worth</div><div class="w-v">'+wMoney_(nw)+'</div><div class="w-d '+(one ? (one.amt>=0?'pos':'neg') : '')+'">'+oneTxt+'</div></div>'+
+      '<div class="w-kpi muted"><div class="w-k">After-tax investable</div><div class="w-v">'+wMoney_(s.afterTaxInvestable)+'</div><div class="w-d">investable + deferred − est. tax on pre-tax at '+esc(s.taxRate)+'% ('+wK_(s.taxHit)+') · the number the withdrawal math runs on</div></div>'+
+    '</div></div>';
+  if(heavy){
+    var pct = function(v){ return nw>0 ? ' — '+(v/nw*100).toFixed(0)+'% of NW' : ''; };
+    var cards = ['<div class="w-kpi"><div class="w-k">Investable</div><div class="w-v">'+wMoney_(s.investable)+'</div><div class="w-d">'+wList_(wealthTierNames_(P,1).concat(wealthTierNames_(P,2), wealthTierNames_(P,3)))+pct(s.investable)+'</div></div>'];
+    if(s.deferred) cards.push('<div class="w-kpi warn"><div class="w-k">Deferred · unsecured</div><div class="w-v">'+wMoney_(s.deferred)+'</div><div class="w-d warn">'+wList_(wealthTierNames_(P,4))+' — a promise paid on its schedule</div></div>');
+    var semiPays = P.ladder && P.ladder.some(function(t){ return t.tier===5 && t.income>0; });
+    if(s.semi) cards.push('<div class="w-kpi"><div class="w-k">'+(semiPays?'Semi-liquid · pays income':'Semi-liquid')+'</div><div class="w-v">'+wMoney_(s.semi)+'</div><div class="w-d">'+wList_(wealthTierNames_(P,5))+' — sellable on the buyer’s terms'+
+      (semiPays ? '; ~'+wK_(P.ladder.filter(function(t){ return t.tier===5; })[0].income)+'/yr at the yields you set' : '')+'</div></div>');
+    if(s.illiquid) cards.push('<div class="w-kpi muted"><div class="w-k">Illiquid</div><div class="w-v">'+wMoney_(s.illiquid)+'</div><div class="w-d">'+wList_(wealthTierNames_(P,6))+pct(s.illiquid)+'</div></div>');
+    h += '<div class="w-split c4">'+cards.join('')+'</div>';
+  } else {
+    var debts = (P.debts && P.debts.rows) || [];
+    h += '<div class="w-split c3">'+
+      '<div class="w-kpi"><div class="w-k">Investable</div><div class="w-v">'+wMoney_(s.investablePos)+'</div><div class="w-d">'+wList_(P.byAccount.filter(function(a){ return a.tier<=3 && a.balance>0; }).map(function(a){ return a.label; }))+'</div></div>'+
+      (debts.length ? '<div class="w-kpi warn"><div class="w-k">Debt</div><div class="w-v">'+wMoney_(s.debt)+'</div><div class="w-d warn">'+wList_(debts.map(function(d){ return d.name; }))+
+        (P.debts.blended!==null ? ' · '+Number(P.debts.blended).toFixed(1)+'% blended'+(P.plan && P.debts.blended > P.plan.inputs.returnPre ? ' — paying this down beats a '+P.plan.inputs.returnPre+'% return' : '') : '')+'</div></div>'
+        : '<div class="w-kpi"><div class="w-k">Debt</div><div class="w-v">$0</div><div class="w-d pos">nothing owed</div></div>')+
+      '<div class="w-kpi muted"><div class="w-k">Months of runway</div><div class="w-v">'+(q.runwayMonths===null?'—':Number(q.runwayMonths).toFixed(1))+'</div><div class="w-d">cash ÷ monthly spending · target 3–6</div></div>'+
+    '</div>';
+  }
+  var st = [];
+  if(q.savingsRate!==null) st.push(['Savings rate', wPct_(q.savingsRate), one && one.contrib!==null ? wK_(one.contrib)+' added · trailing 12 mo' : 'trailing 12 mo', q.savingsRate>=15?'pos':'']);
+  if(q.realReturn1y!==null) st.push(['Real return · 1-yr', (q.realReturn1y>=0?'+':'')+wPct_(q.realReturn1y,1), one && one.pct!==null ? (one.pct>=0?'+':'')+wPct_(one.pct,1)+' nominal − contributions' : '', q.realReturn1y>=0?'pos':'neg']);
+  if(q.exposure) st.push(['Employer-correlated', wPct_(q.exposure.pct), wK_(q.exposure.amt)+' · target '+q.exposure.target+'%', q.exposure.pct>q.exposure.target?'warn':'']);
+  if(q.debtPayoff) st.push(['Debt payoff', wMonth_(q.debtPayoff.m), esc(q.debtPayoff.name)+(q.debtPayoff.payment?' at '+wMoney_(q.debtPayoff.payment)+'/mo':''), '']);
+  if(q.reachableYears && q.reachableYears.liquid!==null) st.push(['Reachable before 59½', Number(q.reachableYears.liquid).toFixed(1)+(q.reachableYears.semi!==null?' + '+Number(q.reachableYears.semi).toFixed(1):'')+' yrs',
+    q.reachableYears.semi!==null ? 'cash + taxable, then semi-liquid' : 'cash + taxable · Roth contributions also reachable', q.reachableYears.liquid<1?'warn':'']);
+  if(q.income && q.income.perYear>0) st.push(['Income from holdings', wK_(q.income.perYear)+'/yr', q.income.pctOfSpend!==null ? wPct_(q.income.pctOfSpend)+' of spending' : 'at the yields you set', 'pos']);
+  if(q.yearsToMedicare!==null && q.yearsToMedicare>0 && P.plan && P.plan.ready) st.push(['Years to Medicare', Number(q.yearsToMedicare).toFixed(1), q.bridgeYears ? 'bridge from '+P.plan.inputs.targetAge+' = '+q.bridgeYears+' yrs' : 'retiring at '+P.plan.inputs.targetAge+' needs no bridge', '']);   // only once a target age exists - before that it answers nothing
+  if(q.nextMilestone) st.push(['Next milestone', wK_(q.nextMilestone.amount), 'net worth · ~'+wMonth_(q.nextMilestone.m)+' at this pace', '']);
+  if(q.estateCoverage!==null) st.push(['Estate coverage', wPct_(q.estateCoverage), 'of assets with beneficiary / titling set', q.estateCoverage<90?'warn':'']);
+  if(st.length) h += '<div class="w-srow">'+st.map(function(x){ return '<div class="w-stat"><div class="w-k">'+x[0]+'</div><div class="w-v '+x[3]+'">'+x[1]+'</div>'+(x[2]?'<div class="w-d">'+x[2]+'</div>':'')+'</div>'; }).join('')+'</div>';
+  h += '<div class="w-sect">By account <span class="w-n">— what each one is for, and how reachable it is</span></div>';
+  h += '<div class="w-scroll"><table class="w-t"><thead><tr><th>Account</th><th class="r">Balance</th><th class="r">% NW</th><th>Reachable</th><th>Tax</th><th class="r">1-yr</th><th class="r">Flags</th></tr></thead><tbody>'+
+    (P.byAccount||[]).map(function(a){
+      var fl = [];
+      if(a.employerTied) fl.push('<span class="w-badge a">Employer-tied</span>');
+      if(!a.liability && a.balance>0 && a.beneficiary===false) fl.push('<span class="w-badge r">No beneficiary</span>');
+      if(a.liability && a.rate) fl.push('<span class="w-badge a">'+esc(a.rate)+'% APR</span>');
+      var reach = a.liability ? '<span class="w-badge r">Debt</span>' :
+        '<span class="w-badge '+(a.tier<=2?'g':a.tier===6?'n':'a')+'">'+esc(W_TIER_REACH_[a.tier])+'</span>'+(a.incomeYield?' <span class="w-badge g">'+esc(a.incomeYield)+'% yield</span>':'');
+      return '<tr><td class="strong">'+esc(a.label)+'</td><td class="r'+(a.balance<0?' neg':'')+'">'+wMoney_(a.balance)+'</td><td class="r">'+(nw?(a.balance/nw*100).toFixed(1)+'%':'—')+'</td>'+
+        '<td>'+reach+'</td><td>'+esc(W_TAX_[a.tax]||'—')+'</td>'+
+        '<td class="r '+(a.change1y===null?'':a.change1y<0?'neg':'pos')+'">'+(a.change1y===null?'new':wSigned_(a.change1y, true))+'</td><td class="r">'+fl.join(' ')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+  return h;
+};
+
+
+/* ---------- Growth (v3.86.0) ----------
+   Net worth over time (month-end, the one wealth_series), where the growth came from (your
+   contributions vs the market, ONLY from the feeds' start - the chart starts there and says so),
+   the period metrics, milestones, the worst drawdown. Reports -> Net worth retired into this tab. */
+WEALTH_TABS.push(['growth','📈','Growth']);
+var W_TEAL = '#0d9488', W_CAT = ['#0d9488','#d97706','#3b82f6','#e11d48','#8b5cf6','#65a30d'], W_OTHER = '#94a3b8';
+function wAxis_(o){ o = o || {};
+  var tick = (typeof cssVar_==='function' && cssVar_('--chart-tick')) || '#94a3b8', grid = (typeof cssVar_==='function' && cssVar_('--chart-grid')) || '#e8edf2';
+  return { maintainAspectRatio:false, animation:false, interaction:{ mode:'index', intersect:false },
+    plugins:{ legend: o.legend ? { position:'top', labels:{ boxWidth:12, color:'#475569', font:{ size:12 } } } : { display:false },
+      tooltip:{ callbacks:{ label:function(c){ return ' '+c.dataset.label+': '+wMoney_(c.parsed.y); } } } },
+    scales:{ x:{ stacked:!!o.stacked, grid:{ display:false }, ticks:{ color:tick, font:{ size:11 }, maxRotation:0, autoSkip:true, maxTicksLimit:10 } },
+      y:{ stacked:!!o.stacked, grid:{ color:grid }, ticks:{ color:tick, font:{ size:11 }, callback:function(v){ return wK_(v); } }, beginAtZero:o.zero===true } } };
+}
+function wealthRangeSeries_(P){
+  var s = P.series || [], r = state.wealthRange || 'all';
+  if(r==='all' || !s.length) return s;
+  var n = { y10:120, y5:60, y1:12 }[r] || s.length;
+  return s.slice(Math.max(0, s.length-1-n));
+}
+function wealthObs_(P){
+  var out = [], per = (P.growth && P.growth.periods) || [];
+  var five = per.filter(function(p){ return p.period==='5-year'; })[0] || per.filter(function(p){ return p.period==='All-time'; })[0];
+  if(five && five.cagr!==null && five.realReturn!==null && five.cagr - five.realReturn > 0.5)
+    out.push(['📐','The headline growth rate overstates it.', 'Over '+(five.period==='5-year'?'five years':'the tracked span')+' the raw number grew '+wPct_(five.cagr,1)+'/yr, but '+wPct_(five.realReturn,1)+'/yr of that was the market - the rest is money you put in. The real return is the one to plan with.']);
+  var dd = P.growth && P.growth.drawdown;
+  if(dd && P.current.netWorth > 0) out.push(['🧯','What a dip like your worst one would cost today.', 'Your worst month-end fall was '+wPct_(dd.pct,1)+' ('+wMonth_(dd.peak)+' → '+wMonth_(dd.trough)+'). The same fall from today is about '+wK_(Math.abs(dd.pct)/100*P.current.netWorth)+'. Planning stresses for a 30% one.']);
+  if(P.tracked && P.tracked.splitFrom) out.push(['🔎','Why the split starts where it does.', 'Your feeds label contributions only from '+wMonth_(P.tracked.splitFrom)+' (Tiller keeps one to two years of history per account). Before that only the total change is known, so nothing before it is split.']);
+  return out;
+}
+WEALTH_VIEWS.growth = function(P){
+  var g = P.growth || {}, per = g.periods || [], C = P.contributions || [];
+  var rng = state.wealthRange || 'all';
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'+
+    '<div class="w-sect" style="margin:0">Net worth over time</div>'+
+    '<div class="w-seg">'+[['all','All'],['y10','10y'],['y5','5y'],['y1','1y']].filter(function(r){ return r[0]==='all' || (P.series||[]).length > ({y10:120,y5:60,y1:12})[r[0]]; })
+      .map(function(r){ return '<button data-act="wealth-range" data-arg="'+r[0]+'" class="'+(rng===r[0]?'on':'')+'">'+r[1]+'</button>'; }).join('')+'</div></div>';
+  h += (P.series && P.series.length > 1) ? '<div class="w-chart"><canvas id="wGrowthNW"></canvas></div>' : '<div class="w-empty">One month of history so far - the line starts next month.</div>';
+  h += '<div class="w-sect">Where the growth came from <span class="w-n">— each year\'s change, split into what you added and what the market did'+(P.tracked && P.tracked.splitFrom ? ', from '+wMonth_(P.tracked.splitFrom) : '')+'</span></div>';
+  if(C.length){
+    h += '<div class="w-chart short"><canvas id="wGrowthSplit"></canvas></div>';
+    var add = C.reduce(function(t,x){ return t + x.added; }, 0), mkt = C.reduce(function(t,x){ return t + x.market; }, 0), tot = add + mkt;
+    var since = wMonth_(C[0].from);
+    var st = [['Since '+since+' · you added', wK_(add), tot ? wPct_(Math.abs(add)/(Math.abs(add)+Math.abs(mkt))*100)+' of the movement' : '', ''],
+      ['Since '+since+' · market did', wSigned_(mkt, true), tot ? wPct_(Math.abs(mkt)/(Math.abs(add)+Math.abs(mkt))*100)+' of the movement' : '', mkt>=0?'pos':'neg']];
+    h += '<div class="w-srow">'+st.map(wStat_).join('')+wGrowthStats_(P)+'</div>';
+  } else {
+    h += '<div class="w-empty">No feed labels a contribution yet, so the change cannot be split honestly. It appears here from the first month a feed does.</div>';
+    var gs = wGrowthStats_(P); if(gs) h += '<div class="w-srow">'+gs+'</div>';
+  }
+  if(per.length){
+    h += '<div class="w-sect">Growth metrics</div><div class="w-scroll"><table class="w-t"><thead><tr><th>Period</th><th class="r">Years</th><th class="r">Start</th><th class="r">End</th><th class="r">Change</th><th class="r">You added</th><th class="r">Market</th><th class="r">Headline CAGR</th><th class="r">Real return</th></tr></thead><tbody>'+
+      per.map(function(p){ return '<tr><td class="strong">'+esc(p.period)+'</td><td class="r">'+Number(p.years).toFixed(1)+'</td><td class="r">'+wMoney_(p.start)+'</td><td class="r">'+wMoney_(p.end)+'</td>'+
+        '<td class="r '+(p.change>=0?'pos':'neg')+'">'+wSigned_(p.change)+'</td><td class="r">'+(p.added===null?'—':wK_(p.added))+'</td><td class="r '+(p.market===null?'':p.market>=0?'pos':'neg')+'">'+(p.market===null?'—':wSigned_(p.market,true))+'</td>'+
+        '<td class="r" style="color:var(--ink-3)">'+(p.cagr===null?'—':wPct_(p.cagr,1))+'</td><td class="r strong">'+(p.realReturn===null?'—':wPct_(p.realReturn,1))+'</td></tr>'; }).join('')+
+      '</tbody></table></div>'+
+      (per.some(function(p){ return p.added===null; }) ? '<div class="w-foot">— = before the feeds labeled contributions, so that window cannot be split.</div>' : '');
+  }
+  var ms = g.milestones || [], obs = wealthObs_(P);
+  if(ms.length || obs.length){
+    h += '<div class="w-two">';
+    if(ms.length) h += '<div class="w-mini"><h4>Milestones</h4><div class="w-scroll"><table class="w-t" style="min-width:0"><thead><tr><th>Milestone</th><th>Date</th><th class="r">Age</th><th class="r">Since last</th></tr></thead><tbody>'+
+      ms.map(function(m){ return '<tr><td class="strong">'+esc(m.label)+'</td><td>'+wMonth_(m.m)+'</td><td class="r">'+(m.age===null?'—':Number(m.age).toFixed(1))+'</td><td class="r">'+(m.sinceYears===null?'—':Number(m.sinceYears).toFixed(1)+' yrs')+'</td></tr>'; }).join('')+
+      (P.quick.nextMilestone ? '<tr><td class="strong">Net worth '+wK_(P.quick.nextMilestone.amount)+'</td><td>projected '+wMonth_(P.quick.nextMilestone.m)+'</td><td class="r">—</td><td class="r">—</td></tr>' : '')+
+      '</tbody></table></div></div>';
+    if(obs.length) h += '<div class="w-mini"><h4>What the split tells you</h4>'+obs.map(function(o){ return '<div class="w-obs"><span class="ic">'+o[0]+'</span><span class="tx"><b>'+esc(o[1])+'</b><small>'+esc(o[2])+'</small></span></div>'; }).join('')+'</div>';
+    h += '</div>';
+  }
+  return h;
+};
+function wStat_(x){ return '<div class="w-stat"><div class="w-k">'+x[0]+'</div><div class="w-v '+(x[3]||'')+'">'+x[1]+'</div>'+(x[2]?'<div class="w-d">'+x[2]+'</div>':'')+'</div>'; }
+function wGrowthStats_(P){
+  var g = P.growth || {}, per = g.periods || [], out = [];
+  var five = per.filter(function(p){ return p.period==='5-year'; })[0];
+  if(five && five.realReturn!==null) out.push(['Real return · 5-yr', wPct_(five.realReturn,1)+'/yr', five.cagr!==null ? 'vs '+wPct_(five.cagr,1)+' headline CAGR' : '', '']);
+  if(g.drawdown) out.push(['Worst drawdown', wPct_(g.drawdown.pct,1), wMonth_(g.drawdown.peak)+' → '+wMonth_(g.drawdown.trough)+(g.drawdown.recoveredMonths!==null ? ' · recovered in '+g.drawdown.recoveredMonths+' mo' : ' · not yet recovered'), 'neg']);
+  if(g.rolling) out.push(['Rolling 12-mo change', wSigned_(g.rolling.current, true), g.rolling.bestPrior===null ? 'the first 12-month window' : (g.rolling.isBest ? 'best ever · prior best '+wSigned_(g.rolling.bestPrior, true) : 'best was '+wSigned_(g.rolling.bestPrior, true)+' ('+wMonth_(g.rolling.bestPriorEnd)+')'), g.rolling.current>=0?'pos':'neg']);
+  return out.map(wStat_).join('');
+}
+WEALTH_VIEWS.growth.after = function(P){
+  if(typeof Chart==='undefined') return;
+  var cv = document.getElementById('wGrowthNW');
+  if(cv && cv.getContext){
+    var s = wealthRangeSeries_(P);
+    wealthCharts_.push(new Chart(cv, { type:'line', data:{ labels:s.map(function(p){ return wMonth_(p.m); }),
+      datasets:[{ label:'Net worth', data:s.map(function(p){ return p.nw; }), borderColor:W_TEAL, backgroundColor:'rgba(13,148,136,.10)', fill:true, tension:.25, borderWidth:2, pointRadius:0 }] }, options:wAxis_() }));
+  }
+  var cv2 = document.getElementById('wGrowthSplit'), C = P.contributions || [];
+  if(cv2 && cv2.getContext && C.length){
+    wealthCharts_.push(new Chart(cv2, { type:'bar', data:{ labels:C.map(function(x){ return x.year; }),
+      datasets:[{ label:'You added (contributions + paydown + cash saved)', data:C.map(function(x){ return x.added; }), backgroundColor:W_CAT[2] },
+        { label:'Market / valuation change', data:C.map(function(x){ return x.market; }), backgroundColor:W_TEAL }] }, options:wAxis_({ legend:true, stacked:true, zero:true }) }));
+  }
+};
+
+
+/* ---------- Analysis (v3.87.0) ----------
+   What the money can do: the liquidity ladder (only tiers with money, each labeled by its own
+   accounts), employer-correlated exposure (only when something is flagged employer-tied; else a
+   Concentration card with the order of operations), debts (only when something is owed), the
+   split as a donut, income from holdings (only when a yield is set), tax diversification. */
+WEALTH_TABS.push(['analysis','🔍','Analysis']);
+function wealthSpendUsed_(P){ var p = P.plan && P.plan.inputs; return p && p.spending > 0 ? p.spending : (P.quick && P.quick.spend12) || 0; }
+WEALTH_VIEWS.analysis = function(P){
+  var spend = wealthSpendUsed_(P), L = P.ladder || [], h = '';
+  if(L.length){
+    h += '<div class="w-sect" style="margin-top:0">Liquidity ladder <span class="w-n">— years of '+(spend>0?wK_(spend):'spending')+' each tier covers, in the order you can reach it</span></div>'+
+      '<div class="w-ladder" style="--n:'+L.length+'">'+L.map(function(t, i){
+        var bad = t.tier<=2 && t.years!==null && t.years<0.5;
+        return '<div class="w-rung"><div class="w-k">'+(i+1)+' · '+esc(t.name)+'</div><div class="w-v">'+wMoney_(t.total)+'</div>'+
+          '<div class="w-yrs'+(bad?' bad':'')+'">'+(t.years===null?'—':Number(t.years).toFixed(1)+' yrs')+'</div><div class="w-d">'+wList_(t.accounts, 3)+(t.tier===5&&t.income>0?' — pays ~'+wK_(t.income)+'/yr':'')+'</div></div>'; }).join('')+'</div>';
+    var reach = L.filter(function(t){ return t.tier<=2; }).reduce(function(a,t){ return a+t.total; }, 0), semi = (L.filter(function(t){ return t.tier===5; })[0] || {total:0}).total;
+    var semiInc = (L.filter(function(t){ return t.tier===5; })[0] || {income:0}).income;
+    if(semi > 0 && spend > 0)
+      h += '<div class="w-warn">⚠ Only '+(reach/spend).toFixed(1)+' years of spending is liquid on demand; the next '+(semi/spend).toFixed(1)+' years sit in semi-liquid holdings that sell only on the buyer’s terms and timing.'+
+        (semiInc>0 ? ' They also pay ~'+wK_(semiInc)+'/yr, so every $100k sold costs ~'+wMoney_(semiInc/semi*100000)+'/yr of income — a diversification plan has to weigh the dividend against the concentration.' : '')+'</div>';
+    else if(spend > 0 && reach/spend < 0.5)
+      h += '<div class="w-warn">⚠ '+(reach/spend*12).toFixed(1)+' months of spending is liquid on demand. The usual target is 3–6 months before putting more into accounts you can’t reach until 59½.</div>';
+  }
+  var D = P.debts && P.debts.rows || [];
+  if(D.length){
+    var ret = P.plan && P.plan.inputs ? P.plan.inputs.returnPre : 7;
+    h += '<div class="w-sect">Debt <span class="w-n">— highest rate first; a dollar here earns the rate, guaranteed</span></div><div class="w-scroll"><table class="w-t"><thead><tr><th>Account</th><th class="r">Balance</th><th class="r">Rate</th><th class="r">Monthly</th><th class="r">Paid off</th><th class="r">Order</th></tr></thead><tbody>'+
+      D.map(function(d, i){
+        var off = d.payoffM ? wMonth_(d.payoffM) : (d.card ? 'next statement' : '—');
+        var ord = d.rate===null ? '<span class="w-badge n">Set a rate</span>' : d.payFirst ? '<span class="w-badge r">Pay first</span>' : '<span class="w-badge a">'+(i===0?'First':'Then')+'</span>';
+        return '<tr><td class="strong">'+esc(d.name)+'</td><td class="r neg">'+wMoney_(d.balance)+'</td><td class="r">'+(d.rate===null?'—':Number(d.rate).toFixed(2).replace(/\.?0+$/,'')+'%')+'</td>'+
+          '<td class="r">'+(d.payment?wMoney_(d.payment)+(d.paymentSource==='balance change'?' <span class="w-badge n">from balance</span>':''):(d.card?'statement':'—'))+'</td><td class="r">'+off+'</td><td class="r">'+ord+'</td></tr>'; }).join('')+
+      '<tr class="total"><td>Total</td><td class="r neg">'+wMoney_(P.debts.total)+'</td><td class="r">'+(P.debts.blended===null?'—':Number(P.debts.blended).toFixed(1)+'% blended')+'</td><td></td><td></td><td></td></tr></tbody></table></div>'+
+      '<div class="w-foot">Rates and payments come from Wealth settings (the gear); a missing payment is read from the last 3 months of the balance. Anything above your '+ret+'% return input is "pay first" — ahead of extra investing, after the 401k match.</div>';
+  }
+  h += '<div class="w-two wide">';
+  var X = P.exposure, K = P.concentration;
+  if(X){
+    h += '<div class="w-mini"><h4>Employer-correlated exposure</h4><div class="w-scroll"><table class="w-t" style="min-width:0"><thead><tr><th>Source</th><th class="r">Value</th><th class="r">% NW</th><th>Why it moves together</th></tr></thead><tbody>'+
+      X.rows.map(function(r){ return '<tr><td class="strong">'+esc(r.name)+'</td><td class="r">'+wMoney_(r.value)+'</td><td class="r">'+wPct_(r.pctNW,1)+'</td><td>'+esc(r.why)+'</td></tr>'; }).join('')+
+      '<tr><td class="strong">Salary</td><td class="r">—</td><td class="r">—</td><td>Income stops in the same scenario</td></tr>'+
+      '<tr class="total"><td>Total</td><td class="r">'+wMoney_(X.total)+'</td><td class="r">'+wPct_(X.pct,1)+'</td><td><span class="w-badge '+(X.pct>X.target?'r':'g')+'">Target '+X.target+'% by '+X.byAge+'</span></td></tr></tbody></table></div>'+
+      '<div class="w-hbar" style="margin-top:12px"><span class="nm">Exposure vs target</span><span class="trk"><i style="width:'+Math.min(100, Math.max(0, X.pct||0)).toFixed(0)+'%;background:'+W_CAT[1]+'"></i><span class="tgt" style="left:'+Math.min(100,X.target)+'%"></span></span><span class="amt">'+wPct_(X.pct)+'</span><span class="pct">│ '+X.target+'%</span></div>'+
+      (X.glidePerYear>0 ? '<div class="w-foot" style="font-size:12.5px;color:var(--ink-2);font-weight:600">Glide path to target: ~'+wK_(X.glidePerYear)+' a year for '+X.glideYears+' years — modeled on Planning with the tax hit and any dividend given up.</div>' : '<div class="w-foot">At or under the target.</div>')+'</div>';
+  } else if(K){
+    h += '<div class="w-mini"><h4>Concentration</h4>'+
+      '<div class="w-obs"><span class="ic">'+(K.over25?'⚠️':'✅')+'</span><span class="tx"><b>'+(K.over25 && K.largest ? esc(K.largest.name)+' is '+wPct_(K.largest.pct)+' of net worth.' : 'No single holding above 25% of net worth')+'</b>'+
+        (K.over25 ? '<small>One account carrying more than a quarter of everything is the concentration to watch.</small>' : '<small>and nothing flagged employer-tied. This card becomes the exposure table when an account is marked employer-tied in Wealth settings.</small>')+'</span></div>'+
+      '<div class="w-obs"><span class="ic">🧭</span><span class="tx"><b>Order of operations at this stage</b><small>'+K.order.map(function(s, i){ return (i+1)+' · '+esc(s.step)+(s.done===true?' ✓':''); }).join(' &nbsp; ')+'. Derived from the numbers above; changes as they do.</small></span></div></div>';
+  }
+  h += '<div class="w-mini"><h4>Assets by what they can do</h4><div class="w-chart short"><canvas id="wAnalysisDonut"></canvas></div>'+
+    (P.income && P.income.perYear>0 ? '<div class="w-srow">'+wStat_(['Income from holdings', wK_(P.income.perYear)+'/yr', 'at the yields set per account'+(P.income.actual12>0?' · '+wK_(P.income.actual12)+' actual dividends, last 12 mo':''), 'pos'])+
+      (P.income.pctOfSpend!==null ? wStat_(['Spending covered by income', wPct_(P.income.pctOfSpend), 'before touching principal', '']) : '')+'</div>' : '')+'</div>';
+  h += '</div>';
+  var T = P.tax || {}, B = T.buckets || [];
+  if(B.length){
+    h += '<div class="w-sect">Tax diversification <span class="w-n">— and what the pre-tax pile really owes</span></div><div class="w-mini">'+
+      B.map(function(b, i){ return '<div class="w-hbar"><span class="nm">'+esc(b.name)+' ('+wList_(b.accounts, 3)+')</span><span class="trk"><i style="width:'+Math.max(0,b.pct).toFixed(0)+'%;background:'+[W_CAT[0],W_CAT[1],W_CAT[2],W_OTHER][['pre','tax','roth','na'].indexOf(b.key)]+'"></i></span><span class="amt">'+wK_(b.total)+'</span><span class="pct">'+wPct_(b.pct)+'</span></div>'; }).join('');
+    var st = [];
+    if(T.embedded>0) st.push(['Embedded tax on pre-tax', '−'+wK_(T.embedded), 'at '+P.split.taxRate+'% blended — set your own rate (gear)', 'neg']);
+    if(T.window) st.push(['Conversion window', T.window.from+' → '+T.window.to, 'retire → Social Security · ~'+T.window.years+' low-income years', '']);
+    if(T.room) st.push(['Room per year at 24% bracket', '~'+wK_(T.room.perYear), T.room.year+' '+esc(T.room.status)+' figures · an estimate', '']);
+    if(!T.window) st.push(['Roth share', wPct_(T.rothShare), 'of assets tax-free on the way out', T.rothShare>=30?'pos':'']);
+    h += '<div class="w-srow">'+st.map(wStat_).join('')+'</div></div>';
+  }
+  return h;
+};
+WEALTH_VIEWS.analysis.after = function(P){
+  if(typeof Chart==='undefined') return;
+  var cv = document.getElementById('wAnalysisDonut'); if(!(cv && cv.getContext)) return;
+  var rows = (P.ladder || []).filter(function(t){ return t.total > 0; });
+  var tot = rows.reduce(function(a,t){ return a+t.total; }, 0);
+  var colors = { 1:W_CAT[0], 2:W_CAT[2], 5:W_CAT[1], 3:W_CAT[4], 4:W_CAT[5], 6:W_OTHER };
+  wealthCharts_.push(new Chart(cv, { type:'doughnut', data:{ labels:rows.map(function(t){ return t.name; }),
+    datasets:[{ data:rows.map(function(t){ return t.total; }), backgroundColor:rows.map(function(t){ return colors[t.tier]; }), borderColor:'#fff', borderWidth:2 }] },
+    options:{ maintainAspectRatio:false, animation:false, cutout:'58%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, color:'#475569', font:{ size:12 } } },
+      tooltip:{ callbacks:{ label:function(c){ return ' '+c.label+': '+wMoney_(c.parsed)+' ('+(tot?(c.parsed/tot*100).toFixed(1):'0')+'%)'; } } } } } }));
+};
+
+
+/* ---------- Planning (v3.88.0) ----------
+   The inputs are edited HERE (saved per person in sbc.wealth_plan; the tax rate is the page's one
+   tax-rate setting); the projection runs in the edge function (_shared/wealthplan.ts) and comes
+   back with the payload: three cases to the plan-to age, the earliest age that works in each, the
+   projection, the same plan at three retirement ages, and the derived path. Rows for things you
+   do not have (deferred comp, semi-liquid stock) do not appear. */
+WEALTH_TABS.push(['plan','🎯','Planning']);
+function wInp_(label, inner){ return '<div class="w-inp"><span>'+label+'</span><span class="w-f">'+inner+'</span></div>'; }
+function wNumIn_(id, v, step, ph, w){ return '<input id="'+id+'" type="number" inputmode="decimal" step="'+(step||'any')+'" style="width:'+(w||96)+'px" value="'+(v===null||v===undefined||v===''?'':esc(v))+'"'+(ph!==undefined&&ph!==null?' placeholder="'+esc(ph)+'"':'')+'>'; }
+WEALTH_VIEWS.plan = function(P){
+  var I = (P.plan && P.plan.inputs) || {}, S = (P.plan && P.plan.saved) || {}, det = (P.setup && P.setup.detected) || {};
+  var has4 = P.split.deferred > 0, has5 = P.split.semi > 0, st = I.stockStrategy || { mode:'hold' };
+  var sv = function(k, d){ return S[k]!==undefined && S[k]!==null && S[k]!=='' ? S[k] : d; };
+  var h = '<div class="w-two"><div class="w-mini"><h4>Your inputs <span style="text-transform:none;letter-spacing:0;color:var(--ink-3)">— edited here, saved for you</span></h4>'+
+    wInp_('Target retirement age', wNumIn_('wpTarget', sv('targetAge',''), '1', '65', 70))+
+    wInp_("Annual spending (today's $)", wNumIn_('wpSpend', sv('spending',''), '1000', det.spending ? Math.round(det.spending) : '', 120))+
+    wInp_('Plan to age', wNumIn_('wpPlanTo', sv('planToAge',''), '1', '95', 70))+
+    wInp_('Return pre / post retirement', wNumIn_('wpRetPre', sv('returnPre',''), '0.1', '7.0', 64)+' % / '+wNumIn_('wpRetPost', sv('returnPost',''), '0.1', '5.0', 64)+' %')+
+    wInp_('Inflation', wNumIn_('wpInfl', sv('inflation',''), '0.1', '3.0', 64)+' %')+
+    wInp_('Annual savings until then', wNumIn_('wpSave', sv('annualSavings',''), '1000', det.savings ? Math.round(det.savings) : '', 120))+
+    wInp_('Social Security', wNumIn_('wpSS', S.socialSecurity ? S.socialSecurity.amount : '', '1000', '0', 100)+' /yr from '+wNumIn_('wpSSAge', S.socialSecurity ? S.socialSecurity.age : '', '1', '67', 60))+
+    (has4 ? wInp_('Deferred comp payout', wNumIn_('wpDCYears', S.deferredPayout ? S.deferredPayout.years : '', '1', '10', 56)+' yrs from '+wNumIn_('wpDCFrom', S.deferredPayout ? S.deferredPayout.fromAge : '', '1', String(I.targetAge||65), 60))+
+      wInp_('Annual deferral (deferred comp)', wNumIn_('wpDefer', sv('annualDeferral',''), '1000', '0', 110)) : '')+
+    (has5 ? wInp_('Stock strategy', '<select id="wpStock"><option value="hold"'+(st.mode!=='sell'?' selected':'')+'>Hold</option><option value="sell"'+(st.mode==='sell'?' selected':'')+'>Sell a %/yr</option></select> '+
+        wNumIn_('wpStockPct', st.mode==='sell' ? st.pct : '', '1', '10', 56)+' % from '+wNumIn_('wpStockFrom', st.mode==='sell' ? st.fromAge : '', '1', '55', 56))+
+      wInp_('Dividend yield (semi-liquid)', wNumIn_('wpYield', sv('dividendYield',''), '0.1', (P.ladder||[]).filter(function(t){ return t.tier===5; }).map(function(t){ return P.split.semi ? (t.income/P.split.semi*100).toFixed(1) : '0'; })[0] || '0', 64)+' %')+
+      wInp_('Capital-gains rate on stock sales', wNumIn_('wpCG', sv('capGainsRate',''), '1', '20', 64)+' %') : '')+
+    wInp_('Tax rate on pre-tax', wNumIn_('wpTax', P.split.taxRate, '1', '30', 64)+' %')+
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn" data-act="wealth-plan-save">Save plan</button></div></div>';
+  var V = P.verdict;
+  h += '<div class="w-mini"><h4>Results — three cases, all to '+esc(I.planToAge||95)+'</h4>';
+  if(!V){
+    h += '<div class="w-setup">'+(P.age===null||P.age===undefined ? 'Add your <b>birthday</b> (Settings → Personal information) and fill in ' : 'Fill in ')+'<b>target age, spending, savings and return</b>, then Save plan. The three cases, the projection and the path appear here.'+
+      (det.spending ? ' Your trailing-12-month spending from Reports is '+wK_(det.spending)+'/yr.' : '')+'</div></div></div>';
+    return h;
+  }
+  var cases = [['Base', V.base], ['Stress · −30% yr 1', V.stress], ['Low return', V.low]];
+  var badge = function(s){ return '<span class="w-badge '+(s==='OK'?'g':s==='Tight'?'a':'r')+'">'+esc(s)+'</span>'; };
+  h += '<div class="w-scroll"><table class="w-t" style="min-width:0"><thead><tr><th>Case</th><th class="r">Earliest age that works</th><th class="r">NW at 65 (today\'s $)</th><th class="r">Runs out</th><th class="r">Verdict</th></tr></thead><tbody>'+
+    cases.map(function(c){ var x = c[1]; return '<tr><td class="strong">'+c[0]+'</td><td class="r strong">'+(x.earliestAge===null?'—':x.earliestAge)+'</td><td class="r">'+(x.nwAt65Real===null?'—':wK_(x.nwAt65Real))+'</td>'+
+      '<td class="r">'+(x.runsOutAge===null?'never':'age '+x.runsOutAge)+'</td><td class="r">'+badge(x.status)+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  var ok = cases.filter(function(c){ return c[1].status==='OK'; }).length;
+  var cls = ok===3 ? 'ok' : V.base.status==='Fails' ? 'bad' : 'mixed';
+  var gap = (P.path||[]).filter(function(p){ return p.key==='stress'; })[0];
+  h += '<div class="w-verdict-bar '+cls+'">'+(ok===3 ? '🟢 On track for '+I.targetAge+' in all three cases.' : V.base.status==='Fails' ? '🔴 Not funded at '+I.targetAge+' in the base case'+(V.base.earliestAge?' — the earliest that works is '+V.base.earliestAge:'')+'.' :
+    '🟡 On track for '+I.targetAge+' in '+ok+' of 3 cases'+(gap ? ' — '+esc(gap.text) : '.'))+'</div></div></div>';
+  h += '<div class="w-sect">Projection to '+esc(I.planToAge)+' <span class="w-n">— after-tax, today\'s dollars, spending '+wK_(I.spending)+' from retirement</span></div><div class="w-chart"><canvas id="wPlanProj"></canvas></div>';
+  var R = P.retireAt || [];
+  if(R.length){
+    var tick = function(s){ return s==='OK' ? '✓' : s==='Tight' ? 'tight' : '✗'; };
+    var rows = [['Years until retirement', function(r){ return Number(r.yearsUntil).toFixed(1); }],
+      ["After-tax NW at retirement (today's $)", function(r){ return wK_(r.afterTaxAtRetirementReal); }],
+      ['Liquid runway before 59½ / Medicare', function(r){ return (r.liquidYearsBefore595===null?'—':Number(r.liquidYearsBefore595).toFixed(1))+' / '+r.medicareGapYears+' yrs'; }],
+      ['Funded to '+I.planToAge+' · base / stress / low', function(r){ return tick(r.funded.base)+' / '+tick(r.funded.stress)+' / '+tick(r.funded.low); }]];
+    if(has5 && st.mode==='sell') rows.push(['Stock sales required before retirement', function(r){ return r.stockSoldBefore>0 ? wK_(r.stockSoldBefore) : '—'; }]);
+    rows.push(['Roth conversion window', function(r){ return r.conversionWindow ? r.conversionWindow[0]+' → '+r.conversionWindow[1] : '—'; }]);
+    h += '<div class="w-sect">Retire at — side by side <span class="w-n">(base case)</span></div><div class="w-scroll"><table class="w-t"><thead><tr><th>Metric</th>'+R.map(function(r){ return '<th class="r">'+r.age+'</th>'; }).join('')+'</tr></thead><tbody>'+
+      rows.map(function(x){ return '<tr><td class="strong">'+esc(x[0])+'</td>'+R.map(function(r){ return '<td class="r">'+x[1](r)+'</td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>';
+  }
+  if(P.path && P.path.length){
+    h += '<div class="w-sect">Derived path <span class="w-n">— each line is computed from the inputs above and changes when they do</span></div><div class="w-mini">'+
+      P.path.map(function(o){ return '<div class="w-obs"><span class="ic">'+o.icon+'</span><span class="tx"><b>'+esc(o.title)+'</b><small>'+esc(o.text)+'</small></span></div>'; }).join('')+'</div>';
+  }
+  return h;
+};
+WEALTH_VIEWS.plan.after = function(P){
+  if(typeof Chart==='undefined' || !P.verdict) return;
+  var cv = document.getElementById('wPlanProj'); if(!(cv && cv.getContext)) return;
+  var pr = P.verdict.projection || [], I = P.plan.inputs;
+  wealthCharts_.push(new Chart(cv, { type:'line', data:{ labels:pr.map(function(p){ return p.age; }),
+    datasets:[{ label:'Base ('+I.returnPre+'% / '+I.returnPost+'%, '+I.inflation+'% inflation)', data:pr.map(function(p){ return p.base; }), borderColor:W_TEAL, borderWidth:2, pointRadius:0, tension:.3 },
+      { label:'Stress (−30% in year 1 of retirement)', data:pr.map(function(p){ return p.stress; }), borderColor:W_CAT[1], borderWidth:2, pointRadius:0, tension:.3, borderDash:[6,4] },
+      { label:'Low return ('+(I.returnPre-2)+'% / '+(I.returnPost-1.5)+'%)', data:pr.map(function(p){ return p.low; }), borderColor:W_CAT[3], borderWidth:2, pointRadius:0, tension:.3, borderDash:[2,3] }] },
+    options:wAxis_({ legend:true }) }));
+};
+function wealthPlanRead_(){
+  var n = function(id){ var e = $('#'+id); if(!e || e.value==='' || e.value===undefined) return null; var x = Number(e.value); return isFinite(x) ? x : null; };
+  /* v3.90.0: a field that is on the form is ALWAYS sent - blank = null, which clears the saved
+     value so the default applies again (otherwise a value, once saved, could never be removed) */
+  var plan = {}, put = function(k, id){ if($('#'+id)) plan[k] = n(id); };
+  put('targetAge','wpTarget'); put('spending','wpSpend'); put('planToAge','wpPlanTo'); put('returnPre','wpRetPre'); put('returnPost','wpRetPost');
+  put('inflation','wpInfl'); put('annualSavings','wpSave'); put('annualDeferral','wpDefer'); put('dividendYield','wpYield'); put('capGainsRate','wpCG');
+  var or_ = function(x, d){ return x===null ? d : x; };   // an entered 0 stays 0
+  if($('#wpSS')) plan.socialSecurity = { amount:or_(n('wpSS'), 0), age:or_(n('wpSSAge'), 67) };
+  if($('#wpDCYears')) plan.deferredPayout = { years:or_(n('wpDCYears'), 10), fromAge:n('wpDCFrom') };
+  var sel = $('#wpStock');
+  if(sel && sel.value) plan.stockStrategy = sel.value==='sell' ? { mode:'sell', pct:or_(n('wpStockPct'), 10), fromAge:or_(n('wpStockFrom'), 55) } : { mode:'hold' };
+  var out = { plan:plan, birthday: state.birthday || '' };   // the answer is rebuilt with the age, as apiWealth is
+  var t = n('wpTax'); if(t!==null) out.config = { taxRate:t };   // ONE tax rate: the page setting the after-tax figures use too
+  return out;
+}
+function wealthPlanSave_(){
+  var body = wealthPlanRead_();
+  var btn = $('[data-act="wealth-plan-save"]'); if(btn){ btn.disabled = true; btn.textContent = 'Running…'; }
+  run('apiWealthSave', body).then(function(p){
+    state.wealth = p; markFetched('wealth');
+    if(state.view==='wealth') drawWealth_();
+    toast(p && p.verdict ? 'Plan saved · base case: '+(p.verdict.base.earliestAge!==null ? 'age '+p.verdict.base.earliestAge : 'not funded') : 'Plan saved');
+  }).catch(function(e){ if(btn){ btn.disabled = false; btn.textContent = 'Save plan'; } toast('⚠ '+(e && e.message || e)); });
+}
+
+
+/* ---------- Estate (v3.89.0) ----------
+   Coverage = assets whose beneficiary / titling / trust is RECORDED ÷ assets. Recorded here, in
+   Wealth settings - never read from a custodian. The gaps list is generated from what is unset,
+   biggest first, so finishing the table clears it. Debts are never on it. Estate-tax figures are
+   settings with years; they appear only when net worth is near enough to them to matter. */
+WEALTH_TABS.push(['estate','📜','Estate']);
+WEALTH_VIEWS.estate = function(P){
+  var E = P.estate || {}, nw = P.current.netWorth, rows = E.rows || [];
+  if(!rows.length) return '<div class="w-empty">No assets yet - the estate view starts with the first account that holds money.</div>';
+  var cov = E.coveragePct, k = ['<div class="w-kpi '+(cov!==null&&cov<90?'warn':'')+'"><div class="w-k">Coverage</div><div class="w-v">'+wPct_(cov)+'</div><div class="w-d '+(cov!==null&&cov<90?'warn':'pos')+'">of assets have beneficiary / titling / trust status recorded</div></div>'];
+  var ma = E.ma || {}, fed = E.federal || {};
+  var showMA = ma.threshold > 0 && nw >= ma.threshold * 0.5, showFed = fed.exclusion > 0 && nw >= fed.exclusion * 0.25;
+  if(showMA) k.push('<div class="w-kpi '+(ma.over?'warn':'')+'"><div class="w-k">MA estate tax exposure</div><div class="w-v">'+wK_(nw)+'</div><div class="w-d">threshold '+wK_(ma.threshold)+' ('+ma.year+')'+(ma.over ? ' · '+Number(ma.multiple).toFixed(1)+'× it — the trust question' : '')+'</div></div>');
+  if(showFed) k.push('<div class="w-kpi muted"><div class="w-k">Federal exclusion</div><div class="w-v">'+wK_(fed.exclusion)+'</div><div class="w-d">'+fed.year+' figure — a setting with a year, so it never silently ages</div></div>');
+  var h = '<div class="w-split '+(k.length>1?'c3':'')+'">'+k.join('')+'</div>';
+  if(!showMA && !showFed) h += '<div class="w-foot" style="margin-top:8px">Estate tax: net worth is well under the state threshold ('+wK_(ma.threshold)+', '+ma.year+') — nothing to plan for there yet. The figures are in Wealth settings.</div>';
+  h += '<div class="w-cov"><i style="width:'+Math.max(0, Math.min(100, cov||0)).toFixed(0)+'%"></i></div>';
+  h += '<div class="w-sect">By account <span class="w-n">— what happens to each one, and what\'s not set</span></div>'+
+    '<div class="w-scroll"><table class="w-t"><thead><tr><th>Account</th><th class="r">Balance</th><th>Passes by</th><th>Beneficiary</th><th>In trust</th><th class="r">Status</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      var ben = r.beneficiary===true ? 'Set' : r.beneficiary===false ? '<span class="w-badge r">Not set</span>' : '<span class="w-badge n">Not recorded</span>';
+      var tr = r.inTrust==='yes' ? 'Yes' : r.inTrust==='no' ? 'No' : r.inTrust==='check' ? '<span class="w-badge a">Check</span>' : 'n/a';
+      return '<tr><td class="strong">'+esc(r.name)+'</td><td class="r">'+wMoney_(r.balance)+'</td><td>'+esc(r.passesBy)+(r.passesBySet?'':' <span style="color:var(--ink-3)">(default)</span>')+'</td><td>'+ben+'</td><td>'+tr+'</td>'+
+        '<td class="r">'+(r.covered?'<span class="w-badge g">Covered</span>':'<span class="w-badge r">Gap</span>')+'</td></tr>'; }).join('')+
+    '</tbody></table></div><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="w-gear" data-act="wealth-gear">'+icon('settings')+'<span>Record these in Wealth settings</span></button></div>';
+  var G = (E.gaps || []).slice(0, 6), obs = [];
+  var acct = function(name){ return (P.byAccount||[]).filter(function(a){ return a.label===name; })[0] || {}; };
+  G.forEach(function(g){
+    var a = acct(g.name), why = a.tier===5 ? ' Low basis means a step-up matters - record how the shares pass (buy-sell, trust, transfer restrictions).' :
+      a.tier<=2 ? ' Small or not, it is the first money anyone would need.' : a.tier===6 ? ' Titling decides who can sell it, and when.' : '';
+    obs.push([a.tier===5?'🏢':a.tier<=2?'💵':a.tier===6?'🏠':'📄', g.name+' — '+(g.missing.length ? g.missing.join(', ')+' not recorded' : 'not covered'), wMoney_(g.balance)+', '+wPct_(g.pctOfEstate)+' of the estate.'+why]);
+  });
+  if(showMA && ma.over && ma.multiple >= 2) obs.push(['📜', 'Trust review', 'Net worth is '+Number(ma.multiple).toFixed(1)+'× the state threshold ('+wK_(ma.threshold)+', '+ma.year+'). A trust set up at a lower number may not fit this one.']);
+  if(obs.length) h += '<div class="w-sect">Gaps <span class="w-n">— generated from the table above, biggest first</span></div><div class="w-mini">'+
+    obs.map(function(o){ return '<div class="w-obs"><span class="ic">'+o[0]+'</span><span class="tx"><b>'+esc(o[1])+'</b><small>'+esc(o[2])+'</small></span></div>'; }).join('')+'</div>';
+  else h += '<div class="w-warn" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46">✓ Every asset has how it passes recorded.</div>';
+  return h;
+};
+
+/* ---------- Wealth settings sheet (the gear) ---------- */
+function wealthSheetOpen_(section){
+  var P = state.wealth; if(!P || P.needsSetup) return;
+  var S = P.settings || {};
+  state.wealthSheet = { section: section || 'accounts',
+    accounts: JSON.parse(JSON.stringify(S.accounts || [])),
+    config: JSON.parse(JSON.stringify(S.config || {})),
+    plan: JSON.parse(JSON.stringify((P.plan && P.plan.saved) || {})) };
+  drawWealth_();
+}
+function wealthSheetClose_(){ state.wealthSheet = null; drawWealth_(); }
+function wOpt_(val, cur, label){ return '<option value="'+esc(val)+'"'+(String(cur)===String(val)?' selected':'')+'>'+esc(label)+'</option>'; }
+function wealthSheetHtml_(P){
+  var W = state.wealthSheet, cfg = W.config || {}, est = cfg.estate || {}, br = cfg.bracket || {}, pl = W.plan || {};
+  var num = function(id, v, step, ph){ return '<input id="'+id+'" type="number" inputmode="decimal" step="'+(step||'any')+'" value="'+(v===null||v===undefined?'':esc(v))+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'>'; };
+  var h = '<div class="dwlib w-sheet" data-act="wealth-sheet-bg"><div class="sheet" data-act="wealth-sheet-in">'+
+    '<h3>Wealth settings</h3><div class="desc">How each account counts on the Wealth page. Nothing here changes Tiller or your budget. Defaults come from each account\'s Tiller type and group; anything you set here wins.</div>';
+  /* v3.88.0: the plan's inputs moved to the Planning tab (one place to edit them). */
+  h += '<div class="custlbl">Accounts</div>';
+  W.accounts.forEach(function(a, i){
+    var sb = a.liability ? 'Debt' + (a.rate ? ' · '+a.rate+'%' : '') : esc(W_TIER_REACH_[a.tier]) + ' · ' + esc(W_TAX_[a.tax]||'');
+    h += '<details><summary><span>'+esc(a.label || a.name)+'</span><span class="w-sb">'+sb+(a.isDefault && a.isDefault.tier ? ' · default' : '')+'</span></summary><div class="w-form">'+
+      '<label>Label (blank = the Tiller name)<input id="wa_label_'+i+'" type="text" value="'+esc(a.label||'')+'" placeholder="'+esc(a.name)+'"></label>'+
+      '<label>Liquidity tier<select id="wa_tier_'+i+'">'+[1,2,3,4,5,6].map(function(t){ return wOpt_(t, a.tier, t+' · '+W_TIER_REACH_[t]); }).join('')+'</select></label>';
+    if(!a.liability){
+      h += '<label>Tax type<select id="wa_tax_'+i+'">'+wOpt_('pre',a.tax,'Pre-tax')+wOpt_('tax',a.tax,'Taxable')+wOpt_('roth',a.tax,'Roth / HSA')+wOpt_('na',a.tax,'Not sold for income')+'</select></label>'+
+        '<label>Income yield (%/yr)'+num('wa_yield_'+i, a.incomeYield||'', '0.1', '0')+'</label>'+
+        '<label class="chk"><input id="wa_emp_'+i+'" type="checkbox"'+(a.employerTied?' checked':'')+'> Employer-tied</label>'+
+        '<label>Passes by<input id="wa_pass_'+i+'" type="text" value="'+esc(a.passesBy||'')+'" placeholder="Beneficiary, TOD, joint, trust…"></label>'+
+        '<label>Beneficiary recorded<select id="wa_ben_'+i+'">'+wOpt_('', a.beneficiary===null||a.beneficiary===undefined?'':String(a.beneficiary), 'Not recorded')+wOpt_('true', String(a.beneficiary), 'Set')+wOpt_('false', String(a.beneficiary), 'Not set')+'</select></label>'+
+        '<label>In trust<select id="wa_trust_'+i+'">'+wOpt_('', a.inTrust||'', '—')+wOpt_('yes',a.inTrust,'Yes')+wOpt_('no',a.inTrust,'No')+wOpt_('na',a.inTrust,'n/a')+wOpt_('check',a.inTrust,'Check')+'</select></label>';
+    } else {
+      h += '<label>Interest rate (APR %)'+num('wa_rate_'+i, a.rate, '0.01', '')+'</label>'+
+        '<label>Monthly payment ($)'+num('wa_pay_'+i, a.payment, '1', '')+'</label>';
+    }
+    h += '<label>Note<input id="wa_note_'+i+'" type="text" value="'+esc(a.note||'')+'"></label></div></details>';
+  });
+  h += '<div class="custlbl">Page</div><div class="w-form">'+
+    '<label>Employer exposure target (% of NW)'+num('wc_expT', cfg.exposureTarget, '1')+'</label>'+
+    '<label>…reached by age'+num('wc_expA', cfg.exposureByAge, '1')+'</label>'+
+    '<label>Tax rate on pre-tax withdrawals (%)'+num('wc_tax', cfg.taxRate, '1')+'</label></div>'+
+    '<div class="custlbl">Estate + tax figures <span style="text-transform:none;letter-spacing:0;font-weight:600">— each carries its year, so it never silently ages</span></div><div class="w-form">'+
+    '<label>State estate-tax threshold ($)'+num('wc_maT', est.maThreshold, '1000')+'</label><label>…as of year'+num('wc_maY', est.maYear, '1')+'</label>'+
+    '<label>Federal exclusion ($)'+num('wc_fedT', est.fedExclusion, '1000')+'</label><label>…as of year'+num('wc_fedY', est.fedYear, '1')+'</label>'+
+    '<label>Top of the 24% bracket ($)'+num('wc_brT', br.top24, '50')+'</label><label>Standard deduction ($)'+num('wc_brD', br.deduction, '50')+'</label>'+
+    '<label>…as of year'+num('wc_brY', br.year, '1')+'</label><label>Filing status<input id="wc_brS" type="text" value="'+esc(br.status||'')+'"></label></div>';
+  h += '<div class="w-acts"><button class="btn ghost" data-act="wealth-sheet-close">Cancel</button><button class="btn" data-act="wealth-sheet-save">Save</button></div></div></div>';
+  return h;
+}
+function wealthSheetRead_(){
+  var W = state.wealthSheet, v = function(id){ var e = $('#'+id); return e ? e.value : undefined; }, c = function(id){ var e = $('#'+id); return e ? !!e.checked : undefined; };
+  var n = function(id){ var x = v(id); return x===undefined || x==='' ? null : Number(x); };
+  var accounts = W.accounts.map(function(a, i){
+    var r = { lc:a.lc, label:v('wa_label_'+i), tier:n('wa_tier_'+i), note:v('wa_note_'+i) };
+    if(!a.liability){ r.tax = v('wa_tax_'+i); r.incomeYield = n('wa_yield_'+i); r.employerTied = c('wa_emp_'+i); r.passesBy = v('wa_pass_'+i);
+      var b = v('wa_ben_'+i); r.beneficiary = b==='' ? null : b==='true'; r.inTrust = v('wa_trust_'+i) || null; }
+    else { r.rate = n('wa_rate_'+i); r.payment = n('wa_pay_'+i); }
+    return r;
+  }).map(function(r, i){
+    /* only what you actually changed, FIELD BY FIELD (v3.90.0): an untouched account - or an
+       untouched tier on an account whose note you edited - keeps following its Tiller-type
+       default instead of having today's default frozen into a saved row. The server writes
+       only the fields it is sent. */
+    var a = W.accounts[i], same = function(x, y){ return String(x===null||x===undefined?'':x) === String(y===null||y===undefined?'':y); };
+    var keys = a.liability ? ['label','tier','note','rate','payment'] : ['label','tier','note','tax','incomeYield','employerTied','passesBy','beneficiary','inTrust'];
+    var orig = { label:a.label||'', tier:a.tier, note:a.note||'', rate:a.rate, payment:a.payment, tax:a.tax, incomeYield:a.incomeYield||null, employerTied:!!a.employerTied,
+      passesBy:a.passesBy||'', beneficiary:a.beneficiary===undefined?null:a.beneficiary, inTrust:a.inTrust||null };
+    var out = { lc:a.lc }, n = 0;
+    keys.forEach(function(k){ if(!same(r[k], orig[k])){ out[k] = (r[k]==='' ? null : r[k]); n++; } });
+    return n ? out : null;
+  }).filter(function(r){ return !!r; });
+  var config = { exposureTarget:n('wc_expT'), exposureByAge:n('wc_expA'), taxRate:n('wc_tax'),
+    estate:{ maThreshold:n('wc_maT'), maYear:n('wc_maY'), fedExclusion:n('wc_fedT'), fedYear:n('wc_fedY') },
+    bracket:{ top24:n('wc_brT'), deduction:n('wc_brD'), year:n('wc_brY'), status:v('wc_brS') } };
+  var out = { accounts:accounts, config:config, birthday: state.birthday || '' };
+  /* v3.88.0: plan inputs are saved from the Planning tab, never from this sheet */
+  return out;
+}
+function wealthSheetSave_(){
+  var body;
+  try{ body = wealthSheetRead_(); }catch(e){ toast('⚠ '+(e && e.message || e)); return; }
+  var btn = $('[data-act="wealth-sheet-save"]'); if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  run('apiWealthSave', body).then(function(p){
+    state.wealth = p; markFetched('wealth'); state.wealthSheet = null;
+    if(state.view==='wealth') drawWealth_();
+    toast('Wealth settings saved');
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+    toast('⚠ '+(e && e.message || e));
+  });
+}
+
+/* ---------- the help section, GENERATED from WEALTH_DEFS (hover, help and formula never drift) ---------- */
+function wealthHelpHtml_(){
+  var keys = Object.keys(WEALTH_DEFS);
+  return '<p style="margin:0 0 8px"><b>Wealth</b> (More → Wealth; on a computer, the sidebar) answers one question first: <b>can you retire when you want to?</b> - then shows what your net worth can actually <i>do</i>: what is investable, what is a promise, what only sells on someone else\'s terms, and what you cannot spend.</p>'+
+    '<p style="margin:0 0 8px">Every number comes from your accounts: Tiller\'s Balance History (and, where it was imported once, history from before Tiller). <b>Net worth here is always the same figure as Balances.</b> Tabs today: '+WEALTH_TABS.map(function(t){ return t[2]; }).join(' · ')+'.</p>'+
+    '<p style="margin:0 0 8px">Sections hide themselves when they have nothing to say - no debts, no debt table; nothing employer-tied, no exposure table. The <b>Wealth settings</b> gear on the page sets how each account counts (tier, tax type, employer-tied, yield, a loan\'s rate and payment, estate fields). It never changes Tiller or your budget.</p>'+
+    '<p style="margin:0 0 8px"><b>On Home</b>, the Wealth card shows net worth, its 12-month change and the verdict, and opens the page. It needs nothing extra from your phone - its numbers arrive with the rest of Home (hide it in Customize if you like).</p>'+   // v3.90.0
+    '<p style="margin:0 0 8px">Every label has an <b>ⓘ</b> - hover (or tap) for what it is, how it is figured and where it comes from. The same text, in full:</p>'+
+    '<details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700">Every Wealth label ('+keys.length+')</summary>'+
+    keys.map(function(k){ var d = WEALTH_DEFS[k]; return '<p style="margin:8px 0 0"><b>'+esc(k)+'</b> — '+esc(d[0])+'. <span style="opacity:.8">'+esc(d[1])+' <i>Source: '+esc(d[2])+'.</i></span></p>'; }).join('')+
+    '</details>';
+}
+
 /* ============================ render dispatch ============================ */
 function render(){
   if(!state.boot){ return; }
@@ -2277,6 +3165,7 @@ function render(){
   // Dashboard/Reports previously left live Chart.js instances on detached
   // canvases (slow leak over a long session).
   if(state.view!=='dash') dashDestroyCharts();
+  if(state.view!=='wealth'){ wealthDestroyCharts_(); wealthHideTip_(); }   // v3.85.0
   if(state.view!=='reports' && typeof rptChart!=='undefined' && rptChart){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
@@ -2305,6 +3194,7 @@ function render(){
   else if(state.view==='notify') renderNotify();         // v3.80.0
   else if(state.view==='obligations') renderObligations();
   else if(state.view==='goals') renderGoals();          // v3.75.0
+  else if(state.view==='wealth') renderWealth();        // v3.85.0
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
   else if(state.view==='activity') renderActivity();
@@ -2338,6 +3228,7 @@ var HOME_CARDS = [
   {id:'attention',slot:'body', size:'l'},
   {id:'coming',   slot:'body', size:'l'},   // v3.56.4 — Obligations: what leaves, and from where
   {id:'goals',    slot:'body', size:'m'},   // v3.75.0 — 🎯 Goals: saving for something
+  {id:'wealth',   slot:'body', size:'m'},   // v3.90.0 — 📈 Wealth: the verdict + net worth + 12-month change (rides apiDashboard)
   {id:'recent',   slot:'body', size:'l'},
   {id:'targets',  slot:'body', size:'l'},
   {id:'areas',    slot:'body', size:'m'},
@@ -2846,6 +3737,25 @@ var DASH_WIDGETS = {
   /* v3.75.0 — 🎯 Goals. Reads state.dash.goals (on the dashboard payload): no
      fetch, no scan. Three states, told apart honestly: no dash yet → loading;
      dash without `goals` (older server) → nothing; [] → the invitation. */
+  /* v3.90.0 — Wealth on Home. Its numbers ride apiDashboard (dash.wealth), so Home still makes no
+     call of its own (Home must not fetch) and the card never touches state.wealth. undefined = this
+     dashboard came from a server that does not carry it (Apps Script fallback / older build) and
+     null = Wealth is not set up in the database: both render NOTHING rather than invent a number. */
+  wealth:{title:'Wealth',icon:'📈',nav:'wealth',render:function(){
+    var head='<div class="dhead"><div class="dlbl">Wealth</div></div>';
+    if(!state.dash) return head+'<div class="dwmiss"><span class="skv">loading…</span></div>';
+    var w = state.dash.wealth;
+    if(w===undefined || w===null) return '';
+    var ch = w.change12;
+    var h = head+'<div class="dnum">'+wMoney_(w.netWorth)+'</div>'+
+      '<div class="dsub">'+(ch===null||ch===undefined ? 'net worth · the 12-month change starts once a year of history exists'
+        : '<span style="color:var(--'+(ch>=0?'green':'red')+');font-weight:700">'+(ch>=0?'▲ ':'▼ ')+wSigned_(ch, true)+'</span> net worth · 12 mo'+(w.change12Pct!==null&&w.change12Pct!==undefined?' ('+(w.change12Pct>=0?'+':'')+w.change12Pct+'%)':''))+'</div>';
+    var v = w.verdict;
+    if(v) h += '<div class="dsub" style="margin-top:6px">Retire at <b>'+(v.earliestAge===null||v.earliestAge===undefined?'—':v.earliestAge)+'</b> · target '+esc(v.targetAge)+' · base case'+
+      ' <span style="opacity:.75">· stress '+esc(v.stress)+' · low '+esc(v.low)+'</span></div>';
+    else h += '<div class="dsub" style="margin-top:6px">Retirement verdict: '+(w.needsAge ? 'add your birthday, then ' : '')+'set up on Wealth → Planning →</div>';
+    return h;
+  }},
   goals:{title:'Goals',icon:'🎯',nav:'goals',render:function(){
     var head='<div class="dhead"><div class="dlbl">Goals</div></div>';
     if(!state.dash) return head+'<div class="dwmiss"><span class="skv">loading…</span></div>';
@@ -3016,7 +3926,7 @@ function dashFetchRecent(){
    nothing anyone hid comes back. After the next save the list is exact, and
    future cards need no migration entry at all. */
 var HOME_KNOWN_KEY = 'sbcHomeKnown';
-var HOME_CARDS_SINCE = {coming:1, goals:1};   // coming: v3.56 · goals: v3.75.0 — each only needed once
+var HOME_CARDS_SINCE = {coming:1, goals:1, wealth:1};   // coming: v3.56 · goals: v3.75.0 · wealth: v3.90.0 — each only needed once
 function homeKnown_(){
   var saved=null;
   try{ saved = JSON.parse(localStorage.getItem(HOME_KNOWN_KEY)||'null'); }catch(e){}
@@ -6139,7 +7049,8 @@ var RPT_META = {
   inout:  {title:'Income vs spending', icon:'⚖️', desc:'Money in vs out per bucket, with the net.', server:'spend', compare:false, controls:['net']},
   tags:   {title:'Tags', icon:'🏷️', desc:'Everything you tagged, across every envelope and account.', server:'tags', compare:false, controls:[]},
   txns:   {title:'Transactions', icon:'🧾', desc:'The raw rows behind the numbers — filtered, tagged, exportable.', server:'txns', compare:false, controls:[]},
-  worth:  {title:'Net worth', icon:'🏦', desc:'Assets minus liabilities across your accounts.', server:'worth', compare:true, controls:[]}
+  /* v3.86.0: Net worth retired into Wealth → Growth (one page answers it, from month-end history
+     with the imported years). The server's 'worth' report stays for older shells; the menu links over. */
 };
 var RPT_PTYPES=[['week','Weekly'],['month','Monthly'],['quarter','Quarterly'],['year','Yearly'],['custom','Custom']];
 var rptChart=null;
@@ -6454,6 +7365,7 @@ function renderReports(){
   var side='<div class="rptside"><h3>Reports</h3><div class="rptlist">'+
     Object.keys(RPT_META).map(function(id){
       return '<button data-act="rpt-select" data-arg="'+id+'" class="'+(r.id===id?'on':'')+'"><span class="ic">'+RPT_META[id].icon+'</span>'+RPT_META[id].title+'</button>'; }).join('')+
+    '<button data-act="goreport" data-arg="worth" title="Net worth moved to Wealth → Growth"><span class="ic">🏦</span>Net worth → Wealth</button>'+   // v3.86.0
     '</div></div>';
   var body;
   if(state.reportErr) body='<div class="empty">⚠ '+esc(state.reportErr)+
@@ -6956,6 +7868,7 @@ function renderMore(){
     ['goals','Goals'],   // v3.75.0
     ['obligations','Obligations'],
     ['accounts','Accounts'],
+    ['wealth','Wealth'],   // v3.85.0
     ['reports','Reports <span class="beta inline">BETA</span>']]);
   h += settingsSectionLabel('APP')+settingsList([['settings','Settings']]);
   // Log out: on phones it lives here now (it followed Settings before); on
@@ -7239,6 +8152,15 @@ function pushOnMessage_(ev){
     toast('🔔 '+(n.title||'SBC Money')+(n.body ? ' — '+n.body : ''), { label:'Open', fn:function(){ go(view); } });
   }
   if(state.boot && (n.kind==='inbox' || n.kind==='sync')) refreshBootSoon_().then(function(){ if(state.view==='dash') renderDash(); });
+}
+/* v3.85.0: #wealth/<tab> survives a reload (one route per tab). Only Wealth restores from the
+   hash - every other page still opens on Home, as before. */
+function wealthRouteFromHash_(){
+  try{
+    var m = String(location.hash||'').match(/^#wealth(?:\/([a-z]+))?$/);
+    if(!m) return;
+    state.view = 'wealth'; state.wealthTab = m[1] || 'snap';
+  }catch(e){}
 }
 /* A notification tap opens ?open=<view>. Honour it once, then drop it from the URL. */
 function pushOpenFromUrl_(){
@@ -8517,6 +9439,8 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each one is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM in your time zone (<b>Settings \u2192 Personal information</b>; Eastern unless you change it).</p>'+
     '<p style="margin:0">Tap a notification and the app opens on the page it is about. If SBC Money is already in front of you, the alert shows as a message at the bottom of the screen instead. The Inbox count also shows in the browser tab — <b>(3) SBC Money</b> — and on the Home Screen icon.</p>');
 
+  h += S('📈','Wealth — net worth, and can you retire?', wealthHelpHtml_());   // v3.85.0: generated from WEALTH_DEFS
+
   h += S('📅','Your routines, on one card',
     '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
     '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
@@ -8728,6 +9652,16 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    /* v3.85.0 — Wealth */
+    case 'wealth-tab': wealthGo_(arg); break;
+    case 'wealth-range': state.wealthRange = arg; drawWealth_(); break;   // v3.86.0
+    case 'wealth-gear': wealthSheetOpen_('accounts'); break;
+    case 'wealth-plan-setup': wealthGo_('plan'); break;   // v3.88.0: the Planning tab owns the inputs
+    case 'wealth-plan-save': wealthPlanSave_(); break;
+    case 'wealth-sheet-close': wealthSheetClose_(); break;
+    case 'wealth-sheet-bg': if(ev.target===el) wealthSheetClose_(); break;
+    case 'wealth-sheet-in': break;
+    case 'wealth-sheet-save': wealthSheetSave_(); break;
     /* v3.79.0 — Suggestion rules */
     case 'rule-open': ruleOpen_(arg); break;
     case 'rule-open-from': ruleOpenFrom_(arg); break;
@@ -8788,7 +9722,8 @@ document.addEventListener('click', function(ev){
         toast('⚠ Birthday not saved: '+(e2 && e2.message || e2));
       });
     })(); break;
-    case 'goreport': state.report.id=(RPT_META[arg]?arg:'summary'); state.report.tagDetail=null; rptSave(); go('reports'); break;
+    case 'goreport': if(arg==='worth'){ wealthGo_('growth'); break; }   // v3.86.0: Net worth lives in Wealth → Growth
+      state.report.id=(RPT_META[arg]?arg:'summary'); state.report.tagDetail=null; rptSave(); go('reports'); break;
     // v3.59 Reports v2
     case 'rpt-select': state.report.id=arg; state.report.tagDetail=null; state.report.openFilter=null; rptSave(); renderReports(); break;
     case 'rpt-ptype': (function(){ var r=state.report;
@@ -9243,6 +10178,8 @@ SBC.ruleMatchesJs_ = ruleMatchesJs_; SBC.ruleFirstMatch_ = ruleFirstMatch_; SBC.
 SBC.ruleOverlaps_ = ruleOverlaps_; SBC.ruleMatchText_ = ruleMatchText_; SBC.ruleCondsFrom_ = ruleCondsFrom_;
 SBC.ruleCriteriaFromConds_ = ruleCriteriaFromConds_; SBC.ruleSource_ = ruleSource_; SBC.ruleWhyHtml_ = ruleWhyHtml_;
 SBC.rulePreviewQuery_ = rulePreviewQuery_; SBC.SETTINGS_VIEWS = SETTINGS_VIEWS;
+SBC.WEALTH_TABS = WEALTH_TABS; SBC.WEALTH_DEFS = WEALTH_DEFS; SBC.WEALTH_VIEWS = WEALTH_VIEWS; SBC.drawWealth_ = drawWealth_; SBC.renderWealth = renderWealth;   // v3.85.0
+SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
 SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
@@ -9259,6 +10196,7 @@ SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_V
   else if(window._gsiEarly === 'fail' && !gsiUp) gsiFailed();
   applySeason();   // v3.57: dress the sidebar brand before anything paints
   pushOpenFromUrl_();           // v3.80.0: a tapped notification opens ?open=<view>
+  wealthRouteFromHash_();       // v3.85.0: a reload on #wealth/<tab> lands on that tab
   goPushHistory_(state.view);   // v3.69.0 (U3): the first entry is Home, so the first Back returns to it
   swRegister_();                // v3.69.0 (F15): cache-first shell for the home-screen app
   try{ if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', pushOnMessage_); }catch(e){}   // v3.80.0
