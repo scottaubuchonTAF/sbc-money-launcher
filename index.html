@@ -1434,11 +1434,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.91.1';
+var FE_VERSION = 'v3.92.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.91.1+20261001.1236';
+var BUILD_ID = 'v3.92.0+20261001.1254';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7064,7 +7064,11 @@ function importNowUi(){
     // cached dashboard and homeReval_() refetches it (mirror refreshes the
     // Inbox from the sheet first, because the import marked it dirty), so the
     // pill updates without a page reload.
-    if(r && r.newCount > 0){ markMirrorDirty_(); invalidateData(); }
+    // v3.92.0: the server refreshed the mirror itself (Inbox + Settings + Tiller's Transactions and
+    // Balance History - r.mirrored==='ok'), so Budget health and Balances refetch with the new balances
+    // even when no transaction was new. Without that refresh, the v3.78.1 path (dirty mirror) stands.
+    if(r && r.mirrored === 'ok'){ invalidateData(); }
+    else if(r && r.newCount > 0){ markMirrorDirty_(); invalidateData(); }
     refreshBootSoon_();
     if(state.view==='inbox') renderInbox();
   }).catch(function(e){
