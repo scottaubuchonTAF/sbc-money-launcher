@@ -787,6 +787,11 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .rptlist button .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--teal-50);font-size:13px}
 .rptlist button.on{background:var(--teal-600);color:#fff} .rptlist button.on .ic{background:rgba(255,255,255,.22)}
 .rptlist button:hover:not(.on){background:var(--teal-50)}
+.rptside h3.rptgrp{margin-top:16px}   /* v3.91.0: the Wealth group of the one Reports menu */
+@media(max-width:860px){ .rptside .rptlist+ .rptgrp+ .rptlist{margin-top:7px} }
+.rptlayout>.rptside,.rptlayout>.rptpanel{min-width:0}   /* v3.91.0: a grid child must not grow to its widest table/chip row (phone overflow) */
+.rptpanel.w-inrpt{background:transparent;box-shadow:none;padding:0}   /* Wealth's own panel is the card */
+.rptpanel.w-inrpt .w-head{margin-top:4px}
 .rptpanel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px}
 .rpthead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .rpthead h2{font-size:19px;letter-spacing:-.02em;margin:0} .rpthead .desc{font-size:12.5px;color:var(--ink-3);margin-top:3px}
@@ -1076,7 +1081,6 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
     <button class="nav" data-v="goals"></button>
     <button class="nav" data-v="obligations"></button>
     <button class="nav" data-v="accounts"></button>
-    <button class="nav" data-v="wealth"></button>
     <button class="nav" data-v="reports"></button>
     </div>
     <!-- v3.76.5: Settings is not a destination you hunt for in a scrolling list -
@@ -1430,11 +1434,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.90.0';
+var FE_VERSION = 'v3.91.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.90.0+20261001.0831';
+var BUILD_ID = 'v3.91.0+20261001.1125';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1878,7 +1882,7 @@ $all('nav.tabs button').forEach(function(b){
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
   'removetxn','reconcile','howto','activity','personal','rules','notify'];   // v3.79.0: +rules   // v3.80.0: +notify
-var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','wealth','reports'];   // v3.85.0: +wealth (right after Accounts)   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
+var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.91.0: Wealth moved INTO Reports (Scott 10/1)   // v3.85.0: +wealth   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
   if(goReplaying_) return;
@@ -1912,12 +1916,13 @@ function go(view){
   $all('[data-v]').forEach(function(b){
     b.classList.toggle('on', b.dataset.v===view ||
       (b.dataset.v==='envelopes' && view==='envdetail') ||
+      (b.dataset.v==='reports' && view==='wealth') ||               // v3.91.0: Wealth is part of Reports
       /* v3.72.0: two owners now. The desktop sidebar's Settings button lights
          for the settings subtree; the phone's More tab lights for that subtree
          AND for the Money pages it is the only route to. They are different
          elements, so both rules can be true without fighting. */
       (b.dataset.v==='settings' && SETTINGS_VIEWS.indexOf(view)!==-1) ||
-      (b.dataset.v==='more' && (view==='more' ||
+      (b.dataset.v==='more' && (view==='more' || view==='wealth' ||
          SETTINGS_VIEWS.indexOf(view)!==-1 || MORE_VIEWS.indexOf(view)!==-1)));
   });
   render();
@@ -2433,7 +2438,7 @@ var WEALTH_DEFS = {
 '1-yr':['Change over the last 12 months','Latest balance − balance 12 months ago (forward-filled if no row that day). Includes your contributions.','Balance History'],
 'Flags':['Things that need a decision','Employer-tied = counts toward exposure. No beneficiary = Estate tab has no designation recorded.','Wealth settings + Estate table'],
 'Net worth over time':['Month-end net worth','Last balance per account in each month, forward-filled across gaps, liabilities negated, summed. Imported history before Tiller.','Balance History + imported history (one-time)'],
-'Where the growth came from':['Deposits vs. market, per year','You added = contributions + match + principal paydown that year; Market = change in net worth − you added. Honest only from when each feed began (Tiller carries 1–2 years of history per account), so the chart starts there and says so.','Feed lines the custodians label (401k "- contribution", HSA Employee/Employer Contribution, 529 "You Bought Contribution"), mortgage balance series; deferred comp needs a payday rule or your deferral election'],
+'Where the growth came from':['Your money vs. your employer\'s vs. the market, per year','Each year\'s change in net worth = You added + Employer added + Market. Market is what is left: each investment account\'s change minus the money that went into it. Honest only from when each feed began (Tiller carries 1-2 years of history per account), so the chart starts there and says so.','Feed lines the custodians label (401k "- contribution", HSA Employee / Employer Contribution, 529 "Money Line Received", IRA "Roth Conversion"), deferred comp\'s own purchases, Balance History'],
 'Since 2019 · you added':['Cumulative deposits','Sum of yearly "you added" since 2019.','Transactions tagged as contributions'],
 'Since 2019 · market did':['Cumulative growth that was not deposits','Sum of yearly "market" since 2019.','Computed'],
 'Real return · 5-yr':['Annualized return net of deposits','Money-weighted return over 5 years with contributions removed; compare to the headline CAGR which counts them.','Balance History + contributions'],
@@ -2445,8 +2450,12 @@ var WEALTH_DEFS = {
 'Start':['Net worth at the start of the window','Forward-filled month-end value.','Balance History'],
 'End':['Net worth at the end of the window','Latest value.','Balance History'],
 'Change':['End − Start','Dollars.','Computed'],
-'You added':['Deposits in the window','Contributions + match + principal paydown.','Transactions tagged as contributions'],
-'Market':['Change − You added','What the market and valuations did.','Computed'],
+'You added':['Your money in, over the window','Your contributions to each investment account (deferred comp = its fund purchases; a 401k\'s labeled contributions include any match - its feed does not separate them) + cash & savings change + card and loan balance change + accounts opened or closed. Itemized under "Where You added came from".','Feed lines labeled as contributions + Balance History'],
+'Employer':['Employer money in, over the window','Lines the custodian labels as the employer\'s (HSA "Employer Contribution"). Not part of You added.','Feed lines labeled employer contributions'],
+'Employer added':['Employer money in, over the span','Sum of each year\'s employer contributions (HSA "Employer Contribution"). A 401k match is inside the 401k\'s contributions - its feed does not label it separately.','Feed lines labeled employer contributions'],
+'Where You added came from':['What makes up You added, per year','Each row is one piece: contributions into each investment account, then the change in cash & savings, card balances, mortgage & loans, and any account opened or closed in the year (money moved, not market). The rows add up to You added.','Feed lines + Balance History'],
+'Item':['One piece of You added','A contribution into one account, or the change in one kind of balance.','Feed lines + Balance History'],
+'Market':['Change − You added − Employer','What the market and valuations did: each investment account\'s change minus the money that went into it (dividends and fund distributions stay in market).','Computed'],
 'Headline CAGR':['Compound annual growth rate of the raw number','(End ÷ Start)^(1/years) − 1. Flattered by deposits.','Computed'],
 'Real return':['Annualized return with deposits removed','Money-weighted (modified Dietz): market ÷ (start + half of what you added), annualized.','Computed'],
 'Milestones':['Round-number crossings','First month-end at or above each threshold; projected ones use the trailing 3-year pace.','Balance History'],
@@ -2504,7 +2513,8 @@ var WEALTH_DEFS = {
 'Gaps':['Generated from the table above','One line per account with something unset, biggest first.','Computed']
 };/* v3.85.0: labels the page shows that the mockup did not - same what / how / source shape. */
 WEALTH_DEFS['Wealth settings'] = ['How each account counts on this page','Per account: liquidity tier, tax type, employer-tied, income yield, debt rate + payment, estate fields. Page: exposure target, tax rate, estate figures with their years.','sbc.wealth_accounts + sbc.wealth_settings (SBC-owned; Tiller is never changed)'];
-WEALTH_DEFS['Since · you added'] = ['Cumulative deposits since the feeds began','Sum of each year\'s "you added" from the first month a feed labeled a contribution.','Feed lines labeled as contributions + Balance History'];
+WEALTH_DEFS['Since · you added'] = ['Your money in since the feeds began','Sum of each year\'s "You added" from the first month a feed labeled a contribution - itemized below.','Feed lines labeled as contributions + Balance History'];
+WEALTH_DEFS['Since · employer added'] = WEALTH_DEFS['Employer added'];
 WEALTH_DEFS['Since · market did'] = ['Cumulative growth that was not deposits','Sum of each year\'s "market" over the same span.','Computed'];
 WEALTH_DEFS['What the split tells you'] = ['Observations computed from the numbers above','Each line fires on a rule (headline vs real return, the worst drawdown re-sized to today, where the split starts) and restates its figures.','Computed'];
 WEALTH_DEFS['Milestone'] = ['The round number crossed','Net worth, and your largest account, at each round number.','Balance History'];
@@ -2568,7 +2578,7 @@ function wealthLoad_(force){
 }
 function renderWealth(){
   if(state.wealth) drawWealth_();
-  else $('#shell').innerHTML = wealthHeadHtml_(null)+'<div class="spin"></div>';
+  else $('#shell').innerHTML = wealthInReports_(wealthHeadHtml_(null)+'<div class="spin"></div>', wealthTab_());
   wealthLoad_(false);
 }
 function wealthGo_(tab){ state.wealthTab = tab; go('wealth'); }
@@ -2587,6 +2597,12 @@ function wealthHeadHtml_(P){
   return '<div class="w-head"><div><h2>Wealth</h2>'+(sub?'<div class="w-sub">'+sub+'</div>':'')+'</div>'+
     (P && !P.needsSetup ? '<button class="w-gear" data-act="wealth-gear" title="Wealth settings">'+icon('settings')+'<span>Wealth settings</span></button>' : '')+'</div>';
 }
+/* v3.91.0: Wealth is part of Reports - its page sits in the Reports layout, under the one menu
+   (the five tabs are that menu's Wealth group; the page no longer carries its own tab bar) */
+function wealthInReports_(inner, tab){
+  return '<h2 class="viewtitle">Reports <span class="beta inline">BETA</span></h2><div class="rptlayout">'+rptSideHtml_(null, tab)+
+    '<div class="rptpanel w-inrpt">'+inner+'</div></div>';
+}
 function drawWealth_(){
   var P = state.wealth;
   if(!P) return;
@@ -2595,18 +2611,14 @@ function drawWealth_(){
     h += '<div class="w-panel"><div class="w-setup"><b>Wealth needs a one-time database step.</b><br>'+
       'Run <b>supabase\\Import Wealth History.cmd</b> on the PC that releases SBC Money (it creates Wealth\'s own tables first; '+
       'with no SDA File history to import it simply stops after that). Net worth today: <b>'+wMoney_(P.current && P.current.netWorth)+'</b> - the same figure Balances shows.</div></div>';
-    $('#shell').innerHTML = h; return;
+    $('#shell').innerHTML = wealthInReports_(h, wealthTab_()); return;
   }
   var tab = wealthTab_();
-  if(WEALTH_TABS.length > 1){
-    h += '<div class="w-tabs" role="tablist">'+WEALTH_TABS.map(function(t){
-      return '<button role="tab" data-act="wealth-tab" data-arg="'+t[0]+'" class="'+(t[0]===tab?'on':'')+'">'+t[1]+' '+esc(t[2])+'</button>'; }).join('')+'</div>';
-  }
   var view = WEALTH_VIEWS[tab] || WEALTH_VIEWS.snap;
   h += '<div class="w-panel" id="wpanel">'+view(P)+'</div>';
   if(state.wealthSheet) h += wealthSheetHtml_(P);
   wealthDestroyCharts_();
-  $('#shell').innerHTML = h;
+  $('#shell').innerHTML = wealthInReports_(h, tab);
   wealthAddInfo_();
   if(view.after) try{ view.after(P); }catch(e){ console.warn('wealth chart:', e && e.message || e); }
 }
@@ -2682,7 +2694,7 @@ WEALTH_VIEWS.snap = function(P){
   var s = P.split, q = P.quick, nw = P.current.netWorth, heavy = wealthHeavy_(P);
   var one = q.oneYear;
   var oneTxt = one ? (one.amt>=0?'▲ ':'▼ ')+wSigned_(one.amt, true)+' 1-yr' +
-      (one.contrib!==null && one.market!==null ? ' · of which you added '+wK_(one.contrib)+', market '+wSigned_(one.market, true) : '') : 'tracked since '+wMonth_(P.tracked.since);
+      (one.contrib!==null && one.market!==null ? ' · of which you added '+wK_(one.contrib)+(one.employer ? ', employer '+wK_(one.employer) : '')+', market '+wSigned_(one.market, true) : '') : 'tracked since '+wMonth_(P.tracked.since);
   var h = '<div class="w-hero">'+wealthVerdictHtml_(P)+
     '<div class="w-split">'+
       '<div class="w-kpi"><div class="w-k">Net worth</div><div class="w-v">'+wMoney_(nw)+'</div><div class="w-d '+(one ? (one.amt>=0?'pos':'neg') : '')+'">'+oneTxt+'</div></div>'+
@@ -2777,19 +2789,22 @@ WEALTH_VIEWS.growth = function(P){
   h += '<div class="w-sect">Where the growth came from <span class="w-n">— each year\'s change, split into what you added and what the market did'+(P.tracked && P.tracked.splitFrom ? ', from '+wMonth_(P.tracked.splitFrom) : '')+'</span></div>';
   if(C.length){
     h += '<div class="w-chart short"><canvas id="wGrowthSplit"></canvas></div>';
-    var add = C.reduce(function(t,x){ return t + x.added; }, 0), mkt = C.reduce(function(t,x){ return t + x.market; }, 0), tot = add + mkt;
+    var add = C.reduce(function(t,x){ return t + x.added; }, 0), mkt = C.reduce(function(t,x){ return t + x.market; }, 0), emp = C.reduce(function(t,x){ return t + (x.employer||0); }, 0);
+    var mov = Math.abs(add) + Math.abs(mkt) + Math.abs(emp);
     var since = wMonth_(C[0].from);
-    var st = [['Since '+since+' · you added', wK_(add), tot ? wPct_(Math.abs(add)/(Math.abs(add)+Math.abs(mkt))*100)+' of the movement' : '', ''],
-      ['Since '+since+' · market did', wSigned_(mkt, true), tot ? wPct_(Math.abs(mkt)/(Math.abs(add)+Math.abs(mkt))*100)+' of the movement' : '', mkt>=0?'pos':'neg']];
+    var st = [['Since '+since+' · you added', wK_(add), mov ? wPct_(Math.abs(add)/mov*100)+' of the movement' : '', '']];
+    if(emp) st.push(['Since '+since+' · employer added', wK_(emp), wPct_(Math.abs(emp)/mov*100)+' of the movement', '']);
+    st.push(['Since '+since+' · market did', wSigned_(mkt, true), mov ? wPct_(Math.abs(mkt)/mov*100)+' of the movement' : '', mkt>=0?'pos':'neg']);
     h += '<div class="w-srow">'+st.map(wStat_).join('')+wGrowthStats_(P)+'</div>';
+    h += wAddedTable_(C);
   } else {
     h += '<div class="w-empty">No feed labels a contribution yet, so the change cannot be split honestly. It appears here from the first month a feed does.</div>';
     var gs = wGrowthStats_(P); if(gs) h += '<div class="w-srow">'+gs+'</div>';
   }
   if(per.length){
-    h += '<div class="w-sect">Growth metrics</div><div class="w-scroll"><table class="w-t"><thead><tr><th>Period</th><th class="r">Years</th><th class="r">Start</th><th class="r">End</th><th class="r">Change</th><th class="r">You added</th><th class="r">Market</th><th class="r">Headline CAGR</th><th class="r">Real return</th></tr></thead><tbody>'+
+    h += '<div class="w-sect">Growth metrics</div><div class="w-scroll"><table class="w-t"><thead><tr><th>Period</th><th class="r">Years</th><th class="r">Start</th><th class="r">End</th><th class="r">Change</th><th class="r">You added</th>'+(per.some(function(p){ return p.employer; }) ? '<th class="r">Employer</th>' : '')+'<th class="r">Market</th><th class="r">Headline CAGR</th><th class="r">Real return</th></tr></thead><tbody>'+
       per.map(function(p){ return '<tr><td class="strong">'+esc(p.period)+'</td><td class="r">'+Number(p.years).toFixed(1)+'</td><td class="r">'+wMoney_(p.start)+'</td><td class="r">'+wMoney_(p.end)+'</td>'+
-        '<td class="r '+(p.change>=0?'pos':'neg')+'">'+wSigned_(p.change)+'</td><td class="r">'+(p.added===null?'—':wK_(p.added))+'</td><td class="r '+(p.market===null?'':p.market>=0?'pos':'neg')+'">'+(p.market===null?'—':wSigned_(p.market,true))+'</td>'+
+        '<td class="r '+(p.change>=0?'pos':'neg')+'">'+wSigned_(p.change)+'</td><td class="r">'+(p.added===null?'—':wK_(p.added))+'</td>'+(per.some(function(q){ return q.employer; }) ? '<td class="r">'+(p.employer===null||p.employer===undefined?'—':wK_(p.employer))+'</td>' : '')+'<td class="r '+(p.market===null?'':p.market>=0?'pos':'neg')+'">'+(p.market===null?'—':wSigned_(p.market,true))+'</td>'+
         '<td class="r" style="color:var(--ink-3)">'+(p.cagr===null?'—':wPct_(p.cagr,1))+'</td><td class="r strong">'+(p.realReturn===null?'—':wPct_(p.realReturn,1))+'</td></tr>'; }).join('')+
       '</tbody></table></div>'+
       (per.some(function(p){ return p.added===null; }) ? '<div class="w-foot">— = before the feeds labeled contributions, so that window cannot be split.</div>' : '');
@@ -2806,6 +2821,25 @@ WEALTH_VIEWS.growth = function(P){
   }
   return h;
 };
+/* v3.91.0 (Scott 10/1: "where do you get YOU added from?"): the pieces, per year - they add up to You added */
+function wAddedTable_(C){
+  var Y = C.slice(-3), rows = [], seen = {};
+  Y.forEach(function(y){ (y.items||[]).forEach(function(it){ if(!seen[it.id]){ seen[it.id] = { label:it.label, kind:it.kind }; rows.push(it.id); } }); });
+  if(!rows.length) return '';
+  var ORD = { contrib:0, cash:1, cards:2, loans:3, moved:4 };
+  rows.sort(function(a,b){ return ORD[seen[a].kind] - ORD[seen[b].kind]; });
+  var val = function(y, id){ var it = (y.items||[]).filter(function(x){ return x.id===id; })[0]; return it ? it.amount : 0; };
+  var emp = Y.some(function(y){ return y.employer; });
+  return '<div class="w-sect">Where You added came from <span class="w-n">— the pieces add up to each year\'s You added</span></div>'+
+    '<div class="w-scroll"><table class="w-t"><thead><tr><th>Item</th>'+Y.map(function(y){ return '<th class="r yr">'+esc(y.year)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    rows.map(function(id){ return '<tr><td'+(seen[id].kind==='contrib'?' class="strong"':'')+'>'+esc(seen[id].label)+(seen[id].kind==='contrib'?' <span class="w-n">contributions</span>':'')+'</td>'+
+      Y.map(function(y){ var v = val(y, id); return '<td class="r">'+(v ? wSigned_(v) : '—')+'</td>'; }).join('')+'</tr>'; }).join('')+
+    '<tr class="total"><td>You added</td>'+Y.map(function(y){ return '<td class="r">'+wSigned_(y.added)+'</td>'; }).join('')+'</tr>'+
+    (emp ? '<tr><td>Employer added <span class="w-n">not in You added</span></td>'+Y.map(function(y){ return '<td class="r">'+(y.employer ? wSigned_(y.employer) : '—')+'</td>'; }).join('')+'</tr>' : '')+
+    '<tr><td>Market</td>'+Y.map(function(y){ return '<td class="r '+(y.market>=0?'pos':'neg')+'">'+wSigned_(y.market, true)+'</td>'; }).join('')+'</tr>'+
+    '</tbody></table></div>'+
+    '<div class="w-foot">Contributions are what each custodian labels as money in (a 401k\'s include any match). Deferred comp counts its own fund purchases. Dividends and fund distributions stay in market.</div>';
+}
 function wStat_(x){ return '<div class="w-stat"><div class="w-k">'+x[0]+'</div><div class="w-v '+(x[3]||'')+'">'+x[1]+'</div>'+(x[2]?'<div class="w-d">'+x[2]+'</div>':'')+'</div>'; }
 function wGrowthStats_(P){
   var g = P.growth || {}, per = g.periods || [], out = [];
@@ -2826,8 +2860,9 @@ WEALTH_VIEWS.growth.after = function(P){
   var cv2 = document.getElementById('wGrowthSplit'), C = P.contributions || [];
   if(cv2 && cv2.getContext && C.length){
     wealthCharts_.push(new Chart(cv2, { type:'bar', data:{ labels:C.map(function(x){ return x.year; }),
-      datasets:[{ label:'You added (contributions + paydown + cash saved)', data:C.map(function(x){ return x.added; }), backgroundColor:W_CAT[2] },
-        { label:'Market / valuation change', data:C.map(function(x){ return x.market; }), backgroundColor:W_TEAL }] }, options:wAxis_({ legend:true, stacked:true, zero:true }) }));
+      datasets:[{ label:'You added (itemized below)', data:C.map(function(x){ return x.added; }), backgroundColor:W_CAT[2] },
+        { label:'Market / valuation change', data:C.map(function(x){ return x.market; }), backgroundColor:W_TEAL }]
+        .concat(C.some(function(x){ return x.employer; }) ? [{ label:'Employer added', data:C.map(function(x){ return x.employer||0; }), backgroundColor:W_CAT[4] }] : []) }, options:wAxis_({ legend:true, stacked:true, zero:true }) }));
   }
 };
 
@@ -3148,7 +3183,7 @@ function wealthSheetSave_(){
 /* ---------- the help section, GENERATED from WEALTH_DEFS (hover, help and formula never drift) ---------- */
 function wealthHelpHtml_(){
   var keys = Object.keys(WEALTH_DEFS);
-  return '<p style="margin:0 0 8px"><b>Wealth</b> (More → Wealth; on a computer, the sidebar) answers one question first: <b>can you retire when you want to?</b> - then shows what your net worth can actually <i>do</i>: what is investable, what is a promise, what only sells on someone else\'s terms, and what you cannot spend.</p>'+
+  return '<p style="margin:0 0 8px"><b>Wealth</b> (part of <b>Reports</b> - its five pages are the menu\'s Wealth group; on a phone, More → Reports & Wealth) answers one question first: <b>can you retire when you want to?</b> - then shows what your net worth can actually <i>do</i>: what is investable, what is a promise, what only sells on someone else\'s terms, and what you cannot spend.</p>'+
     '<p style="margin:0 0 8px">Every number comes from your accounts: Tiller\'s Balance History (and, where it was imported once, history from before Tiller). <b>Net worth here is always the same figure as Balances.</b> Tabs today: '+WEALTH_TABS.map(function(t){ return t[2]; }).join(' · ')+'.</p>'+
     '<p style="margin:0 0 8px">Sections hide themselves when they have nothing to say - no debts, no debt table; nothing employer-tied, no exposure table. The <b>Wealth settings</b> gear on the page sets how each account counts (tier, tax type, employer-tied, yield, a loan\'s rate and payment, estate fields). It never changes Tiller or your budget.</p>'+
     '<p style="margin:0 0 8px"><b>On Home</b>, the Wealth card shows net worth, its 12-month change and the verdict, and opens the page. It needs nothing extra from your phone - its numbers arrive with the rest of Home (hide it in Customize if you like).</p>'+   // v3.90.0
@@ -7354,6 +7389,18 @@ function drawReportChart(){
 }
 
 /* ---- render ---- */
+/* v3.91.0 (Scott 10/1: "I would also want wealth built as part of reports"): ONE menu for every report -
+   the spending reports, then Wealth's five. Drawn by Reports AND by the Wealth page, so the menu never
+   changes under you; on a phone it is the same two rows of chips. */
+function rptSideHtml_(rid, wtab){
+  return '<div class="rptside"><h3>Spending</h3><div class="rptlist">'+
+    Object.keys(RPT_META).map(function(id){
+      return '<button data-act="'+(state.view==='reports'?'rpt-select':'rpt-open')+'" data-arg="'+id+'" class="'+(rid===id?'on':'')+'"><span class="ic">'+RPT_META[id].icon+'</span>'+RPT_META[id].title+'</button>'; }).join('')+
+    '</div><h3 class="rptgrp">Wealth</h3><div class="rptlist">'+
+    WEALTH_TABS.map(function(t){
+      return '<button data-act="wealth-tab" data-arg="'+t[0]+'" class="'+(wtab===t[0]?'on':'')+'"><span class="ic">'+t[1]+'</span>'+esc(t[2])+'</button>'; }).join('')+
+    '</div></div>';
+}
 function renderReports(){
   if(state.report.id!=='tags') state.report.tagDetail=null;
   var r=state.report, meta=RPT_META[r.id]||(r.id='summary',RPT_META.summary);
@@ -7362,11 +7409,7 @@ function renderReports(){
   var sameErr=state.reportErr&&state.reportErrSig===rptSig();
   if(needFetch&&!state.reportLoading&&!sameErr) rptFetch();
   if(state.tagsList===null&&!state.reportLoading) fetchTags(); // tag filter options (lazy, reports-only)
-  var side='<div class="rptside"><h3>Reports</h3><div class="rptlist">'+
-    Object.keys(RPT_META).map(function(id){
-      return '<button data-act="rpt-select" data-arg="'+id+'" class="'+(r.id===id?'on':'')+'"><span class="ic">'+RPT_META[id].icon+'</span>'+RPT_META[id].title+'</button>'; }).join('')+
-    '<button data-act="goreport" data-arg="worth" title="Net worth moved to Wealth → Growth"><span class="ic">🏦</span>Net worth → Wealth</button>'+   // v3.86.0
-    '</div></div>';
+  var side=rptSideHtml_(r.id, null);
   var body;
   if(state.reportErr) body='<div class="empty">⚠ '+esc(state.reportErr)+
     '<div style="margin-top:10px"><button class="btn sm" data-act="rpt-retry">Try again</button></div></div>';
@@ -7868,8 +7911,7 @@ function renderMore(){
     ['goals','Goals'],   // v3.75.0
     ['obligations','Obligations'],
     ['accounts','Accounts'],
-    ['wealth','Wealth'],   // v3.85.0
-    ['reports','Reports <span class="beta inline">BETA</span>']]);
+    ['reports','Reports & Wealth <span class="beta inline">BETA</span>']]);   // v3.91.0: Wealth lives inside Reports
   h += settingsSectionLabel('APP')+settingsList([['settings','Settings']]);
   // Log out: on phones it lives here now (it followed Settings before); on
   // desktop it stays in the sidebar footer.
@@ -9725,6 +9767,7 @@ document.addEventListener('click', function(ev){
     case 'goreport': if(arg==='worth'){ wealthGo_('growth'); break; }   // v3.86.0: Net worth lives in Wealth → Growth
       state.report.id=(RPT_META[arg]?arg:'summary'); state.report.tagDetail=null; rptSave(); go('reports'); break;
     // v3.59 Reports v2
+    case 'rpt-open': state.report.id=arg; state.report.tagDetail=null; state.report.openFilter=null; rptSave(); go('reports'); break;   // v3.91.0: from the Wealth page
     case 'rpt-select': state.report.id=arg; state.report.tagDetail=null; state.report.openFilter=null; rptSave(); renderReports(); break;
     case 'rpt-ptype': (function(){ var r=state.report;
       if(arg==='custom'&&r.ptype!=='custom'){ var rng=rptRange(); r.custFrom=rng.from; r.custTo=rng.to; }
@@ -10179,6 +10222,7 @@ SBC.ruleOverlaps_ = ruleOverlaps_; SBC.ruleMatchText_ = ruleMatchText_; SBC.rule
 SBC.ruleCriteriaFromConds_ = ruleCriteriaFromConds_; SBC.ruleSource_ = ruleSource_; SBC.ruleWhyHtml_ = ruleWhyHtml_;
 SBC.rulePreviewQuery_ = rulePreviewQuery_; SBC.SETTINGS_VIEWS = SETTINGS_VIEWS;
 SBC.WEALTH_TABS = WEALTH_TABS; SBC.WEALTH_DEFS = WEALTH_DEFS; SBC.WEALTH_VIEWS = WEALTH_VIEWS; SBC.drawWealth_ = drawWealth_; SBC.renderWealth = renderWealth;   // v3.85.0
+SBC.rptSideHtml_ = rptSideHtml_; SBC.wealthInReports_ = wealthInReports_;   // v3.91.0
 SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
