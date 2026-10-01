@@ -242,6 +242,7 @@ aside.side{display:none}
 .dpl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dpl .v{flex:none;font-variant-numeric:tabular-nums}
 .dpl .ok{color:var(--teal-600,#0d9488);font-weight:700} .dpl .wait{color:var(--ink-3)}
+.bsplan{padding:8px 0;border-top:1px solid var(--line)} .bsplan:first-of-type{border-top:none}
 .dtile .dscroll{overflow:auto;flex:1;min-height:0;margin:0 -18px;padding:0 18px}
 .dkv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)}
 .dkv:first-child{border-top:none}
@@ -1440,11 +1441,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.93.0';
+var FE_VERSION = 'v3.93.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.93.0+20261001.1601';
+var BUILD_ID = 'v3.93.1+20261001.1623';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3357,6 +3358,10 @@ function fundPlanRows_(b){
     return '<div class="dpl"><span class="nm">'+lbl+'</span><span class="v">'+st+'</span></div>';
   });
   if(Math.abs(Number(b.other||0))>=0.005) rows.push('<div class="dpl"><span class="nm">Other funding</span><span class="v">'+money(b.other)+'</span></div>');
+  // v3.93.1: an active plan is not a plan in use (old, the other season). Say what was left out.
+  var sk = b.skipped||[];
+  if(!(b.plans||[]).length) rows.push('<div class="dpl"><span class="nm wait">No plan used in the last 3 months — pick your budget plans in Settings → Budget &amp; paychecks</span></div>');
+  else if(sk.length) rows.push('<div class="dpl"><span class="nm wait">Not in this month’s budget: '+sk.map(function(x){ return esc(x.name); }).join(', ')+'</span></div>');
   return rows.length ? '<div class="dpls">'+rows.join('')+'</div>' : '';
 }
 /* v3.45 — Way C2: WHERE the money behind the budget actually sits.
@@ -5162,7 +5167,8 @@ function plansSection(){
       '<span class="nm">'+esc(p.name)+(p.active?'':' (inactive)')+'</span>'+
       '<span class="mode">'+(tot!=null?money(tot):esc(p.mode))+'</span></div>';
     if(open){
-      h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">How often: '+esc(planFreqLabel_(p.frequency||'monthly'))+'</div>';   // v3.93.0
+      h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">How often: '+esc(planFreqLabel_(p.frequency||'monthly'))+
+        ' · In the budget: '+esc((p.include||'auto')==='auto'?'automatic':planIncludeLabel_(p.include))+'</div>';   // v3.93.0 / v3.93.1
       if(p.incomeMatch) h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">matches: '+esc(p.incomeMatch)+'</div>';
       h += planLinesHtml(p);
       h += '<div class="reglinks">'+
@@ -5222,6 +5228,10 @@ function planFormHtml(){
     PLAN_FREQ_OPTS.map(function(o){
       return '<option value="'+o[0]+'"'+((pe.frequency||'monthly')===o[0]?' selected':'')+'>'+o[1]+'</option>';
     }).join('')+'</select></div>'+
+    '<div class="formrow"><label>In the budget</label><select id="pfInc">'+
+    PLAN_INCLUDE_OPTS.map(function(o){
+      return '<option value="'+o[0]+'"'+((pe.include||'auto')===o[0]?' selected':'')+'>'+o[1]+'</option>';
+    }).join('')+'</select></div>'+
     '<div class="formrow"><label>Income match (optional — text in the deposit description)</label>'+
     '<input type="text" id="pfMatch" value="'+esc(pe.incomeMatch)+'" placeholder="AUBUCHON DIRECT DEP"></div>'+
     '<div class="formrow"><label>Lines (fixed $, percent %, or remainder)</label>';
@@ -5246,10 +5256,16 @@ function planFormHtml(){
 /* v3.93.0: how a plan counts toward the month's budget (Settings 'Plan Frequency'). */
 var PLAN_FREQ_OPTS = [['monthly','Once a month'],['every','Every paycheck'],
   ['p1','Paycheck 1 of the month'],['p2','Paycheck 2 of the month'],['p3','Paycheck 3 (months that have one)']];
+/* v3.93.1 (Scott: "I could have multiple budgets in there that may be old or summer vs winter"):
+   which plans make up the month's budget (Settings 'Plan Budget'). Automatic = the plan you used most
+   recently for that How often, so switching seasons switches the budget. */
+var PLAN_INCLUDE_OPTS = [['auto','Automatic — when it’s the plan I used last'],['always','Always'],['never','Never']];
+function planIncludeLabel_(v){ var o = PLAN_INCLUDE_OPTS.filter(function(x){ return x[0]===v; })[0]; return o ? o[1] : PLAN_INCLUDE_OPTS[0][1]; }
 function planFreqLabel_(f){ var o = PLAN_FREQ_OPTS.filter(function(x){ return x[0]===f; })[0]; return o ? o[1] : 'Once a month'; }
 function planFormCapture(){
   var pe = state.planEdit;
   if($('#pfFreq')) pe.frequency = $('#pfFreq').value;
+  if($('#pfInc')) pe.include = $('#pfInc').value;
   if($('#pfName')) pe.name = $('#pfName').value;
   if($('#pfMode')) pe.mode = $('#pfMode').value;
   if($('#pfMatch')) pe.incomeMatch = $('#pfMatch').value;
@@ -5268,6 +5284,7 @@ function planSave(){
   if(cancel){ cancel.disabled = true; }
   var isEdit = !!pe.planId;
   var freq = pe.frequency || 'monthly', freq0 = pe._freq0 || 'monthly';
+  var inc = pe.include || 'auto', inc0 = pe._inc0 || 'auto';
   run('apiSavePlan', { planId:pe.planId||'', name:pe.name, mode:pe.mode,
     incomeMatch:pe.incomeMatch, active:pe.active!==false,
     lines: lines.map(function(l){ return { envelopeId:l.envelopeId,
@@ -5276,9 +5293,11 @@ function planSave(){
   .then(function(r){
     // v3.93.0: "How often" is a Settings row keyed by plan id, so a NEW plan saves it once the id exists.
     var id = (r && r.planId) || pe.planId;
-    if(id && freq!==freq0){
-      var patch = {}; patch[id] = freq;
-      return run('apiSetBudgetSettings', { planFrequency: patch }).then(function(){ invalidateData(); return r; });
+    if(id && (freq!==freq0 || inc!==inc0)){
+      var bs = {}, fp = {}, ip = {};
+      if(freq!==freq0){ fp[id] = freq; bs.planFrequency = fp; }
+      if(inc!==inc0){ ip[id] = inc; bs.planInclude = ip; }
+      return run('apiSetBudgetSettings', bs).then(function(){ invalidateData(); return r; });
     }
     return r;
   })
@@ -9345,7 +9364,7 @@ function drawHealthSettings(){
    Scott 10/1/26: "my goal for the month is to fill my envelopes to my latest funding plan ...
    somebody may budget paycheck to paycheck ... i want to make sure this works either way".
    Three Settings rows + one per plan (supabase/functions/_shared/budget.ts has the rules). */
-var BUDGET_SOURCE_OPTS = [['','Automatic — your funding plans when you have one'],['plans','Your funding plans'],
+var BUDGET_SOURCE_OPTS = [['','Automatic — your plans when you have one'],['plans','Your funding plans'],
   ['targets','Monthly targets (the Targets tab)'],['off','No budget — just show what I funded']];
 var PAY_SCHEDULE_OPTS = [['','Not set'],['monthly','Once a month'],['twice-monthly','Twice a month'],
   ['biweekly','Every 2 weeks'],['weekly','Every week']];
@@ -9377,11 +9396,24 @@ function drawBudgetSettings(){
     '<div class="formrow"><label>One payday (needed for every 2 weeks / every week)</label><input type="date" id="bsStart" value="'+esc(b.start||'')+'"></div>'+
     '<div class="note" style="padding:2px 0 6px">'+(b.paychecks!=null ? 'This month has <b>'+b.paychecks+'</b> paycheck'+(b.paychecks===1?'':'s')+'.' :
       'Not set: paycheck 1 and 2 plans always count, a paycheck 3 plan counts once you use it, and an every-paycheck plan counts each time you use it.')+'</div></div></div>';
-  h += '<div class="grp"><h3>Your plans — how often</h3><div class="card">';
+  h += '<div class="grp"><h3>Your plans</h3><div class="card">'+
+    '<div class="note" style="padding:4px 0 8px"><b>Automatic</b> counts the plan you used most recently for each How often — switch from a summer plan to a winter one and the budget follows on the first payday you use it; an old plan drops out on its own. <b>Always</b> / <b>Never</b> decide for you.</div>';
   if(!live.length) h += '<div class="note" style="padding:6px 0">No active plans yet — make one on <b>Fund</b>.</div>';
+  // v3.93.1: which plans count. The status line says what Automatic decided this month, and why.
+  var st = {};
+  (b.plans||[]).forEach(function(x){ st[x.planId] = { on:true, lastUsed:x.lastUsed }; });
+  (b.skipped||[]).forEach(function(x){ st[x.planId] = { on:false, lastUsed:x.lastUsed, why:x.why }; });
+  var mlabel = function(k){ if(!k) return ''; var m = Number(k.slice(5,7)); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]+' '+k.slice(0,4); };
   live.forEach(function(p){
-    h += '<div class="formrow"><label>'+esc(p.name)+(planTotal(p)!=null?' · '+money(planTotal(p)):'')+'</label>'+
-      '<select class="bsfreq" data-plan="'+esc(p.planId)+'">'+opt(PLAN_FREQ_OPTS, p.frequency||'monthly')+'</select></div>';
+    var s1 = st[p.planId] || {};
+    var note = s1.on ? '✓ in this month’s budget'+(s1.lastUsed?' · last used '+mlabel(s1.lastUsed):'')
+      : s1.why==='never' ? 'not in the budget (Never)'
+      : s1.why==='older' ? 'not in this month’s budget — a newer '+esc(planFreqLabel_(p.frequency||'monthly').toLowerCase())+' plan was used'+(s1.lastUsed?' (this one last '+mlabel(s1.lastUsed)+')':'')
+      : s1.why==='unused' ? 'not in this month’s budget — not used in the last 3 months' : '';
+    h += '<div class="bsplan"><div class="nm"><b>'+esc(p.name)+'</b>'+(planTotal(p)!=null?' · '+money(planTotal(p)):'')+'</div>'+
+      (note?'<div class="note" style="padding:2px 0 4px">'+note+'</div>':'')+
+      '<div class="formrow"><label>In the budget</label><select class="bsinc" data-plan="'+esc(p.planId)+'">'+opt(PLAN_INCLUDE_OPTS, p.include||'auto')+'</select></div>'+
+      '<div class="formrow"><label>How often</label><select class="bsfreq" data-plan="'+esc(p.planId)+'">'+opt(PLAN_FREQ_OPTS, p.frequency||'monthly')+'</select></div></div>';
   });
   h += '</div></div>';
   h += '<div class="actions"><button class="btn" data-act="budget-save">Save</button>'+
@@ -9403,6 +9435,13 @@ function budgetSettingsSave_(){
     if(p && (p.frequency||'monthly') !== el.value){ freq[id] = el.value; nf++; }
   });
   if(nf) args.planFrequency = freq;
+  var inc = {}, ni = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('.bsinc'), function(el){
+    var id = el.getAttribute('data-plan');
+    var p = (state.plans||[]).find(function(x){ return x.planId===id; });
+    if(p && (p.include||'auto') !== el.value){ inc[id] = el.value; ni++; }
+  });
+  if(ni) args.planInclude = inc;
   if(!Object.keys(args).length){ toast('Nothing changed'); return; }
   var btn = document.querySelector('[data-act="budget-save"]');
   if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -9511,7 +9550,7 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Available to fund</b> on Home is the <b>pool</b>, and nothing else — the same number Fund will let you deal out. Income parked in another income envelope (a <b>Regular Pay</b>, say) is listed under it as <i>In Regular Pay</i>: it is your money, it just isn’t fundable until you open that envelope and tap <b>Move to pool</b>.</p>'+
     '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
     '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
-    '<p style="margin:0 0 6px"><b>Budget</b> — what you mean to fund this month. Home’s <b>Funded</b> card compares the two. It comes from your <b>funding plans</b>: each plan has a <b>How often</b> (once a month, every paycheck, or paycheck 1 / 2 / 3 of the month), and the card lists each one — <i>Paycheck 1 ✓ · Paycheck 2 waiting</i>. Set it in <b>Settings → Budget &amp; paychecks</b>, where you can also switch to monthly targets or no budget at all.</p>'+
+    '<p style="margin:0 0 6px"><b>Budget</b> — what you mean to fund this month. Home’s <b>Funded</b> card compares the two. It comes from your <b>funding plans</b>: each plan has a <b>How often</b> (once a month, every paycheck, or paycheck 1 / 2 / 3 of the month), and the card lists each one — <i>Paycheck 1 ✓ · Paycheck 2 waiting</i>. Old or seasonal plans can stay: each plan is <b>In the budget</b> Automatic (the plan you used most recently for that How often), Always or Never. Set it in <b>Settings → Budget &amp; paychecks</b>, where you can also switch to monthly targets or no budget at all.</p>'+
     '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month (the Targets tab). Used as the budget only when you pick <i>Monthly targets</i>.</p>'+
     '<p style="margin:0 0 6px"><b>Goal</b> \u2014 an envelope you\u2019re saving up in, with a number to reach and (if you like) a date. It\u2019s still just an envelope; <b>Goals</b> keeps score.</p>'+
     '<p style="margin:0 0 6px"><b>Max</b> \u2014 a ceiling for an envelope. It can go over; when it does, SBC suggests moving the extra. It never moves anything itself.</p>'+
@@ -10018,7 +10057,7 @@ document.addEventListener('click', function(ev){
     case 'fund-cancel': delete state.fund[arg]; drawFund(); break;
     case 'fund-go': fundGo(arg); break;
     case 'plan-new':
-      state.planEdit = {planId:'', name:'', mode:'fixed', incomeMatch:'', active:true, frequency:'monthly', _freq0:'monthly',
+      state.planEdit = {planId:'', name:'', mode:'fixed', incomeMatch:'', active:true, frequency:'monthly', _freq0:'monthly', include:'auto', _inc0:'auto',
         lines:[{envelopeId:'',fixed:'',percent:'',remainder:false}]};
       drawPlans(); break;
     case 'plan-tiller': planFromTiller(); break;
@@ -10034,19 +10073,20 @@ document.addEventListener('click', function(ev){
       var pl = state.plans.find(function(x){return x.planId===arg;});
       state.planEdit = JSON.parse(JSON.stringify(pl));
       state.planEdit._freq0 = pl.frequency || 'monthly';   // v3.93.0: save "How often" only when it changed
+      state.planEdit._inc0 = pl.include || 'auto';         // v3.93.1: same for "In the budget"
       drawPlans(); break;
     case 'plan-dup':
       var pd = state.plans.find(function(x){return x.planId===arg;});
       if(pd){ state.planEdit = JSON.parse(JSON.stringify(pd));
         state.planEdit.planId=''; state.planEdit.active=true;
-        state.planEdit.name = pd.name + ' (copy)'; state.planEdit._freq0 = 'monthly';
+        state.planEdit.name = pd.name + ' (copy)'; state.planEdit._freq0 = 'monthly'; state.planEdit._inc0 = 'auto';
         drawPlans(); }
       break;
     case 'plan-restore':
       var pv = state.plans.find(function(x){return x.planId===arg;});
       if(pv){ state.planEdit = JSON.parse(JSON.stringify(pv));
         state.planEdit.planId=''; state.planEdit.active=true;
-        state.planEdit.name = pv.name.replace(/\s+—\s+saved\s+.*$/, ''); state.planEdit._freq0 = 'monthly';
+        state.planEdit.name = pv.name.replace(/\s+—\s+saved\s+.*$/, ''); state.planEdit._freq0 = 'monthly'; state.planEdit._inc0 = 'auto';
         drawPlans(); }
       break;
     case 'plan-cancel': state.planEdit=null; drawPlans(); break;
