@@ -237,6 +237,11 @@ aside.side{display:none}
 .dtile .dbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
 .dtile.hero .dbar{background:rgba(255,255,255,.25)} .dtile.hero .dbar i{background:#fff}
 .dtile .dhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.dpls{margin-top:8px;border-top:1px solid var(--line);padding-top:4px}
+.dpl{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:2px 0;color:var(--ink-2)}
+.dpl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dpl .v{flex:none;font-variant-numeric:tabular-nums}
+.dpl .ok{color:var(--teal-600,#0d9488);font-weight:700} .dpl .wait{color:var(--ink-3)}
 .dtile .dscroll{overflow:auto;flex:1;min-height:0;margin:0 -18px;padding:0 18px}
 .dkv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)}
 .dkv:first-child{border-top:none}
@@ -1297,7 +1302,8 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
   apiSetTxnTags:1, apiAddTagBatch:1, // v3.58.1: tags mirror-first — apiRegister
                      // is mirror-served, so a refresh before the hourly sync
                      // must still show the tag that was just saved
-  apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: act on the mirror's outbox
+  apiRetryWriteBack:1, apiDiscardWriteBack:1, // v3.60: act on the mirror's outbox
+  apiSetBudgetSettings:1 }; // v3.93.0: Home reads Settings from the mirror, so the budget settings land there first
 /* v3.60: calls that exist ONLY on the mirror (the outbox is the mirror's ledger;
    Apps Script has never heard of it). A definitive mirror error must NOT fall
    back to Apps Script — it would just answer "unknown function" after a slow
@@ -1434,11 +1440,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.92.1';
+var FE_VERSION = 'v3.93.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.92.1+20261001.1341';
+var BUILD_ID = 'v3.93.0+20261001.1601';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1644,6 +1650,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   // no double-click dedupe.
   apiSetTxnTags:1, apiAddTagBatch:1, apiSaveObligation:1, apiRemoveObligation:1,
   apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1, apiSetTimeZone:1, // v3.81.0
+  apiSetBudgetSettings:1, // v3.93.0: budget source / pay schedule / plan "How often" (mirror-first, see SUPA_WRITES)
   apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
 MUTATING.apiWealthSave = 1;   // v3.85.0: Wealth settings - mirror-only, SBC-owned tables (see MIRROR_ONLY)
 // v3.64: the routing tables must agree — a mirror-first write that isn't MUTATING
@@ -1881,7 +1888,7 @@ $all('nav.tabs button').forEach(function(b){
    the same reason Transactions was: the phone had nowhere else to put it. It
    now sits in the Money group of the sidebar AND on More. */
 var SETTINGS_VIEWS = ['settings','maint','sync','history','about','healthset','admin',
-  'removetxn','reconcile','howto','activity','personal','rules','notify'];   // v3.79.0: +rules   // v3.80.0: +notify
+  'removetxn','reconcile','howto','activity','personal','rules','notify','budgetset'];   // v3.79.0: +rules   // v3.80.0: +notify   // v3.93.0: +budgetset
 var MORE_VIEWS = ['txns','fund','goals','obligations','accounts','reports'];   // v3.91.0: Wealth moved INTO Reports (Scott 10/1)   // v3.85.0: +wealth   // v3.75.0: +goals   // v3.72.2: swapped with the tab bar
 var goReplaying_ = false;
 function goPushHistory_(view){
@@ -3247,7 +3254,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' || state.view==='notify' ? ' narrow':'');   // v3.79.0: +rules   // v3.80.0: +notify
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' || state.view==='notify' || state.view==='budgetset' ? ' narrow':'');   // v3.79.0: +rules   // v3.80.0: +notify
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -3266,6 +3273,7 @@ function render(){
   else if(state.view==='removetxn') renderRemoveTxn();
   else if(state.view==='reconcile') renderReconcile();
   else if(state.view==='healthset') renderHealthSettings();
+  else if(state.view==='budgetset') renderBudgetSettings();   // v3.93.0
   else if(state.view==='personal') renderPersonal();     // v3.57.3
   else if(state.view==='rules') renderRules();           // v3.79.0
   else if(state.view==='notify') renderNotify();         // v3.80.0
@@ -3325,6 +3333,32 @@ var HOME_DEFAULT_HIDDEN = {targets:1, areas:1, inout:1, fundgauge:1, accounts:1,
 function homePersistId_(id){ return id==='attention' ? 'negatives' : id; }
 function homeCardId_(id){ return id==='negatives' ? 'attention' : id; }
 function dpct_(f,t){ return t>0 ? Math.min(100, Math.round(f/t*100)) : (f>0?100:0); }
+/* v3.93.0 (Scott 10/1: "$8,818 ... 100% of $8,485 budget"): the BAR stops at full, the
+   WORDS don't - 104% and "$333.00 over" is the information. */
+function fundPctText_(f,t){ return t>0 ? Math.round(f/t*100) : (f>0?100:0); }
+function fundVsBudgetText_(f,t,source){
+  var what = source==='plans' ? 'plan budget' : 'budget';
+  var s = fundPctText_(f,t)+'% of '+money(t)+' '+what;
+  var diff = Math.round((Number(f||0)-Number(t||0))*100)/100;
+  if(t>0 && diff>=0.005) s += ' · '+money(diff)+' over';
+  else if(t>0 && diff<=-0.005) s += ' · '+money(-diff)+' to go';
+  return s;
+}
+/* v3.93.0: where you are in the month, one line per plan that counts this month
+   (Paycheck 1 ✓ · Paycheck 2 waiting), plus funding that came from no plan. */
+function fundPlanRows_(b){
+  if(!b || b.source!=='plans') return '';
+  var rows = (b.plans||[]).map(function(r){
+    var lbl = r.frequency==='monthly' ? esc(r.name)
+      : '<b>'+esc(r.label)+(r.frequency==='every' && r.count>1 ? ' ×'+r.count : '')+'</b> '+esc(r.name);
+    var st = (r.target>0 && r.funded>=r.target-0.005) ? '<span class="ok">✓</span>'
+      : (!r.applied ? '<span class="wait">waiting · '+money(r.target)+'</span>'
+      : money(r.funded)+' of '+money(r.target));
+    return '<div class="dpl"><span class="nm">'+lbl+'</span><span class="v">'+st+'</span></div>';
+  });
+  if(Math.abs(Number(b.other||0))>=0.005) rows.push('<div class="dpl"><span class="nm">Other funding</span><span class="v">'+money(b.other)+'</span></div>');
+  return rows.length ? '<div class="dpls">'+rows.join('')+'</div>' : '';
+}
 /* v3.45 — Way C2: WHERE the money behind the budget actually sits.
    Available to fund is the income pool, and the pool routinely disagrees with
    the bank: cards owed pull the bank below it, unapproved inbox rows push the
@@ -3390,10 +3424,13 @@ var DASH_WIDGETS = {
 
   funded:{title:'Funded vs budget',icon:'🎯',nav:'fund',render:function(sz){
     var d=state.dash; if(!d) return '<div class="dlbl">Funded</div><div class="dnum"><span class="skv">…</span></div>';
-    var p=dpct_(d.totals.funded,d.totals.target);
-    if(sz==='s') return '<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum big">'+p+'%</div><div class="dsub">of budget</div>';
+    var b=d.budget||{source:'targets'};
+    var p=dpct_(d.totals.funded,d.totals.target), tp=fundPctText_(d.totals.funded,d.totals.target);
+    if(sz==='s') return '<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum big">'+(b.source==='off'?money(d.totals.funded):tp+'%')+'</div><div class="dsub">'+(b.source==='off'?'this month':'of budget')+'</div>';
     var head='<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum">'+money(d.totals.funded)+'</div>'+
-      '<div class="dbar"><i style="width:'+p+'%"></i></div><div class="dsub">'+p+'% of '+money(d.totals.target)+' budget</div>';
+      (b.source==='off' ? '<div class="dsub">this month · no budget set</div>' :
+      '<div class="dbar"><i style="width:'+p+'%"></i></div><div class="dsub">'+fundVsBudgetText_(d.totals.funded,d.totals.target,b.source)+'</div>')+
+      fundPlanRows_(b);
     if(sz==='m') return head;
     var rows=(d.rows||[]).slice(0,5).map(function(r){var q=dpct_(r.funded,r.target);
       return '<div class="dfrow"><div class="l1"><span class="nm">'+esc(r.name)+'</span><span class="v">'+money(r.funded)+' / '+money(r.target)+'</span></div><div class="dbar"><i style="width:'+q+'%"></i></div></div>';}).join('');
@@ -5125,6 +5162,7 @@ function plansSection(){
       '<span class="nm">'+esc(p.name)+(p.active?'':' (inactive)')+'</span>'+
       '<span class="mode">'+(tot!=null?money(tot):esc(p.mode))+'</span></div>';
     if(open){
+      h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">How often: '+esc(planFreqLabel_(p.frequency||'monthly'))+'</div>';   // v3.93.0
       if(p.incomeMatch) h += '<div class="meta" style="color:var(--ink-3);font-size:12.5px;margin-top:3px">matches: '+esc(p.incomeMatch)+'</div>';
       h += planLinesHtml(p);
       h += '<div class="reglinks">'+
@@ -5180,6 +5218,10 @@ function planFormHtml(){
     ['fixed','percent','mixed'].map(function(m){
       return '<option value="'+m+'"'+(pe.mode===m?' selected':'')+'>'+m+'</option>';
     }).join('')+'</select></div>'+
+    '<div class="formrow"><label>How often (what this plan budgets each month)</label><select id="pfFreq">'+
+    PLAN_FREQ_OPTS.map(function(o){
+      return '<option value="'+o[0]+'"'+((pe.frequency||'monthly')===o[0]?' selected':'')+'>'+o[1]+'</option>';
+    }).join('')+'</select></div>'+
     '<div class="formrow"><label>Income match (optional — text in the deposit description)</label>'+
     '<input type="text" id="pfMatch" value="'+esc(pe.incomeMatch)+'" placeholder="AUBUCHON DIRECT DEP"></div>'+
     '<div class="formrow"><label>Lines (fixed $, percent %, or remainder)</label>';
@@ -5201,8 +5243,13 @@ function planFormHtml(){
     '<button class="btn ghost" data-act="plan-cancel">Cancel</button></div></div>';
   return h;
 }
+/* v3.93.0: how a plan counts toward the month's budget (Settings 'Plan Frequency'). */
+var PLAN_FREQ_OPTS = [['monthly','Once a month'],['every','Every paycheck'],
+  ['p1','Paycheck 1 of the month'],['p2','Paycheck 2 of the month'],['p3','Paycheck 3 (months that have one)']];
+function planFreqLabel_(f){ var o = PLAN_FREQ_OPTS.filter(function(x){ return x[0]===f; })[0]; return o ? o[1] : 'Once a month'; }
 function planFormCapture(){
   var pe = state.planEdit;
+  if($('#pfFreq')) pe.frequency = $('#pfFreq').value;
   if($('#pfName')) pe.name = $('#pfName').value;
   if($('#pfMode')) pe.mode = $('#pfMode').value;
   if($('#pfMatch')) pe.incomeMatch = $('#pfMatch').value;
@@ -5220,11 +5267,21 @@ function planSave(){
   if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
   if(cancel){ cancel.disabled = true; }
   var isEdit = !!pe.planId;
+  var freq = pe.frequency || 'monthly', freq0 = pe._freq0 || 'monthly';
   run('apiSavePlan', { planId:pe.planId||'', name:pe.name, mode:pe.mode,
     incomeMatch:pe.incomeMatch, active:pe.active!==false,
     lines: lines.map(function(l){ return { envelopeId:l.envelopeId,
       fixed:l.remainder?0:Number(l.fixed||0), percent:l.remainder?0:Number(l.percent||0),
       remainder:!!l.remainder }; }) }, { version: isEdit })
+  .then(function(r){
+    // v3.93.0: "How often" is a Settings row keyed by plan id, so a NEW plan saves it once the id exists.
+    var id = (r && r.planId) || pe.planId;
+    if(id && freq!==freq0){
+      var patch = {}; patch[id] = freq;
+      return run('apiSetBudgetSettings', { planFrequency: patch }).then(function(){ invalidateData(); return r; });
+    }
+    return r;
+  })
   .then(function(){
     toast(isEdit ? 'Plan saved ✓ (previous version kept)' : 'Plan saved ✓');
     if(pe.planId) state.planOpen[pe.planId] = true;
@@ -7981,6 +8038,7 @@ function renderMore(){
 function renderSettings(){
   var h = '<h2 class="viewtitle">Settings</h2>';
   h += settingsSectionLabel('SET UP')+settingsList([
+    ['budgetset','Budget & paychecks'],     // v3.93.0 — where the month's budget comes from
     ['healthset','Health settings'],
     ['rules','Suggestion rules'],            // v3.79.0 — see + edit "Always suggest this"
     ['notify','Notifications'],              // v3.80.0
@@ -9283,6 +9341,81 @@ function drawHealthSettings(){
     '<button class="btn ghost" data-act="goview" data-arg="settings">Cancel</button></div>'; // v3.64: back to where you came from, not Home
   $('#shell').innerHTML = h;
 }
+/* ============================ v3.93.0 — Budget & paychecks ============================
+   Scott 10/1/26: "my goal for the month is to fill my envelopes to my latest funding plan ...
+   somebody may budget paycheck to paycheck ... i want to make sure this works either way".
+   Three Settings rows + one per plan (supabase/functions/_shared/budget.ts has the rules). */
+var BUDGET_SOURCE_OPTS = [['','Automatic — your funding plans when you have one'],['plans','Your funding plans'],
+  ['targets','Monthly targets (the Targets tab)'],['off','No budget — just show what I funded']];
+var PAY_SCHEDULE_OPTS = [['','Not set'],['monthly','Once a month'],['twice-monthly','Twice a month'],
+  ['biweekly','Every 2 weeks'],['weekly','Every week']];
+function renderBudgetSettings(){
+  if(state.dash && state.dash.budget && state.plans){ drawBudgetSettings(); return; }
+  $('#shell').innerHTML = '<h2 class="viewtitle">Budget &amp; paychecks</h2><div class="spin"></div>';
+  Promise.all([
+    (state.dash && state.dash.budget) ? Promise.resolve(state.dash) : run('apiDashboard'),
+    state.plans ? Promise.resolve(state.plans) : run('apiPlans')
+  ]).then(function(res){
+    if(!state.dash || !state.dash.budget) state.dash = res[0];
+    state.plans = res[1];
+    if(state.view==='budgetset') drawBudgetSettings();
+  }).catch(fail);
+}
+function drawBudgetSettings(){
+  var b = (state.dash && state.dash.budget) || {};
+  var live = (state.plans||[]).filter(function(p){ return p.active && !isPlanVersion(p) && (p.lines||[]).length; });
+  var opt = function(list, cur){ return list.map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+'>'+o[1]+'</option>'; }).join(''); };
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">Budget &amp; paychecks</h2>'+
+    '<div class="note" style="padding:4px 0 14px">Home’s <b>Funded</b> card compares what you funded this month with this budget.</div>';
+  h += '<div class="grp"><h3>What the budget is</h3><div class="card">'+
+    '<div class="formrow"><select id="bsSource">'+opt(BUDGET_SOURCE_OPTS, b.setting)+'</select></div>'+
+    '<div class="note" style="padding:2px 0 6px">Now using: <b>'+esc(b.source==='plans'?'your funding plans':b.source==='off'?'no budget':'monthly targets')+'</b>. '+
+    'A plan budgets its fixed amounts each time it counts this month; a % or “rest” line budgets what it actually funded.</div></div></div>';
+  h += '<div class="grp"><h3>When you get paid</h3><div class="card">'+
+    '<div class="formrow"><label>Pay schedule</label><select id="bsSched">'+opt(PAY_SCHEDULE_OPTS, b.schedule)+'</select></div>'+
+    '<div class="formrow"><label>One payday (needed for every 2 weeks / every week)</label><input type="date" id="bsStart" value="'+esc(b.start||'')+'"></div>'+
+    '<div class="note" style="padding:2px 0 6px">'+(b.paychecks!=null ? 'This month has <b>'+b.paychecks+'</b> paycheck'+(b.paychecks===1?'':'s')+'.' :
+      'Not set: paycheck 1 and 2 plans always count, a paycheck 3 plan counts once you use it, and an every-paycheck plan counts each time you use it.')+'</div></div></div>';
+  h += '<div class="grp"><h3>Your plans — how often</h3><div class="card">';
+  if(!live.length) h += '<div class="note" style="padding:6px 0">No active plans yet — make one on <b>Fund</b>.</div>';
+  live.forEach(function(p){
+    h += '<div class="formrow"><label>'+esc(p.name)+(planTotal(p)!=null?' · '+money(planTotal(p)):'')+'</label>'+
+      '<select class="bsfreq" data-plan="'+esc(p.planId)+'">'+opt(PLAN_FREQ_OPTS, p.frequency||'monthly')+'</select></div>';
+  });
+  h += '</div></div>';
+  h += '<div class="actions"><button class="btn" data-act="budget-save">Save</button>'+
+    '<button class="btn ghost" data-act="goview" data-arg="settings">Cancel</button></div>';
+  $('#shell').innerHTML = h;
+}
+function budgetSettingsSave_(){
+  var b = (state.dash && state.dash.budget) || {};
+  var args = {}, freq = {}, nf = 0;
+  var src = $('#bsSource') ? $('#bsSource').value : '';
+  var sch = $('#bsSched') ? $('#bsSched').value : '';
+  var st = $('#bsStart') ? $('#bsStart').value : '';
+  if(src !== (b.setting||'')) args.source = src;
+  if(sch !== (b.schedule||'') || st !== (b.start||'')){ args.schedule = sch; args.start = st; }
+  if((sch==='biweekly'||sch==='weekly') && !st){ toast('Pick one payday so SBC can count the paychecks in each month'); return; }
+  Array.prototype.forEach.call(document.querySelectorAll('.bsfreq'), function(el){
+    var id = el.getAttribute('data-plan');
+    var p = (state.plans||[]).find(function(x){ return x.planId===id; });
+    if(p && (p.frequency||'monthly') !== el.value){ freq[id] = el.value; nf++; }
+  });
+  if(nf) args.planFrequency = freq;
+  if(!Object.keys(args).length){ toast('Nothing changed'); return; }
+  var btn = document.querySelector('[data-act="budget-save"]');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  run('apiSetBudgetSettings', args).then(function(){
+    state.plans = null;
+    invalidateData();
+    toast('Budget settings saved ✓');
+    go('dash');
+  }).catch(function(e){
+    if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+    toast('⚠ '+(e.message||e));
+  });
+}
 function hsSave(){
   var hs = state.healthset;
   run('apiSetHealthSettings', { offBudget: hs.offBudget,
@@ -9378,7 +9511,8 @@ function renderHowTo(){
     '<p style="margin:0 0 6px"><b>Available to fund</b> on Home is the <b>pool</b>, and nothing else — the same number Fund will let you deal out. Income parked in another income envelope (a <b>Regular Pay</b>, say) is listed under it as <i>In Regular Pay</i>: it is your money, it just isn’t fundable until you open that envelope and tap <b>Move to pool</b>.</p>'+
     '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
     '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
-    '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month. The dashboard tracks funded-vs-target.</p>'+
+    '<p style="margin:0 0 6px"><b>Budget</b> — what you mean to fund this month. Home’s <b>Funded</b> card compares the two. It comes from your <b>funding plans</b>: each plan has a <b>How often</b> (once a month, every paycheck, or paycheck 1 / 2 / 3 of the month), and the card lists each one — <i>Paycheck 1 ✓ · Paycheck 2 waiting</i>. Set it in <b>Settings → Budget &amp; paychecks</b>, where you can also switch to monthly targets or no budget at all.</p>'+
+    '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month (the Targets tab). Used as the budget only when you pick <i>Monthly targets</i>.</p>'+
     '<p style="margin:0 0 6px"><b>Goal</b> \u2014 an envelope you\u2019re saving up in, with a number to reach and (if you like) a date. It\u2019s still just an envelope; <b>Goals</b> keeps score.</p>'+
     '<p style="margin:0 0 6px"><b>Max</b> \u2014 a ceiling for an envelope. It can go over; when it does, SBC suggests moving the extra. It never moves anything itself.</p>'+
     '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
@@ -9393,7 +9527,7 @@ function renderHowTo(){
     '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
     '<p style="margin:0 0 6px"><b>1. Approve the paycheck.</b> Open <b>Inbox</b> — your deposit is waiting there. Approve it into your income envelope (Regular Pay 💵).</p>'+
     '<p style="margin:0 0 6px"><b>2. Move it to the pool.</b> Open the Regular Pay envelope and tap <b>"→ Move $… to pool"</b> (the button shows the amount; no "are you sure" — the toast that follows has <b>Undo</b>). Now the money is on the loading dock, ready for jobs.</p>'+
-    '<p style="margin:0 0 8px"><b>3. Fund your envelopes.</b> Go to <b>Fund</b> — tap <b>Available to fund</b> on Home, or <b>More → Fund</b> on a phone. The pool balance is at the top. Apply your funding plan (or split it by hand), review, confirm.</p>'+
+    '<p style="margin:0 0 8px"><b>3. Fund your envelopes.</b> Go to <b>Fund</b> — tap <b>Available to fund</b> on Home, or <b>More → Fund</b> on a phone. The pool balance is at the top. Apply your funding plan (or split it by hand), review, confirm. A plan for each paycheck? Give each one its <b>How often</b> (Paycheck 1, Paycheck 2…) and Home’s <b>Funded</b> card shows which paychecks are done and which are still to come.</p>'+
     '<p style="margin:0">That’s it — every dollar of the paycheck now has a job. If money is left over, park it in a savings envelope; never leave dollars jobless in the pool for long.</p>');
 
   h += S('🧾','During the week — approve your spending',
@@ -9740,6 +9874,7 @@ document.addEventListener('click', function(ev){
   var p = arg.split('|');
   switch(act){
     case 'goview': go(arg); break;
+    case 'budget-save': budgetSettingsSave_(); break;   // v3.93.0
     /* v3.85.0 — Wealth */
     case 'wealth-tab': wealthGo_(arg); break;
     case 'wealth-range': state.wealthRange = arg; drawWealth_(); break;   // v3.86.0
@@ -9883,7 +10018,7 @@ document.addEventListener('click', function(ev){
     case 'fund-cancel': delete state.fund[arg]; drawFund(); break;
     case 'fund-go': fundGo(arg); break;
     case 'plan-new':
-      state.planEdit = {planId:'', name:'', mode:'fixed', incomeMatch:'', active:true,
+      state.planEdit = {planId:'', name:'', mode:'fixed', incomeMatch:'', active:true, frequency:'monthly', _freq0:'monthly',
         lines:[{envelopeId:'',fixed:'',percent:'',remainder:false}]};
       drawPlans(); break;
     case 'plan-tiller': planFromTiller(); break;
@@ -9898,19 +10033,20 @@ document.addEventListener('click', function(ev){
     case 'plan-edit':
       var pl = state.plans.find(function(x){return x.planId===arg;});
       state.planEdit = JSON.parse(JSON.stringify(pl));
+      state.planEdit._freq0 = pl.frequency || 'monthly';   // v3.93.0: save "How often" only when it changed
       drawPlans(); break;
     case 'plan-dup':
       var pd = state.plans.find(function(x){return x.planId===arg;});
       if(pd){ state.planEdit = JSON.parse(JSON.stringify(pd));
         state.planEdit.planId=''; state.planEdit.active=true;
-        state.planEdit.name = pd.name + ' (copy)';
+        state.planEdit.name = pd.name + ' (copy)'; state.planEdit._freq0 = 'monthly';
         drawPlans(); }
       break;
     case 'plan-restore':
       var pv = state.plans.find(function(x){return x.planId===arg;});
       if(pv){ state.planEdit = JSON.parse(JSON.stringify(pv));
         state.planEdit.planId=''; state.planEdit.active=true;
-        state.planEdit.name = pv.name.replace(/\s+—\s+saved\s+.*$/, '');
+        state.planEdit.name = pv.name.replace(/\s+—\s+saved\s+.*$/, ''); state.planEdit._freq0 = 'monthly';
         drawPlans(); }
       break;
     case 'plan-cancel': state.planEdit=null; drawPlans(); break;
