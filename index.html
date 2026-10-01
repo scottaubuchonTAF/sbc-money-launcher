@@ -1434,11 +1434,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.92.0';
+var FE_VERSION = 'v3.92.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.92.0+20261001.1254';
+var BUILD_ID = 'v3.92.1+20261001.1341';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2454,6 +2454,8 @@ var WEALTH_DEFS = {
 'Employer':['Employer money in, over the window','Lines the custodian labels as the employer\'s (HSA "Employer Contribution"). Not part of You added.','Feed lines labeled employer contributions'],
 'Employer added':['Employer money in, over the span','Sum of each year\'s employer contributions (HSA "Employer Contribution"). A 401k match is inside the 401k\'s contributions - its feed does not label it separately.','Feed lines labeled employer contributions'],
 'Where You added came from':['What makes up You added, per year','Each row is one piece: contributions into each investment account, then the change in cash & savings, card balances, mortgage & loans, and any account opened or closed in the year (money moved, not market). The rows add up to You added.','Feed lines + Balance History'],
+'Yours / yr':['What you put into this account each year','Used only for months its feed sends no contribution lines (HealthEquity sends balances but often not transactions). Months the feed labels keep the feed\'s numbers.','You - set here'],
+'Employer / yr':['What your employer puts in each year','Same rule: only the months the feed is silent. Shown as Employer added, never as You added.','You - set here'],
 'Item':['One piece of You added','A contribution into one account, or the change in one kind of balance.','Feed lines + Balance History'],
 'Market':['Change − You added − Employer','What the market and valuations did: each investment account\'s change minus the money that went into it (dividends and fund distributions stay in market).','Computed'],
 'Headline CAGR':['Compound annual growth rate of the raw number','(End ÷ Start)^(1/years) − 1. Flattered by deposits.','Computed'],
@@ -2829,23 +2831,56 @@ function wAddedTable_(C){
   var ORD = { contrib:0, cash:1, cards:2, loans:3, moved:4 };
   rows.sort(function(a,b){ return ORD[seen[a].kind] - ORD[seen[b].kind]; });
   var val = function(y, id){ var it = (y.items||[]).filter(function(x){ return x.id===id; })[0]; return it ? it.amount : 0; };
+  var estOf = function(y, id){ var it = (y.items||[]).filter(function(x){ return x.id===id; })[0]; return it && it.estMonths ? it.estMonths : 0; };   // v3.92.1
   var emp = Y.some(function(y){ return y.employer; });
   return '<div class="w-sect">Where You added came from <span class="w-n">— the pieces add up to each year\'s You added</span></div>'+
     '<div class="w-scroll"><table class="w-t"><thead><tr><th>Item</th>'+Y.map(function(y){ return '<th class="r yr">'+esc(y.year)+'</th>'; }).join('')+'</tr></thead><tbody>'+
     rows.map(function(id){ return '<tr><td'+(seen[id].kind==='contrib'?' class="strong"':'')+'>'+esc(seen[id].label)+(seen[id].kind==='contrib'?' <span class="w-n">contributions</span>':'')+'</td>'+
-      Y.map(function(y){ var v = val(y, id); return '<td class="r">'+(v ? wSigned_(v) : '—')+'</td>'; }).join('')+'</tr>'; }).join('')+
+      Y.map(function(y){ var v = val(y, id), em = estOf(y, id); return '<td class="r"'+(em ? ' title="'+em+' month'+(em>1?'s':'')+' from your yearly setting"' : '')+'>'+(v ? (em ? '≈ ' : '')+wSigned_(v) : '—')+'</td>'; }).join('')+'</tr>'; }).join('')+
     '<tr class="total"><td>You added</td>'+Y.map(function(y){ return '<td class="r">'+wSigned_(y.added)+'</td>'; }).join('')+'</tr>'+
     (emp ? '<tr><td>Employer added <span class="w-n">not in You added</span></td>'+Y.map(function(y){ return '<td class="r">'+(y.employer ? wSigned_(y.employer) : '—')+'</td>'; }).join('')+'</tr>' : '')+
     '<tr><td>Market</td>'+Y.map(function(y){ return '<td class="r '+(y.market>=0?'pos':'neg')+'">'+wSigned_(y.market, true)+'</td>'; }).join('')+'</tr>'+
     '</tbody></table></div>'+
-    '<div class="w-foot">Contributions are what each custodian labels as money in (a 401k\'s include any match). Deferred comp counts its own fund purchases. Dividends and fund distributions stay in market. An HSA whose provider shows one feed on two accounts (spending + investment) is one row.</div>';
+    '<div class="w-foot">Contributions are what each custodian labels as money in (a 401k\'s include any match). Deferred comp counts its own fund purchases. Dividends and fund distributions stay in market. An HSA whose provider shows one feed on two accounts (spending + investment) is one row.'+
+    (Y.some(function(y){ return (y.items||[]).some(function(it){ return it.estMonths; }); }) ? ' ≈ = includes months from your yearly setting (the feed sent no lines).' : '')+'</div>';
 }
-/* v3.91.1: a feed that stopped labeling money in - its contributions since then can only show up as market */
+/* v3.91.1: a feed that stopped labeling money in - its contributions since then can only show up as market.
+   v3.92.1 (Scott 10/1: HealthEquity "doesn't work well with Tiller"): set what goes in per year, right here.
+   Months the feed labels keep the feed's numbers; only the silent months use the setting. */
 function wFeedGaps_(P){
   var G = P.feedGaps || [];
   if(!G.length) return '';
-  return '<div class="w-warn"><span>⚠</span><span>'+G.map(function(g){ return '<b>'+esc(g.account)+'</b>: no contribution lines since '+wMonth_(g.lastMonth+'-01'); }).join(' · ')+
-    '. Tiller still updates the balance, but without the transactions the money you put in since then is counted as <b>market</b>. Refresh or re-link that account in Tiller and it sorts itself out.</span></div>';
+  return G.map(function(g, i){
+    var t = g.typical || {}, c = g.covered;
+    var form = '<div class="w-contrib" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">'+
+      '<label>Yours / yr <input id="wcY'+i+'" inputmode="decimal" style="width:96px" value="'+(c && c.yours ? c.yours : '')+'" placeholder="'+(t.yours ? Math.round(t.yours) : '')+'"></label>'+
+      '<label>Employer / yr <input id="wcE'+i+'" inputmode="decimal" style="width:96px" value="'+(c && c.employer ? c.employer : '')+'" placeholder="'+(t.employer ? Math.round(t.employer) : '')+'"></label>'+
+      '<button class="btn sm" data-act="wealth-contrib-save" data-arg="'+i+'">Save</button>'+
+      (c ? '<button class="btn ghost sm" data-act="wealth-contrib-clear" data-arg="'+i+'">Clear</button>' : '')+'</div>';
+    if(c) return '<div class="w-foot"><b>'+esc(g.account)+'</b>: no contribution lines since '+wMonth_(g.lastMonth+'-01')+
+      ' - using your setting for the months since: '+wK_(c.yours)+'/yr yours'+(c.employer ? ' + '+wK_(c.employer)+'/yr employer' : '')+'. Months the feed labels keep its own numbers.'+form+'</div>';
+    return '<div class="w-warn"><span>⚠</span><span><b>'+esc(g.account)+'</b>: no contribution lines since '+wMonth_(g.lastMonth+'-01')+
+      '. Tiller still updates the balance, but without the transactions the money you put in since then is counted as <b>market</b>. Refresh or re-link that account in Tiller - or set what goes in each year'+
+      (t.yours || t.employer ? ' (its last 12 months of lines: '+wK_(t.yours||0)+' yours'+(t.employer ? ' + '+wK_(t.employer)+' employer' : '')+')' : '')+':'+form+'</span></div>';
+  }).join('');
+}
+function wealthContribSave_(i, clear){
+  var P = state.wealth, g = P && (P.feedGaps||[])[Number(i)];
+  if(!g) return;
+  var map = {}, cur = (P.settings && P.settings.config && P.settings.config.annualContrib) || {};
+  Object.keys(cur).forEach(function(k){ map[k] = cur[k]; });
+  var num = function(id){ var el = $('#'+id); var v = el ? String(el.value).replace(/[$,\s]/g,'') : ''; return v==='' ? 0 : Number(v); };
+  if(clear) delete map[g.lc];
+  else {
+    var y = num('wcY'+i), e = num('wcE'+i);
+    if(!isFinite(y) || !isFinite(e) || y < 0 || e < 0){ toast('⚠ Enter dollars per year'); return; }
+    if(y || e) map[g.lc] = { yours:y, employer:e }; else delete map[g.lc];
+  }
+  run('apiWealthSave', { config:{ annualContrib: map } }).then(function(p){
+    state.wealth = p; markFetched('wealth');
+    if(state.view==='wealth') drawWealth_();
+    toast(clear || !map[g.lc] ? 'Setting cleared' : 'Saved · '+g.account+' uses it for the months the feed is silent');
+  }).catch(function(e){ toast('⚠ '+(e && e.message || e)); });
 }
 function wStat_(x){ return '<div class="w-stat"><div class="w-k">'+x[0]+'</div><div class="w-v '+(x[3]||'')+'">'+x[1]+'</div>'+(x[2]?'<div class="w-d">'+x[2]+'</div>':'')+'</div>'; }
 function wGrowthStats_(P){
@@ -9711,6 +9746,8 @@ document.addEventListener('click', function(ev){
     case 'wealth-gear': wealthSheetOpen_('accounts'); break;
     case 'wealth-plan-setup': wealthGo_('plan'); break;   // v3.88.0: the Planning tab owns the inputs
     case 'wealth-plan-save': wealthPlanSave_(); break;
+    case 'wealth-contrib-save': wealthContribSave_(arg, false); break;    // v3.92.1
+    case 'wealth-contrib-clear': wealthContribSave_(arg, true); break;
     case 'wealth-sheet-close': wealthSheetClose_(); break;
     case 'wealth-sheet-bg': if(ev.target===el) wealthSheetClose_(); break;
     case 'wealth-sheet-in': break;
