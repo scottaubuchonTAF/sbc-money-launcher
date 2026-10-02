@@ -1283,6 +1283,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiGoals:1,           // v3.75.0: goals + max (targets rows; its write is Apps-Script-only → MIRROR_REFRESH_ONE)
   apiWealth:1,          // v3.85.0: the Wealth page's one call (mirror-only; SBC-owned tables + the mirror)
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
+  apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1311,7 +1312,8 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
 var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1, // v3.62: +apiRefreshMirror
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: notifications live only in the mirror
-  apiWealth:1, apiWealthSave:1 }; // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
+  apiWealth:1, apiWealthSave:1, // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
+  apiRefreshSettings:1 }; // v3.93.4
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
    8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
@@ -1441,11 +1443,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.93.2';
+var FE_VERSION = 'v3.93.4';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.93.2+20261002.1122';
+var BUILD_ID = 'v3.93.4+20261002.1223';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1795,7 +1797,27 @@ function apiCall_(fn, args, retry, mutating){
   // v3.48: every other mutation path is Apps-Script-only (not a SUPA_WRITE, or
   // the mirror is off / 3-strikes out), so the mirror is now behind the sheet.
   if(mutating) markMirrorDirty_();
+  // v3.93.4: a SETTINGS write landed in the sheet; pull the Settings tab into the mirror right away.
+  if(mutating && SETTINGS_WRITE_FNS[fn]) return legacyCall_(fn, args, retry, mutating).then(function(r){ settingsMirrorRefresh_(fn); return r; });
   return legacyCall_(fn, args, retry, mutating);
+}
+/* v3.93.4 (open item 5): Apps-Script-only writes of a Settings row that a MIRROR read uses. Until now each of
+   them showed the old value on Balances / Reports / Home for up to an hour (the manual flag, 9/18, was the
+   first one anybody saw). After the write lands, ask the mirror to re-read the Settings tab (apiRefreshSettings),
+   then drop the views that read it. Never blocks or fails the write - it is a background tidy-up. */
+var SETTINGS_WRITE_FNS = { apiSetAccountHidden:1, apiSetBalanceGroupOrder:1, apiSetBalanceAccountOrder:1,
+  apiSetSpendingAccount:1, apiSetHealthSettings:1, apiSetManualAccount:1, apiSetAllowedEmails:1,
+  apiSetDashLayout:1, apiSetDensity:1, apiSetBirthday:1, apiSetTimeZone:1 };
+function settingsMirrorRefresh_(fn){
+  if(!supaOn_()) return Promise.resolve(null);
+  return supaCall_('apiRefreshSettings', []).then(function(r){
+    if(r && r.settings==='refreshed'){
+      state.balances = null; state.accounts = null;
+      state._fetchedAt = {};                                   // warm views re-read from the fresh mirror
+      if(fn==='apiSetHealthSettings' || fn==='apiSetAccountHidden' || fn==='apiSetManualAccount') invalidateData();   // Budget health reads them
+    }
+    return r;
+  }).catch(function(e){ try{ console.info('SBC settings refresh: '+(e && e.message || e)); }catch(x){} return null; });
 }
 function legacyCall_(fn, args, retry, mutating){
   // v3.16: abort + clear message if the server doesn't answer in time (a cold
@@ -2198,6 +2220,9 @@ function bootMerge_(b){
     // "stopped updating" banner comes back with the background reconcile. A newer pulse report wins.
     var pf = prev.attention.freeze, bf = b.attention.freeze;
     if(pf && pf.rechecked && bf && !bf.rechecked && String(bf.asOf||'')===String(pf.asOf||'')) b.attention.freeze = pf;
+    // v3.93.3: same rule for the Obligations report (the mirror re-checks its balances too).
+    var po = prev.attention.obligations, bo = b.attention.obligations;
+    if(po && po.rechecked && bo && !bo.rechecked && String(bo.asOf||'')===String(po.asOf||'')) b.attention.obligations = po;
   }
   return b;
 }
