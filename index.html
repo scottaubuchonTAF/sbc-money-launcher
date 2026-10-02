@@ -1441,11 +1441,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.93.1';
+var FE_VERSION = 'v3.93.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.93.1+20261001.1623';
+var BUILD_ID = 'v3.93.2+20261002.1122';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2193,6 +2193,11 @@ function bootMerge_(b){
   if(b.attention && prev.attention){
     if(b.attention.obligations == null && prev.attention.obligations != null) b.attention.obligations = prev.attention.obligations;
     if(b.attention.freeze == null && prev.attention.freeze != null) b.attention.freeze = prev.attention.freeze;
+    // v3.93.2: the mirror re-checks the pulse's freeze report against the CURRENT balances; Apps Script
+    // hands back the same report unchecked. Same report (same asOf) = keep the checked one, or a cleared
+    // "stopped updating" banner comes back with the background reconcile. A newer pulse report wins.
+    var pf = prev.attention.freeze, bf = b.attention.freeze;
+    if(pf && pf.rechecked && bf && !bf.rechecked && String(bf.asOf||'')===String(pf.asOf||'')) b.attention.freeze = pf;
   }
   return b;
 }
@@ -5897,6 +5902,7 @@ function balEditSave(account){
   toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
+    freezeClearAccount_(account, amt);   // v3.93.2: the "stopped updating" banner no longer applies
     dashRevalFromScript_();   // v3.55.2: Home is mirror-served too — keep it in step
   }).catch(function(e){
     prevRows.forEach(function(p){ p.r.balance=p.balance; p.r.days=p.days; p.r.updated=p.updated; });
@@ -6450,7 +6456,22 @@ function healthLedgerCard_(H, sz, head, d){
 
 function freezeReval_(){
   var f = state.boot && state.boot.attention && state.boot.attention.freeze;
-  if(f && f.anyStuck) state.freeze = f;
+  // v3.93.2: a report that says "nothing stuck" CLEARS the banner. It used to only ever set it, so a
+  // banner shown once stayed for the whole session after the balance had moved.
+  if(f) state.freeze = f.anyStuck ? f : null;
+}
+/* v3.93.2: you just set this account's balance by hand - if the new number is not the frozen one,
+   the banner about it is no longer true. Same $2 tolerance as the report (FeedFreeze.gs). */
+function freezeClearAccount_(account, balance){
+  var f = state.freeze;
+  if(!f || !f.stuck) return;
+  var keep = f.stuck.filter(function(a){
+    return !(a.account===account && Math.abs(Math.round(Number(balance)*100) - Math.round(Number(a.balance)*100)) > 200);
+  });
+  if(keep.length===f.stuck.length) return;
+  var next = Object.assign({}, f, { stuck:keep, anyStuck:keep.length>0, rechecked:true });   // rechecked: see bootMerge_
+  state.freeze = keep.length ? next : null;
+  try{ if(state.boot && state.boot.attention) state.boot.attention.freeze = next; }catch(e){}
 }
 function freezeBanner_(){
   var f = state.freeze;
@@ -9257,6 +9278,7 @@ function reconSave(account){
   toast(mutBalanceToast_(account));
   run('apiManualBalance', { account:account, balance:amt }).then(function(){
     toast('✓ '+account+' updated · Tiller');
+    freezeClearAccount_(account, amt);   // v3.93.2: the "stopped updating" banner no longer applies
     dashRevalFromScript_();   // v3.55.2: Home is mirror-served too — keep it in step
   }).catch(function(e){
     if(a&&prev){ a.balance=prev.balance; a.days=prev.days; a.updated=prev.updated; a.dormant=prev.dormant; state.balances=null; drawReconcile(); }
