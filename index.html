@@ -1228,7 +1228,7 @@ var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
    answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
    nothing about envelopes / inbox / register / journal, and clearing here
    would tell Home it is fresh when it is not. */
-var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1, apiWealth:1 };   // v3.85.0: +apiWealth (its spending reads register)   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
+var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1, apiWealth:1, apiArchivedEnvelopes:1, apiEnvelopeTxns:1, apiInspectTxn:1 };   // v3.94.2: +the 9/15 audit's unaudited reads (apiAccountsFull needs none - see the api's REFRESH_ONE_BY_FN)   // v3.85.0: +apiWealth (its spending reads register)   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -1259,10 +1259,17 @@ function refreshConfirmed_(r){
 function withMirrorRefresh_(fn, args){
   if(!(MIRROR_REFRESH_FNS[fn] || MIRROR_REFRESH_ONE[fn]) || !mirrorDirty_()) return args;
   var a = Array.prototype.slice.call(args);
-  var src = (a[0] && typeof a[0]==='object') ? a[0] : null, o = {};
+  // v3.94.2: a read whose FIRST argument is a value (apiInspectTxn's txnId, apiEnvelopeTxns' envelope id)
+  // must keep it - the flag goes on the LAST object argument, or on a new trailing one. The api reads
+  // args[0] OR the last argument (wantsRefresh_). Before this, registering such a read would have
+  // replaced its id with {refreshMirror:true}.
+  var at = (a.length && a[0] && typeof a[0]==='object') ? 0 : -1;
+  if(at<0){ for(var i=a.length-1;i>=0;i--){ if(a[i] && typeof a[i]==='object' && !Array.isArray(a[i])){ at=i; break; } } }
+  if(at<0 && a.length && (a[0]===undefined || a[0]===null)) at = 0;
+  var src = at>=0 ? a[at] : null, o = {};
   if(src) for(var k in src){ if(Object.prototype.hasOwnProperty.call(src,k)) o[k]=src[k]; }
   o.refreshMirror = true;
-  a[0] = o;
+  if(at>=0) a[at] = o; else a.push(o);
   return a;
 }
 /* v3.49: after a manual "Refresh from Tiller" the Apps Script answer is
@@ -1455,11 +1462,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.94.0';
+var FE_VERSION = 'v3.95.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.94.0+20261008.2144';
+var BUILD_ID = 'v3.95.0+20261008.2248';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7184,6 +7191,8 @@ function inspectTxn(txnId){
         (t.dateAdded?' · added '+esc(t.dateAdded):'')+'</div>';
     });
     h += '<div style="font-weight:700;margin-top:8px">Audit trail · '+d.audit.length+' op'+(d.audit.length!==1?'s':'')+'</div>';
+    // v3.94.2: the trail is the hourly copy of the Audit Log - a write from the last hour is not in it yet
+    if(d.auditAsOf){ try{ h += '<div style="color:var(--ink-3);font-size:11.5px">hourly copy as of '+esc(new Date(d.auditAsOf).toLocaleString())+' — ops since then show up after the next sync</div>'; }catch(e){} }
     if(!d.audit.length) h += '<div style="color:var(--ink-3)">no audit ops reference this txn</div>';
     d.audit.forEach(function(a){
       h += '<div style="margin:5px 0"><b>'+esc(a.action)+'</b> · '+esc(a.timestamp)+' · '+esc(a.opId)+
