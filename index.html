@@ -1228,7 +1228,7 @@ var MIRROR_REFRESH_FNS = { apiBoot:1, apiDashboard:1 };
    answering. ★ They must NOT clear the dirty flag: refreshing `plans` says
    nothing about envelopes / inbox / register / journal, and clearing here
    would tell Home it is fresh when it is not. */
-var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1, apiWealth:1, apiArchivedEnvelopes:1, apiEnvelopeTxns:1, apiInspectTxn:1 };   // v3.94.2: +the 9/15 audit's unaudited reads (apiAccountsFull needs none - see the api's REFRESH_ONE_BY_FN)   // v3.85.0: +apiWealth (its spending reads register)   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
+var MIRROR_REFRESH_ONE = { apiPlans:1, apiGoals:1, apiWealth:1, apiArchivedEnvelopes:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiRules:1 };   // v3.95.1: +apiRules   // v3.94.2: +the 9/15 audit's unaudited reads (apiAccountsFull needs none - see the api's REFRESH_ONE_BY_FN)   // v3.85.0: +apiWealth (its spending reads register)   // v3.75.0: +apiGoals (targets)   // WHICH tables is the server's business — one list, not two
 var MIRROR_DIRTY_KEY = 'sbcMirrorDirty', MIRROR_DIRTY_TTL = 2*60*60*1000;
 function markMirrorDirty_(){ try{ localStorage.setItem(MIRROR_DIRTY_KEY, String(Date.now())); }catch(e){} }
 function clearMirrorDirty_(){ try{ localStorage.removeItem(MIRROR_DIRTY_KEY); }catch(e){} }
@@ -1302,6 +1302,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
+  apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1462,11 +1463,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.95.0';
+var FE_VERSION = 'v3.95.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.95.0+20261008.2248';
+var BUILD_ID = 'v3.95.1+20261008.2332';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -8702,9 +8703,15 @@ function ruleForInboxRow_(t){
   return (r && r.envelopeId===t.suggestedId) ? r : null;
 }
 
+/* v3.95.1 (open item 4, Rules step 2): served from the MIRROR (apiRules in SUPA_READS). The order IS the
+   behaviour, so a mirror that cannot vouch for it (ordered:false - phase12 row_num not yet synced for this
+   person) is not trusted: ask Apps Script the slow way instead, same answer, same shape. */
 function loadRules_(){
   if(state.rulesLoading) return state.rulesLoading;
   state.rulesLoading = run('apiRules').then(function(res){
+    if(res && res.source==='mirror' && res.ordered===false){ try{ console.info('SBC rules: mirror unordered - asking Apps Script'); }catch(e){} return legacyCall_('apiRules', []); }
+    return res;
+  }).then(function(res){
     state.rules = (res && res.rules) || [];
     state.rulesLoading = null;
     return state.rules;
