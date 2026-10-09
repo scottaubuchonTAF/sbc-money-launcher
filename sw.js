@@ -20,8 +20,8 @@
    Never cached: anything that is not GET, anything cross-origin except the
    pinned Chart.js build, the Google Identity script, and every API call
    (Apps Script / Supabase are POSTs — they never touch this file). */
-var SW_VERSION = 'v3.93.4';
-var BUILD_ID = 'v3.93.4+20261002.1223';   // v3.78.7: stamped by deploy/set-version.mjs
+var SW_VERSION = 'v3.94.0';
+var BUILD_ID = 'v3.94.0+20261008.2144';   // v3.78.7: stamped by deploy/set-version.mjs
 var CACHE = 'sbc-' + BUILD_ID;
 var CHART_JS = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 var SHELL = ['./', './index.html', './manifest.json'];                        // required — install fails without these
@@ -72,6 +72,28 @@ function pushShowOpts_(d) {
     data: { view: d.view || 'dash', kind: d.kind || '' }
   };
 }
+/* v3.94.0 - clearing (Scott's son, 10/8/26: "notifications that won't clear").
+   A notification that is no longer true is noise: the Inbox was approved (here
+   or on another device), or the app is open and showing the thing it
+   announced. The page asks for a close ('sbc-clear' message), and the server
+   sends a silent {kind:'clear'} push to the OTHER devices when the Inbox
+   reaches zero. A clear is never sent to an Apple endpoint (Safari revokes a
+   subscription whose pushes show nothing) - the iPhone clears on its next open. */
+function pushClose_(tag) {
+  return self.registration.getNotifications().then(function (list) {
+    var n = 0;
+    list.forEach(function (x) {
+      if (x.tag && x.tag.indexOf('sbc-') === 0 && (!tag || x.tag === tag)) { x.close(); n++; }
+    });
+    return n;
+  }).catch(function () { return 0; });
+}
+self.addEventListener('message', function (ev) {
+  var m = (ev && ev.data) || {};
+  if (m.type !== 'sbc-clear') return;
+  var p = pushClose_(m.tag ? 'sbc-' + String(m.tag) : '');
+  if (ev.waitUntil) ev.waitUntil(p);
+});
 self.addEventListener('push', function (ev) {
   var d = {};
   try { d = ev.data ? ev.data.json() : {}; } catch (e) { d = { title: 'SBC Money', body: ev.data ? ev.data.text() : '' }; }
@@ -82,6 +104,11 @@ self.addEventListener('push', function (ev) {
     var wins = r[0] || [], sub = r[1];
     var apple = !!(sub && /push\.apple\.com/.test(sub.endpoint));
     var front = wins.some(function (w) { return w.focused && w.visibilityState === 'visible'; });
+    if (d.kind === 'clear') {   // v3.94.0: silent - close, badge off, tell any open window, show nothing
+      if (self.navigator && self.navigator.clearAppBadge) self.navigator.clearAppBadge().catch(function () {});
+      wins.forEach(function (w) { try { w.postMessage({ type: 'sbc-cleared', tag: d.tag || '' }); } catch (e) { /* closed */ } });
+      return pushClose_(d.tag ? 'sbc-' + String(d.tag) : '');
+    }
     var show = apple || !front;
     if (d.kind === 'inbox' && typeof d.count === 'number' && self.navigator && self.navigator.setAppBadge) {
       self.navigator.setAppBadge(d.count).catch(function () {});
