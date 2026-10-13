@@ -1463,11 +1463,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.95.1';
+var FE_VERSION = 'v3.96.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.95.1+20261008.2332';
+var BUILD_ID = 'v3.96.0+20261012.2145';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4906,6 +4906,7 @@ function approveAll(){
       invalidateData();
       setInboxCount_(state.inbox.length);   // v3.49
       refreshBoot();
+      envBalancesRefresh_();   // v3.96.0
       drawInbox();
       var failed = r.results.length - r.approved;
       var msg = 'Approved '+r.approved+' ✓';
@@ -5018,8 +5019,25 @@ function afterApprove(txnId, key, ruleInfo){
     invalidateData();        // v3.49: also revalidates Home in the background
     updateBadges(inboxCountEff_());
     refreshBoot();
+    envBalancesRefresh_();   // v3.96.0: the envelope's balance moved on the mirror — show it
     drawInbox();
   };
+}
+/* v3.96.0: after a MIRROR-FIRST approve the envelope balance is already right on
+   the mirror, but nothing on the page re-read it: refreshBoot() asks Apps Script,
+   whose groups bootMerge_ deliberately ignores for MIRROR_LEAD_MS after a mirror
+   write (the sheet lags the mirror), and nothing else refreshes state.boot.groups.
+   So Envelopes / the envelope page showed the OLD balance for up to three minutes
+   after approving a paycheck (seen building the how-to video, 10/12/26). One fast
+   mirror read fixes it, the same one a fund already does; repaint if the user is
+   looking at balances. Never rejects. */
+function envBalancesRefresh_(){
+  return mirrorBootRefresh_().then(function(ok){
+    if(!ok) return false;
+    if(state.view==='envelopes') renderEnvelopes();
+    else if(state.view==='envdetail') renderEnvDetail();
+    return true;
+  });
 }
 /* v3.79.0 (screen 5): a new "Always suggest this" rule says which words it
    matches, and the toast offers Edit rule next to Undo. The rule list is
@@ -9152,14 +9170,21 @@ function drawAdmin(){
   var a = state.access;
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">Access</h2>';
-  h += '<div class="note" style="padding:4px 0 14px">These '+esc('@'+a.domain)+' accounts can sign in to SBC Money. '+
-    (a.isAdmin?'Add a family member’s email to give them access.':'Only an admin can change this list.')+'</div>';
+  /* v3.96.0: outside accounts. Family addresses are recognised by domain; any
+     other Google account must first be registered on the bridge
+     (SBC_EXTERNAL_EMAILS) — the page just says so and tags them. */
+  var ext = (a.external||[]).map(function(e){ return String(e).toLowerCase(); });
+  h += '<div class="note" style="padding:4px 0 14px">These accounts can sign in to SBC Money — '+esc('@'+a.domain)+
+    ' family accounts, plus any outside Google account the app operator has registered. '+
+    (a.isAdmin?'Add an email to give them access to <b>your</b> books.':'Only an admin can change this list.')+'</div>';
   h += '<div class="card">';
   a.allowed.forEach(function(em){
     var isAdm = a.admins.indexOf(em)>-1;
     var isMe = em===String(a.me).toLowerCase();
+    var isExt = ext.indexOf(em)>-1;
     h += '<div class="envrow"><span class="nm">'+esc(em)+
       (isAdm?' <span class="bal" style="opacity:.6">· admin</span>':'')+
+      (isExt?' <span class="bal" style="opacity:.6">· outside account</span>':'')+
       (isMe?' <span class="bal" style="opacity:.6">· you</span>':'')+'</span>'+
       (a.isAdmin && !isAdm ? '<button class="btn danger sm" data-act="admin-remove" data-arg="'+esc(em)+'">Remove</button>'
         : '<span style="opacity:.3">—</span>')+
@@ -9169,7 +9194,7 @@ function drawAdmin(){
   if(a.isAdmin){
     h += '<div class="grp"><h3>Add access</h3><div class="card" style="padding:12px">'+
       '<input id="adminEmail" class="amt" style="width:100%;box-sizing:border-box" '+
-        'placeholder="name@'+esc(a.domain)+'" autocomplete="off">'+
+        'placeholder="name@…" autocomplete="off">'+
       '<div class="actions" style="margin-top:10px"><button class="btn" data-act="admin-add">Add to allowlist</button></div>'+
       '</div></div>';
   }
@@ -9712,196 +9737,230 @@ function abServerVer_(){
 }
 
 /* ============================ how to use (v3.24) ============================ */
+/* ============================ How to use (v3.96.0 rewrite) ============================
+   ONE data source for the help: the HOWTO_SECTIONS list inside renderHowTo is what
+   the in-app page renders AND what deploy/build-help.mjs turns into the standalone
+   guide (webapp/guide.html + SBC-Money-Guide.html). Written for someone who has never
+   budgeted with envelopes and is not family: no version numbers, no dates, no
+   changelog — tests pin that. The Wealth section is generated from WEALTH_DEFS so
+   hovers, help and formulas never drift. Groups: start · week · tools · trust ·
+   reference. The sections live INSIDE renderHowTo on purpose: a dozen older tests pin
+   the help text by slicing this function's body; howtoMode_='sections' makes it hand
+   the list back instead of painting (build-help.mjs + tests use that). */
+var HOWTO_VIDEO_URL = 'https://sbc.theaubuchonfamily.com/how-to-sbc-money.mp4';
+var HOWTO_GUIDE_URL = 'https://sbc.theaubuchonfamily.com/guide.html';
+var HOWTO_GROUPS = [
+  ['start','Start here'], ['week','The routine'], ['tools','Tools you’ll grow into'],
+  ['trust','When something looks off'], ['reference','Reference']];
+var howtoMode_ = '';
 function renderHowTo(){
-  var S = function(emoji, title, body, open){
-    return '<details class="card" style="padding:13px 16px;margin-bottom:10px"'+(open?' open':'')+'>'+
+  var P = function(s){ return '<p style="margin:0 0 8px">'+s+'</p>'; };
+  var PL = function(s){ return '<p style="margin:0">'+s+'</p>'; };
+  var B = function(s){ return '<p style="margin:0 0 6px">• '+s+'</p>'; };
+  var S = function(e, t, h, o){ var s = { e:e, t:t, h:h }; Object.keys(o||{}).forEach(function(k){ s[k]=o[k]; }); return s; };
+
+  var HOWTO_SECTIONS = [
+  S('💡','The big idea (read this first)',
+    P('SBC Money is <b>envelope budgeting</b>. Picture cash envelopes with names on them: Rent, Groceries, Eating Out. Every dollar you have sits in exactly one envelope — that is the dollar\u2019s <b>job</b>.')+
+    P('Two rules make the whole system work:')+
+    P('<b>1. Only budget money you actually have.</b> Not next week\u2019s paycheck, not what you hope to earn — just what is in your accounts right now.')+
+    P('<b>2. Before you spend, look at the envelope, not the bank account.</b> Your bank balance lies to you: it includes rent money that isn\u2019t spent yet. The envelope tells the truth about what is really free to spend.')+
+    PL('Do that consistently and something great happens: you stop living paycheck to paycheck, because each envelope fills up <i>before</i> its bill arrives. The long-term goal is to be a full month ahead.'), {g:'start', open:true}),
+
+  S('🚀','Your first day',
+    P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you gave Scott — any Google account works once it is registered. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
+    P('<b>What you will see.</b> Your envelopes already exist — one per category in your Tiller sheet — and every one of them is <b>$0</b>. That is on purpose: your history is kept, but budgeting starts today. The <b>Inbox</b> only shows transactions from today onward.')+
+    P('<b>Put your real money on the books (5 minutes, once).</b> Open <b>Balances</b> and check that the bank balances look right. Then <b>Settings → Maintenance → Reconcile accounts → Reconcile to bank</b>: SBC puts the cash you actually have into the <b>Income Cash Pool</b>. Now open <b>Fund</b> and deal that money out — this month\u2019s rent, groceries until payday, a little in each envelope you will touch before the next paycheck. Leave what is left in the pool or park it in savings.')+
+    P('<b>Leave 💳 CC Payment at $0.</b> It is plumbing, not a spending envelope — the credit-card section below explains why.')+
+    PL('From here on it is the routine in the next section. Give it two paydays before judging it; the first one is always the slowest.'), {g:'start'}),
+
+  S('📚','Words you’ll see everywhere',
+    B('<b>Envelope</b> — a named job for money (Groceries, Rent). Its balance is what is truly available for that job.')+
+    B('<b>Group</b> — a folder of envelopes (Bills, Everyday, Savings).')+
+    B('<b>Income Cash Pool</b> — the loading dock. New money lands here first, then you deal it out. Money in the pool has no job yet.')+
+    B('<b>Available to fund</b> on Home is the <b>pool</b>, and nothing else — the same number Fund will let you deal out. Income parked in another income envelope (a <b>Regular Pay</b>, say) is listed under it as <i>In Regular Pay</i>: it is your money, it just isn\u2019t fundable until you open that envelope and tap <b>Move to pool</b>.')+
+    B('<b>Fund</b> — moving money from the pool into envelopes. This is “giving every dollar a job.”')+
+    B('<b>Funding plan</b> — a saved recipe (“every paycheck: $500 rent, $200 groceries, the rest to savings”) so payday takes one tap.')+
+    B('<b>Budget</b> — what you mean to fund this month. It comes from your funding plans; Home\u2019s <b>Funded</b> card compares the two.')+
+    B('<b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to. <b>Approve</b> is that confirmation; the envelope moves the moment you do.')+
+    B('<b>Rollover</b> — envelope balances carry forward forever. Grocery money you didn\u2019t spend this month is still yours next month.')+
+    B('<b>Goal</b> \u2014 an envelope you\u2019re saving up in, with a number to reach and (if you like) a date. <b>Max</b> \u2014 a ceiling for an envelope; it can go over, and SBC suggests moving the extra.')+
+    B('<b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.')+
+    B('<b>Tag</b> — a label that cuts across envelopes (“Myrtle Beach 2027”) so you can see what an event cost.')+
+    B('<b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there.')+
+    B('<b>Maintenance</b> — a page under Settings holding the tools for when something looks wrong: Tiller sync, Reconcile accounts, Remove a transaction, Access, the sheet links.')+
+    B('<b>Tiller</b> — the service that pulls your bank data into your own Google Sheet. SBC reads from that sheet and writes your decisions back to it. The sheet is the record; the app is the fast view.')+
+    PL('<b>Write-back</b> — every save you make here is also written to your sheet in the background (the “syncing” toast). You never need to open the sheet, but you always can.'), {g:'start'}),
+
+  S('💵','Payday — the routine that matters most',
+    P('Three steps, about two minutes:')+
+    B('<b>Approve the paycheck.</b> Open <b>Inbox</b> — your deposit is waiting. Approve it into your income envelope (Regular Pay 💵).')+
+    B('<b>Move it to the pool.</b> Open the Regular Pay envelope and tap <b>→ Move $… to pool</b> (the button shows the amount; no “are you sure” — the toast that follows has <b>Undo</b>).')+
+    P('• <b>Fund your envelopes.</b> Tap <b>Available to fund</b> on Home (or <b>More → Fund</b> on a phone). The pool balance is at the top. Apply your funding plan, or split it by hand, and confirm when the footer says <b>Fully assigned ✓</b>.')+
+    P('Paid more than once a month? Save a plan per paycheck and give each its <b>How often</b> (Paycheck 1, Paycheck 2…). Home\u2019s <b>Funded</b> card then shows <i>Paycheck 1 ✓ · Paycheck 2 waiting</i>.')+
+    PL('That is it — every dollar of the paycheck has a job. Money left over goes to a savings envelope; never leave dollars jobless in the pool for long.'), {g:'week'}),
+
+  S('🧾','During the week — approve your spending',
+    P('As you spend, transactions flow into the <b>Inbox</b> on their own (it syncs from your bank every hour; <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour, and on the phone, pulling the page down does the same). A few times a week, clear it:')+
+    B('Most items arrive with a <b>suggestion pill</b> — one tap to approve if it is right.')+
+    B('Tick <b>Always suggest this</b> when approving and that store is suggested automatically from then on. The card shows the words the rule will look for (“Hannaford Supermarket”, not “Hannaford Supermarket 8123”); the message after has <b>Edit rule</b>. An Inbox card filled in by a rule says <b>Suggested by rule …</b> — tap <b>edit</b> to fix a wrong one right there.')+
+    B('<b>✓ Approve all</b> takes everything that already has a suggestion.')+
+    B('One purchase, two jobs? <b>Split</b> spreads it across envelopes (the Walmart run that was half groceries, half a game).')+
+    B('<b>Tag as you approve</b>: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there ride along with the approval — one entry in History, one Undo.')+
+    P('<b>Settings \u2192 Suggestion rules</b> lists every rule in the order SBC checks them (the first match wins). Tap one to change its words or envelope, move it up or down, or delete it; the preview shows what it would catch before you save. A ⚠ means a rule above catches everything this one would.')+
+    PL('Approving isn\u2019t busywork — it is the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.'), {g:'week'}),
+
+  S('🚨','When an envelope runs dry',
+    P('Eating Out is empty and it is only the 20th? That is the system <i>working</i> — it caught the overspend while you can still do something about it.')+
+    B('<b>Cover it:</b> open an envelope with slack and use <b>Move money</b>. You are choosing the trade-off (“less clothes money this month”) instead of discovering it later.')+
+    B('<b>Or let it ride negative:</b> negative envelopes are allowed — they stay red and roll forward until you cover them at the next funding. Nothing hides.')+
+    PL('Moving money between envelopes is normal and healthy. The budget is a plan, not a punishment.'), {g:'week'}),
+
+  S('💳','Credit cards — and why CC Payment stays empty',
+    P('Cards are the one thing that trips people up, and the rule is simpler than you\u2019d guess: <b>a card purchase is spending, and it counts the moment you swipe.</b> When the charge arrives in your Inbox you approve it into Groceries or Gas like any other purchase, and that envelope goes down right then.')+
+    P('<b>So don\u2019t put money in CC Payment 💳.</b> When you pay the card bill, money leaves checking and the card balance drops; both sides land in CC Payment and cancel out, which is why it sits at about $0. Funding it would count the same spending twice.')+
+    PL('Under <b>Available to fund</b> on Home, <b>Cash in accounts</b> is what is in checking and savings and <b>Cards owed</b> (amber) is the part that belongs to the card companies. Amber, not red — an obligation, not a problem.'), {g:'week'}),
+
+  S('🎯','Goals — saving for something',
+    P('A goal is an envelope with a finish line. Open <b>Goals</b>, tap <b>+ New goal</b>, say <b>what for</b>, <b>how much</b> and \u2014 only if you want \u2014 <b>by when</b>. Leave the date blank and it\u2019s a <i>someday</i> goal: no deadline, no nagging, just a bar that fills as you fund it.')+
+    P('The Goals page shows saved / target, the percent, and for a dated goal <b>$X/month to make it</b> plus <b>On track</b> or <b>Behind</b>. Behind gives you a month\u2019s grace, so it won\u2019t flip red the day before payday. Goal envelopes wear 🎯 in the Envelopes list and the nearest three sit on Home. <b>Reached \u2713</b> means spend it, or set a new number.')+
+    PL('<b>Max</b> is the opposite tool: open an everyday envelope, <b>Set max</b>, and if it ever sits above that you see <i>\u201c$120 over max\u201d</i> on the row and under Needs attention. Tap it and Move opens with the amount filled in \u2014 you choose where it goes. SBC only points; it never moves your money. Caps show on the same Goals page wearing 🧱.'), {g:'tools'}),
+
+  S('🏦','Autopay — will the cash be in the right account?',
+    P('Envelopes answer <i>“is this money spoken for?”</i> They say nothing about <b>which account</b> it is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.')+
+    P('That\u2019s what <b>More → Obligations</b> is for. Once per card or loan: what it is, <b>which account it is paid from</b>, how the amount is decided, the closing and due days, and how many days ahead you want warning. Nothing to update month to month — it reads your own balance history. The account pickers list every account your balance history reports on; an account marked <b>Hide</b> on the Tiller Accounts tab never appears here.')+
+    B('<b>Statement balance</b> — what the card owed just after it closed; what autopay-in-full actually takes.')+
+    B('<b>Whatever is owed today</b> — for a card you pay off as you go.')+
+    B('<b>A fixed amount</b> — a mortgage or car payment. You type the number.')+
+    P('The <b>Obligations</b> card on Home then lists what leaves in the next 30 days with the account it comes from. <b>Green</b>: the money is there. <b>Amber</b>: it isn\u2019t, but you have it elsewhere — <i>“Move $340 to checking before the 15th for Discover”</i>. <b>Red</b>: not there and not anywhere else. <b>Grey</b>: that account\u2019s balance hasn\u2019t moved in days, so SBC won\u2019t guess — see “When a balance is frozen”.')+
+    PL('<b>“I moved it” hides the warning for three days and records nothing.</b> That is deliberate: the real transfer arrives in your Inbox on its own as two transactions. It is deliberately pessimistic — today\u2019s money against what leaves, never counting on a paycheck first. Want the answer this second? <b>Obligations → Check now</b>.'), {g:'tools'}),
+
+  S('🗓️','Budget & paychecks',
+    P('<b>Settings → Budget & paychecks</b> decides what Home\u2019s <b>Funded</b> card measures you against. Default is <b>your funding plans</b>: each plan has a <b>How often</b> (once a month, every paycheck, or paycheck 1 / 2 / 3), and each is <b>In the budget</b> Automatic (the plan you used most recently for that How often), Always or Never — so old or seasonal plans can stay saved without counting.')+
+    PL('You can switch to <b>Monthly targets</b> (a fixed amount per envelope per month) or to <b>no budget</b>, in which case the card simply shows what you funded.'), {g:'tools'}),
+
+  S('📈','Wealth — net worth, and can you retire?', wealthHelpHtml_(), {g:'tools', gen:true}),
+
+  S('🔔','Notifications',
+    P('SBC Money can tap you on the shoulder instead of waiting for you to open it. Turn it on once per device in <b>Settings → Notifications</b> — on a computer in a normal Chrome or Edge tab, on an iPhone from the Home Screen app.')+
+    P('You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM in your time zone (<b>Settings → Personal information</b>).')+
+    PL('Tap a notification and the app opens on the page it is about; once the thing is handled, the notification clears itself on every device. The Inbox count also shows on the browser tab and the Home Screen icon.'), {g:'tools'}),
+
+  S('🩺','Is the budget honest?',
+    P('<b>Budget health</b> on Home answers one question: does the money in your envelopes add up to the money you really have? It always shows the answer to the dollar — <b>✓ 100% accounted for</b>, with every part of any difference named:')+
+    B('<b>Awaiting approval</b> — transactions in your Inbox. Approve them and that part closes.')+
+    B('<b>Not imported yet</b> — Tiller has them, the Inbox doesn\u2019t. They arrive on the hour, or now with <b>Check for new</b>.')+
+    B('<b>In the balance, transaction not in yet</b> (or the reverse) — normal bank timing; it settles by itself.')+
+    B('<b>Amber</b> — an account out of step for more than a few days, usually a feed that stopped. Refresh it at my.tiller.com.')+
+    PL('• <b>Red, “not traced yet”</b> — money SBC can\u2019t tie to any account or transaction, with the day it started. Look at what changed that day.'), {g:'trust'}),
+
+  S('🧊','When a balance is frozen',
+    P('Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old.')+
+    P('SBC watches for it: an account whose balance hasn\u2019t changed in days <i>while transactions kept arriving</i> gets a banner above Home and one email a day until it is sorted. Anything that depends on that balance says <b>Can\u2019t check</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn\u2019t trust.</b>')+
+    P('To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won\u2019t cooperate, mark the account manual and set the balance yourself under <b>Settings → Maintenance → Reconcile accounts</b>.')+
+    PL('<b>Frozen is not the same as slow.</b> On that page the <b>Feed check</b> lists two different things: an account whose balance moved by more than its transactions explain (interest, a fee, a slow purchase — it clears on its own), and an account marked 🧊 that hasn\u2019t reported a balance for three days or more, which won\u2019t clear by waiting.'), {g:'trust'}),
+
+  /* "if a user wants to set up a manual account, should they do that in SBC or
+     Tiller?" — SBC has no create-account path; the account list is built from
+     Balance History rows that arrive on the hourly sync. The GROUP is the step
+     people skip: a blank group drops the account out of the honesty check. */
+  S('✋','An account with no feed — HSA, rewards, a car',
+    P('Some things you want on the books have no bank feed at all: an <b>HSA</b>, a <b>credit-card rewards</b> balance, a <b>401(k)</b>, the value of a car. SBC can track those — you just type the number in when it changes.')+
+    P('<b>Create the account in Tiller, not in SBC.</b> SBC has no <i>add account</i> button anywhere; the account list you see on Balances and Reconcile is built from what your Tiller sheet reports. Add it on Tiller\u2019s <b>Accounts</b> tab — and <b>give it a Group</b> (Checking, Savings, Credit, Retirement …). ⚠ The group is the step people skip, and an account without one quietly drops out of the honesty check and shows up later as an <i>unexplained</i> balance nobody can find.')+
+    P('It reaches SBC on the next hourly sync — a Tiller-side change only ever arrives on the hour, so if it isn\u2019t there yet, that\u2019s why.')+
+    P('Then, in SBC: <b>Settings → Maintenance → Reconcile accounts</b>, find it under 🔄 AUTOMATIC and tap <b>Mark manual</b>. It moves up to ✋ MANUAL. From then on <b>Update balance</b> is how you keep it honest — that writes the new balance back into your Tiller sheet, so both sides stay in step.')+
+    PL('⚠ <b>A manual account is a balance, not a spending account.</b> It will never have transactions and nothing you spend from it touches an envelope. That\u2019s right for an HSA or a car. It is <i>not</i> the way to track cash in your wallet — for that, keep an envelope and let the money live in the pool.'), {g:'trust'}),
+
+  S('📊','Checking on yourself',
+    B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards.')+
+    B('<b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full Activity (every movement names the other envelope — tap to jump). With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top. <b>Hide from lists</b> quiets an envelope you never want to see (it stays pickable, leaves the list, and stops counting toward available to fund); <b>Archive</b> is for one that is finished for good.')+
+    B('<b>Transactions</b> — everything approved; search by description, filter by account or envelope, un-approve or re-split, tap <b>+ tag</b> on a row, or <b>🏷 Tag many</b> to tag a whole trip at once.')+
+    B('<b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶; every report is scoped to your <b>spending accounts</b> and filters by group, envelope, or tag. Start on <b>Period summary</b>.')+
+    B('<b>Tags</b> — label transactions with events that cut across envelopes (“2027 Myrtle Beach Vacation”). Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.')+
+    B('<b>Balances</b> — your real account balances from the bank feeds, assets minus liabilities. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a manual account sets its balance; <b>Reorder</b> arranges groups and accounts.')+
+    PL('• <b>Wealth</b> — net worth over time, what you added versus what the market did, and whether you are on pace to retire. Its own section above.'), {g:'tools'}),
+
+  S('📮','When a save doesn\u2019t reach your sheet',
+    P('When you approve, move or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes — usually within seconds. Once in a while Google doesn\u2019t answer, and the write fails.')+
+    P('SBC retries on its own every time you open the app. If a save still can\u2019t land, a red <b>“save never reached your sheet”</b> banner at the top of Home says exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.')+
+    P('Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.')+
+    P('A save and its “send to the sheet” ticket are written together — one can\u2019t exist without the other — and each ticket is sent <b>exactly once</b>: if two parts of the app try to send the same one, the sheet recognises the duplicate and answers with the first result instead of moving money twice. If Retry says <b>“already being sent”</b>, another send is in progress; give it a minute.')+
+    PL('<b>Approve all</b> used to take up to a minute and a half for a big batch; it saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>“Apps Script was busy”</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.'), {g:'trust'}),
+
+  S('🔄','Making the app re-read your sheet',
+    P('Settings → Maintenance → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.')+
+    PL('You rarely need it: the app catches up on its own within the hour. Reach for it after a repair made directly in the sheet. It cannot pull bank balances forward — that\u2019s <b>↻ Refresh from Tiller</b> on Balances.'), {g:'trust'}),
+
+  S('↩️','Made a mistake? Nothing is permanent',
+    P('Every action in SBC Money is recorded and reversible. <b>One tap:</b> when you approve, move, or fund, the green confirmation at the bottom of the screen carries an <b>Undo</b> button for a few seconds — tap it and the action is reversed on the spot. Missed it? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation; nothing expires there.')+
+    P('<b>One tap back, too:</b> your phone\u2019s back gesture (or the browser\u2019s Back button) steps back through SBC Money — envelope detail to Envelopes, a Settings page to Settings — instead of leaving the app.')+
+    PL('You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can\u2019t break your money.'), {g:'trust'}),
+
+  S('🔐','Who can see your money',
+    P('Your bank data lives in <b>your</b> Tiller sheet and <b>your</b> companion sheet, in your own Google Drive. Two service accounts have access so the app works: the SBC app account (an editor — it imports your transactions hourly and writes your categorizations back) and a read-only account that feeds the fast view. <b>Scott is on neither sheet, is not on your access list, and nothing in the app shows him your numbers.</b>')+
+    P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. He doesn\u2019t, and the app has no screen that would. If that is not enough, say so — the alternative is running your own copy.')+
+    PL('<b>Settings → Maintenance → Access</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
+
+  S('🗺️','Every page, one line each',
+    P('The pages the rest of this guide doesn\u2019t stop to explain. If a page loads with a red ⚠ and a <b>Try again</b> button, tap it — the load failed, nothing else did.')+
+    B('<b>Transactions</b> — every approved transaction; search by description, filter by account, envelope or hidden, and tag from here.')+
+    B('<b>Fund</b> — moves pool money into envelopes. Type the amount (or take the whole pool), apply a plan or split by hand, and the footer says <b>Fully assigned ✓</b> when every dollar has a job. Plans live at the bottom of this page.')+
+    B('<b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one. Envelopes and Tiller categories are one list: creating, renaming, regrouping or archiving an envelope here does the same thing to its category in your Tiller sheet (archive = <b>Hide From Reports</b>), and the confirmation says <b>Tiller ✓</b> when it landed. Hide is the exception — it only quiets the envelope in SBC.')+
+    B('<b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour.')+
+    B('<b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.')+
+    B('<b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the ones below.')+
+    B('<b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined — ✎ Add puts them on the Categories tab in one tap.')+
+    B('<b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.')+
+    B('<b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.')+
+    B('<b>Access</b> — who can sign in to <i>your</i> budget; add a partner\u2019s email here.')+
+    B('<b>More</b> (phone) — the pages the five tabs have no room for: Transactions, Fund, Goals, Obligations, Accounts, Reports, and Settings. On a computer these all live in the left sidebar instead.')+
+    B('<b>Sign-ins & activity</b> — every sign-in and who changed what (Settings → Records).')+
+    B('<b>Health settings</b> — which account groups count as cash and debt for the honesty check (Settings → Set up).')+
+    PL('<b>Display density</b>, <b>Monthly dress-up</b>, <b>Back up envelopes to Tiller</b> and the <b>Customize</b> button on Home are all cosmetic or belt-and-suspenders — none of them moves money.'), {g:'reference'}),
+
+  S('🎨','Monthly dress-up & birthdays',
+    P('On a computer, the logo and sidebar dress for the season (on a phone it\u2019s the little emoji in the Home greeting) — snow in January, fireworks in July, a string of lights in December. It\u2019s decoration only: nothing about your money changes, and the numbers never move.')+
+    P('Tell SBC your <b>birthday</b> (Settings → Personal information) and your birthday month adds balloons and confetti, and on the day itself the app greets you with <b>Happy Birthday</b>. The full date is saved with your account — the year will also power future age-based reports.')+
+    PL('Not your thing? The <b>Monthly dress-up</b> switch in Settings turns it all off on that device — each person decides for themselves.'), {g:'reference'}),
+
+  S('⬆️','Keeping the app current',
+    P('SBC Money is a web page you\u2019ve added to your home screen, and it keeps a copy of itself on your device so it opens instantly, even on a bad connection. When an update ships, a teal <b>Update available — tap to reload</b> banner appears at the top of Home within an hour or so. Tap it; the app reloads on the new version and nothing you\u2019ve done is lost.')+
+    PL('<b>Settings → About</b> shows the version on each part of the app — <b>Server</b>, <b>UI</b> and <b>Mirror</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will. The <b>Build</b> line under them names the exact release this screen is running.'), {g:'reference'}),
+
+  S('📅','Your routines, on one card',
+    B('<b>Payday (2 min):</b> Inbox → approve paycheck → Move to pool → Fund with your plan.')+
+    B('<b>Every few days (1 min):</b> clear the Inbox; glance at an envelope before a big purchase.')+
+    B('<b>Monthly (10 min):</b> review Reports, adjust your funding plan to real life, cover any negative envelopes, glance at <b>Goals</b> — are you on pace?')+
+    B('<b>Once per device (1 min):</b> <b>Settings → Notifications → Turn on</b>, so the app tells you when something needs you.')+
+    P('<b>Once, ever (5 min):</b> enter your autopays under <b>More → Obligations</b> — every card and loan that pays itself. After that it warns you on its own.')+
+    PL('Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.'), {g:'reference'})
+  ];
+  if(howtoMode_==='sections') return HOWTO_SECTIONS;
+
+  var card = function(s, idx){
+    return '<details class="card" id="howto-'+idx+'" style="padding:13px 16px;margin-bottom:10px"'+(s.open?' open':'')+'>'+
       '<summary style="cursor:pointer;font-weight:700;font-size:15px;list-style:none">'+
-      emoji+'&nbsp; '+title+'</summary>'+
-      '<div style="margin-top:10px;font-size:13.5px;line-height:1.7;opacity:.92">'+body+'</div></details>';
+      s.e+'&nbsp; '+esc(s.t)+'</summary>'+
+      '<div style="margin-top:10px;font-size:13.5px;line-height:1.7;opacity:.92">'+s.h+'</div></details>';
   };
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
     '<h2 class="viewtitle">How to use SBC Money</h2>'+
-    '<div class="note" style="padding:2px 2px 14px">Five minutes here and the whole app makes sense. Start with the big idea, then learn the payday routine — everything else is detail.</div>';
-
-  h += S('💡','The big idea (read this first)',
-    '<p style="margin:0 0 8px">SBC Money is <b>envelope budgeting</b>. Picture cash envelopes with names on them: Rent, Groceries, Eating Out. Every dollar you have sits in exactly one envelope — that’s the dollar’s <b>job</b>.</p>'+
-    '<p style="margin:0 0 8px">Two rules make the whole system work:</p>'+
-    '<p style="margin:0 0 8px"><b>1. Only budget money you actually have.</b> Not next week’s paycheck, not what you hope to earn — just what’s in your accounts right now.</p>'+
-    '<p style="margin:0 0 8px"><b>2. Before you spend, look at the envelope — not the bank account.</b> Your bank balance lies to you: it includes rent money that isn’t spent yet. The envelope tells the truth about what’s really free to spend.</p>'+
-    '<p style="margin:0">Do that consistently and something great happens over time: you stop living paycheck-to-paycheck, because each envelope fills up <i>before</i> its bill arrives. The long-term goal is to be a full month ahead.</p>', true);
-
-  h += S('📚','Words you’ll see everywhere',
-    '<p style="margin:0 0 6px"><b>Envelope</b> — a named job for money (Groceries, Rent). Its balance = what’s truly available for that job.</p>'+
-    '<p style="margin:0 0 6px"><b>Group</b> — a folder of envelopes (Bills, Everyday, Savings).</p>'+
-    '<p style="margin:0 0 6px"><b>Income Cash Pool</b> — the loading dock. New income lands here first, then you deal it out to envelopes. Money in the pool has no job yet.</p>'+
-    /* v3.76.6 */
-    '<p style="margin:0 0 6px"><b>Available to fund</b> on Home is the <b>pool</b>, and nothing else — the same number Fund will let you deal out. Income parked in another income envelope (a <b>Regular Pay</b>, say) is listed under it as <i>In Regular Pay</i>: it is your money, it just isn’t fundable until you open that envelope and tap <b>Move to pool</b>.</p>'+
-    '<p style="margin:0 0 6px"><b>Fund</b> — the act of moving money from the pool into envelopes. This is "giving every dollar a job."</p>'+
-    '<p style="margin:0 0 6px"><b>Funding plan</b> — a saved recipe for funding ("every paycheck: $500 rent, $200 groceries, rest to savings") so payday takes one tap.</p>'+
-    '<p style="margin:0 0 6px"><b>Budget</b> — what you mean to fund this month. Home’s <b>Funded</b> card compares the two. It comes from your <b>funding plans</b>: each plan has a <b>How often</b> (once a month, every paycheck, or paycheck 1 / 2 / 3 of the month), and the card lists each one — <i>Paycheck 1 ✓ · Paycheck 2 waiting</i>. Old or seasonal plans can stay: each plan is <b>In the budget</b> Automatic (the plan you used most recently for that How often), Always or Never. Set it in <b>Settings → Budget &amp; paychecks</b>, where you can also switch to monthly targets or no budget at all.</p>'+
-    '<p style="margin:0 0 6px"><b>Target</b> — what an envelope should receive each month (the Targets tab). Used as the budget only when you pick <i>Monthly targets</i>.</p>'+
-    '<p style="margin:0 0 6px"><b>Goal</b> \u2014 an envelope you\u2019re saving up in, with a number to reach and (if you like) a date. It\u2019s still just an envelope; <b>Goals</b> keeps score.</p>'+
-    '<p style="margin:0 0 6px"><b>Max</b> \u2014 a ceiling for an envelope. It can go over; when it does, SBC suggests moving the extra. It never moves anything itself.</p>'+
-    '<p style="margin:0 0 6px"><b>Inbox</b> — new bank transactions waiting for you to confirm which envelope they belong to.</p>'+
-    '<p style="margin:0 0 6px"><b>Rollover</b> — envelope balances carry forward forever. Money you didn’t spend on groceries this month is still yours next month.</p>'+
-    '<p style="margin:0 0 6px"><b>In flight</b> — money the bank has moved but hasn’t finished telling us about yet. It clears on its own; see "Is the budget honest?" below.</p>'+
-    '<p style="margin:0 0 6px"><b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.</p>'+
-    '<p style="margin:0 0 6px"><b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there. (Before v3.66 these rows just said "Money moved".)</p>'+
-    '<p style="margin:0 0 6px"><b>Maintenance</b> — a page under Settings holding the tools for when something looks wrong: Tiller sync, Reconcile accounts, Remove a transaction, Access, the Tiller backup and the sheet links. (v3.72.0: Health settings moved to <b>Settings → Set up</b> and Sign-ins &amp; activity to <b>Settings → Records</b> — one is configuration, the other a log, and neither is plumbing.)</p>'+
-    '<p style="margin:0"><b>Write-back</b> — every save you make here is also written to your Google Sheet in the background (that\u2019s the "syncing in background" toast). The sheet is the record; the app is the fast view of it.</p>');
-
-  h += S('💵','Payday — the routine that matters most',
-    '<p style="margin:0 0 8px">Three steps, about two minutes:</p>'+
-    '<p style="margin:0 0 6px"><b>1. Approve the paycheck.</b> Open <b>Inbox</b> — your deposit is waiting there. Approve it into your income envelope (Regular Pay 💵).</p>'+
-    '<p style="margin:0 0 6px"><b>2. Move it to the pool.</b> Open the Regular Pay envelope and tap <b>"→ Move $… to pool"</b> (the button shows the amount; no "are you sure" — the toast that follows has <b>Undo</b>). Now the money is on the loading dock, ready for jobs.</p>'+
-    '<p style="margin:0 0 8px"><b>3. Fund your envelopes.</b> Go to <b>Fund</b> — tap <b>Available to fund</b> on Home, or <b>More → Fund</b> on a phone. The pool balance is at the top. Apply your funding plan (or split it by hand), review, confirm. A plan for each paycheck? Give each one its <b>How often</b> (Paycheck 1, Paycheck 2…) and Home’s <b>Funded</b> card shows which paychecks are done and which are still to come.</p>'+
-    '<p style="margin:0">That’s it — every dollar of the paycheck now has a job. If money is left over, park it in a savings envelope; never leave dollars jobless in the pool for long.</p>');
-
-  h += S('🧾','During the week — approve your spending',
-    '<p style="margin:0 0 8px">As you spend, transactions flow into the <b>Inbox</b> automatically (it syncs from your bank every hour). A few times a week, clear it:</p>'+
-    '<p style="margin:0 0 6px">• Most items arrive with a <b>suggestion pill</b> — one tap to approve if it’s right.</p>'+
-    '<p style="margin:0 0 6px">• Tick <b>"Always suggest this"</b> when approving and that store will be suggested automatically from then on. The card shows the words the rule will look for \u2014 the store name without the changing numbers (\u201cHannaford Supermarket\u201d, not \u201cHannaford Supermarket 8123\u201d) \u2014 and the message that follows has <b>Edit rule</b>.</p>'+
-    '<p style="margin:0 0 6px">• <b>Settings \u2192 Suggestion rules</b> lists every rule in the order SBC checks them (the first one that matches wins). Tap a rule to change its words or envelope, move it up or down, or delete it; the preview shows what it would catch in the Inbox and in the last 12 months before you save. Saving also re-suggests everything already waiting in the Inbox. A \u26a0 means one rule catches everything another would, so the lower one never gets used. An Inbox card that was filled in by a rule says <b>Suggested by rule \u2026</b> \u2014 tap <b>edit</b> to fix a wrong one right there.</p>'+
-    '<p style="margin:0 0 6px">• <b>"✓ Approve all"</b> takes care of everything that already has a suggestion.</p>'+
-    '<p style="margin:0 0 8px">• One purchase, two jobs? Use <b>Split</b> to spread it across envelopes (the Walmart run that was half groceries, half a game).</p>'+
-    '<p style="margin:0">Approving isn’t busywork — it’s the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.</p>');
-
-  h += S('🚨','When an envelope runs dry',
-    '<p style="margin:0 0 8px">Eating Out is empty and it’s only the 20th? That’s the system <i>working</i> — it caught the overspend while you can still do something about it.</p>'+
-    '<p style="margin:0 0 6px">• <b>Cover it:</b> open an envelope with slack and use <b>Move money</b>. You’re choosing the trade-off ("less clothes money this month") instead of discovering it later.</p>'+
-    '<p style="margin:0 0 8px">• <b>Or let it ride negative:</b> negative envelopes are allowed — they stay red and roll forward until you cover them at the next funding. Nothing hides.</p>'+
-    '<p style="margin:0">Moving money between envelopes is normal and healthy. The budget is a plan, not a punishment.</p>');
-
-  h += S('💳','Credit cards — and why CC Payment stays empty',
-    '<p style="margin:0 0 8px">Cards are the one thing that trips people up, and the rule is simpler than you’d guess: <b>a card purchase is spending, and it counts the moment you swipe.</b> When that charge arrives in your Inbox you approve it into Groceries or Gas like any other purchase, and that envelope goes down right then. Nothing special happens later.</p>'+
-    '<p style="margin:0 0 8px"><b>So don’t put money in CC Payment 💳.</b> It isn’t a spending envelope — it’s plumbing. When you actually pay the card bill, two things happen at once: money leaves checking and the card balance drops. Both sides land in CC Payment and cancel each other out, which is why it should always sit at about $0.</p>'+
-    '<p style="margin:0 0 8px">Funding it would double-count the same debt: once when you swiped, once again in the envelope. The money would sit there forever with nothing to spend it on.</p>'+
-    '<p style="margin:0 0 8px">What about the balance you owe? It’s already accounted for — the charge came out of a spending envelope the day you swiped, so the money is spoken for and no envelope is pretending otherwise.</p>'+
-    '<p style="margin:0">You can see it: under the big <b>Available to fund</b> number on the Dashboard, <b>Cash in accounts</b> is what’s sitting in checking and savings, and <b>Cards owed</b> in amber underneath is the part of it that belongs to the card companies. Amber, not red — that’s an obligation, not a problem. <b>Waiting in your inbox</b> shows up there too, which is why the pool can read a little above your bank balance until you clear the Inbox.</p>');
-
-  h += S('🎯','Goals — saving for something',
-    '<p style="margin:0 0 8px">A goal is just an envelope with a finish line. Open <b>Goals</b> (sidebar, or More on your phone), tap <b>+ New goal</b>, and say <b>what for</b> (pick an envelope or make a new one), <b>how much</b>, and \u2014 only if you want \u2014 <b>by when</b>. Leave the date blank and it\u2019s a <i>someday</i> goal: no deadline, no nagging, just a bar that fills up as you put money in.</p>'+
-    '<p style="margin:0 0 8px">Money gets into a goal the same way it gets into any envelope: fund it on payday, or <b>Move money</b> into it from another envelope. The Goals page shows saved / target, the percent, and for a dated goal <b>$X/month to make it</b> plus <b>On track</b> or <b>Behind</b>. Behind gives you a month\u2019s grace, so it won\u2019t flip red the day before payday. A dated goal that passes its date short shows up on <b>Needs attention</b> until you reach it, re-date it or clear it.</p>'+
-    '<p style="margin:0 0 8px">Goal envelopes wear a <b>\ud83c\udfaf</b> badge with their percent in the Envelopes list, and the <b>\ud83c\udfaf Goals</b> card on Home shows your nearest three. When the balance reaches the number it reads <b>Reached \u2713</b> \u2014 then spend it, or set a new number. Change or clear a goal any time from the envelope\u2019s page (<b>Edit goal</b>).</p>'+
-    '<p style="margin:0 0 8px"><b>Max</b> is the opposite tool, for everyday envelopes: open the envelope, <b>Set max</b>, and if Groceries ever sits above it you\u2019ll see <i>\u201c$120 over max\u201d</i> on the row and on Needs attention. Tap it and Move opens with that amount filled in \u2014 you pick where it goes. SBC only points; it never moves your money.</p>'+
-    /* v3.76.8 */
-    '<p style="margin:0">Anything you have capped shows up on this same <b>Goals</b> page, in the same list, wearing 🧱 instead of 🎯 \u2014 so you can see every cap you have set in one place instead of hunting envelope by envelope. Read the two together: 🎯 is a floor you are climbing to, 🧱 is a ceiling you would rather not cross. An envelope with both is still one card.</p>');
-
-  h += S('🏦','Autopay — will the cash be in the right account?',
-    '<p style="margin:0 0 8px">Envelopes answer <i>“is this money already spoken for?”</i> They say nothing about <b>which account</b> the money is sitting in. You can be perfectly on budget and still bounce a card payment because the cash is in savings and the autopay hits checking.</p>'+
-    '<p style="margin:0 0 8px">That’s what <b>More → Obligations</b> is for. Tell it, once per card or loan: what it is, <b>which account the payment comes out of</b>, how the amount is decided, the closing day, the due day, and how many days ahead you want warning. Nothing to update month to month — it reads the amount from your own balance history.</p>'+
-    '<p style="margin:0 0 8px">The account pickers list every account your balance history reports on — cash accounts for <b>Paid from</b>, cards and loans for the balance to read — with live accounts first. An account marked <b>Hide</b> on the Tiller Accounts tab never appears here: hiding it means you’re done with it, everywhere.</p>'+
-    '<p style="margin:0 0 6px">Three ways to decide the amount:</p>'+
-    '<p style="margin:0 0 6px">• <b>Statement balance</b> — what the card owed just after it closed. That’s what autopay-in-full actually takes. If the feed didn’t leave a balance right after your closing day, SBC works it back from what the card owes today, minus everything that posted since the close.</p>'+
-    '<p style="margin:0 0 6px">• <b>Whatever is owed today</b> — for a card you pay off as you go.</p>'+
-    '<p style="margin:0 0 8px">• <b>A fixed amount</b> — a mortgage or car payment. You type the number; no account to pick, because nothing needs to be read.</p>'+
-    '<p style="margin:0 0 8px">Then it watches, and the <b>Obligations</b> card on your Dashboard shows what is leaving in the next 30 days, in date order, with the account each one comes out of. A green dot means the money is there. <b>Amber</b> means it isn’t, but you have it somewhere else — <i>“Move $340 to MONEY before the 15th for Discover”</i> — and that warning also rides at the top of <b>Needs attention</b>. <b>Red</b> means it isn’t there and isn’t anywhere else; that one needs a real decision. <b>Grey</b> means the account’s balance hasn’t moved in days, so SBC won’t guess — see “When a balance is frozen”.</p>'+
-    '<p style="margin:0 0 8px"><b>“I moved it” hides the warning for three days and records nothing.</b> That’s deliberate. When you really move money between banks, the transfer arrives in your Inbox on its own as two transactions and you approve it as an Account Transfer — if SBC wrote its own row you’d end up with the same transfer twice. If the money lands, the warning never comes back. If it doesn’t, it does.</p>'+
-    '<p style="margin:0 0 8px">It is deliberately pessimistic: it compares what you have <b>today</b> against what leaves, and never counts on a paycheck arriving first. Better an early nudge you can ignore than a late one you can’t.</p>'+
-    '<p style="margin:0">Amounts refresh with the hourly sync. Just set one up and want the answer this second? <b>Obligations → Check now</b>.</p>');
-
-  h += S('🩺','Is the budget honest?',
-    '<p style="margin:0 0 8px"><b>Budget health</b> on the Dashboard answers one question: does the money in your envelopes add up to the money you really have? As of <b>v3.78.0</b> it always shows the answer to the dollar: <b>✓ 100% accounted for</b>, with every part of any difference named.</p>'+
-    '<p style="margin:0 0 8px">How it knows: for each account, SBC compares the balance with every transaction Tiller has for it. On a healthy account that comparison stays the same for weeks. When it changes, SBC knows which account, which day, and which side moved first.</p>'+
-    '<p style="margin:0 0 6px">• <b>Awaiting approval</b>: transactions in your Inbox. Approve them and that part closes.</p>'+
-    '<p style="margin:0 0 6px">• <b>Not imported yet</b>: transactions Tiller has that haven’t reached your Inbox. They arrive on the next hourly sync, or right away with <b>Check for new</b>. The card updates as soon as they land.</p>'+
-    '<p style="margin:0 0 6px">• <b>An account “in the balance, transaction not in yet”</b> (or the reverse): normal bank timing. Banks post the balance and the transaction on different days. It settles by itself and needs nothing from you.</p>'+
-    '<p style="margin:0 0 6px">• <b>Amber</b>: an account has been out of step longer than a few days (<i>Health Stuck Days</i>, default 5). Usually a feed that stopped updating. Refresh it at my.tiller.com, or set the balance on Balances.</p>'+
-    '<p style="margin:0">• <b>Red, “not traced yet”</b>: money SBC can’t tie to any account or transaction, with the day it started. Look at what changed that day, such as a deleted or edited transaction, an envelope adjustment, or an account moved in or out of the budget.</p>');
-
-  h += S('🧊','When a balance is frozen',
-    '<p style="margin:0 0 8px">Once in a while a bank feed keeps reporting the <i>same</i> balance day after day while your real account moves on. Tiller writes a fresh row every night, so the date says “today” and everything looks healthy — the number underneath is just old. On 8/26/26 that hid a $1,061.54 gap for a week.</p>'+
-    '<p style="margin:0 0 8px">SBC now watches for it: an account whose balance hasn’t changed in days <i>while transactions kept arriving</i> gets called out in a banner above the Dashboard, and you get one email a day until it’s sorted.</p>'+
-    '<p style="margin:0 0 8px">As of <b>v3.70.0</b> Budget health watches for the same thing, and it does it the honest way — by the last day the <i>number</i> changed, not the last day a row arrived. It also speaks up when your totals still add up: on 9/10/26 the books balanced to the cent while a checking balance had been frozen for six days, and the old card had nothing to say about it. A frozen balance is now the headline whether or not anything looks wrong.</p>'+
-    '<p style="margin:0 0 6px">To fix it: refresh or re-link that account at <b>my.tiller.com</b>. If the bank simply won’t cooperate, mark the account <b>manual</b> in Tiller and set the balance yourself under <b>Settings → Maintenance → Reconcile accounts</b>.</p>'+
-    '<p style="margin:0 0 8px">Until it’s fixed, anything that depends on that balance says <b>“Can’t check”</b> rather than guessing — including your autopay warnings. <b>SBC will never raise an alarm, or clear one, on a number it doesn’t trust.</b></p>'+
-    '<p style="margin:0"><b>Frozen is not the same as slow.</b> Under <b>Settings → Maintenance → Reconcile accounts</b>, the <b>Feed check</b> lists two different things. An account whose balance moved by more than its transactions explain has something posted that hasn’t arrived as a transaction yet — interest, a fee, a purchase the bank is slow with — and it clears on its own. An account marked 🧊 hasn’t reported a balance at all for three days or more; that one won’t clear by waiting. Either way the automatic <b>true-up to bank</b> holds off, because truing your envelopes to a number that’s wrong is worse than leaving them alone.</p>');
-
-  /* v3.76.7 - "if a user wants to set up a manual account, should they do that
-     in SBC or Tiller?" (Scott, 9/18/26). SBC has no create-account path at all:
-     the account list is built from Balance History rows that arrive on the
-     hourly Tiller sync. And the GROUP is the part people skip - a blank group
-     drops the account out of `bank` entirely and lands as unexplained on Budget
-     health (Brady's $8.60, 9/15/26). Say both, in the user's words. */
-  h += S('✋','An account with no feed — HSA, rewards, a car',
-    '<p style="margin:0 0 8px">Some things you want on the books have no bank feed at all: an <b>HSA</b>, a <b>credit-card rewards</b> balance, a <b>401(k)</b>, the value of a car. SBC can track those — you just type the number in when it changes.</p>'+
-    '<p style="margin:0 0 8px"><b>Create the account in Tiller, not in SBC.</b> SBC has no <i>add account</i> button anywhere; the account list you see on Balances and Reconcile is built from what your Tiller sheet reports. Add it on Tiller’s <b>Accounts</b> tab — and <b>give it a Group</b> (Checking, Savings, Credit, Retirement …). ⚠ The group is the step people skip, and an account without one quietly drops out of the honesty check and shows up later as an <i>unexplained</i> balance nobody can find.</p>'+
-    '<p style="margin:0 0 8px">It reaches SBC on the next hourly sync — a Tiller-side change only ever arrives on the hour, so if it isn’t there yet, that’s why.</p>'+
-    '<p style="margin:0 0 8px">Then, in SBC: <b>Settings → Maintenance → Reconcile accounts</b>, find it under 🔄 AUTOMATIC and tap <b>Mark manual</b>. It moves up to ✋ MANUAL. From then on <b>Update balance</b> is how you keep it honest — that writes the new balance back into your Tiller sheet, so both sides stay in step.</p>'+
-    '<p style="margin:0">⚠ <b>A manual account is a balance, not a spending account.</b> It will never have transactions and nothing you spend from it touches an envelope. That’s right for an HSA or a car. It is <i>not</i> the way to track cash in your wallet — for that, keep an envelope and let the money live in the pool.</p>');
-
-  h += S('📊','Checking on yourself',
-    '<p style="margin:0 0 6px">• <b>Dashboard</b> — available to fund, funded-vs-target, spent this month. Tap <b>Customize</b> at the top of Home to show, hide or reorder the cards.</p>'+
-    '<p style="margin:0 0 6px">• <b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full history. With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top — it matches envelope and group names and opens the groups that match.</p>'+
-    '<p style="margin:0 0 6px">• Got an envelope you never want to see — a brokerage or stock-transaction bucket? Open it and tap '+
-    '<b>Hide from lists</b>. It stays pickable when you categorize, but leaves the list and stops counting toward '+
-    '<b>available to fund</b>. They collect under <b>Envelopes ▸ Hidden</b>. <b>Archive</b> is the heavier one — use it when an envelope is finished for good.</p>'+
-    '<p style="margin:0 0 6px">• <b>Reports</b> <i>(BETA — still being shaped; tell Scott what you want to see)</i> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶. Every report is scoped to your <b>spending accounts</b> (checking, savings, credit — flag them right in the filter panel) and filters by group, envelope, or tag. Start on <b>Period summary</b>; the <b>Tags</b> report shows what an event cost across every envelope.</p>'+
-    '<p style="margin:0 0 6px">• <b>Tags</b> — label transactions with events that cut across envelopes ("2026 Myrtle Beach Vacation"). Tag as you approve: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there are applied BY the approve — one entry in History, and one <b>Undo</b> takes the approval and its tags back together. ✓ Approve all carries each card’s own tags. Already approved? On <b>Transactions</b>, tap <b>+ tag</b> on a row (or ⋮ → Tags… in the one-line view), or <b>🏷 Tag many</b> to tick a whole trip and tag it at once. Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.</p>'+
-    '<p style="margin:0 0 6px">• <b>Balances</b> — your real account balances from the bank feeds. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a row sets a balance by hand (feed-less accounts); <b>Reorder</b> arranges groups and accounts.</p>'+
-    '<p style="margin:0 0 6px">• <b>Budget health</b> — the honesty check (see the section above). Green means your budget isn’t fiction.</p>'+
-    '<p style="margin:0">• <b>Settings → Maintenance → Tiller</b> — quick links straight to your own Tiller spreadsheet, your companion sheet, and my.tiller.com, if you ever want to look under the hood. You almost never need to.</p>');
-
-  h += S('🎨','Monthly dress-up & birthdays',
-    '<p style="margin:0 0 8px">On a computer, the logo and sidebar dress for the season (on a phone it’s the little emoji in the Home greeting) — snow in January, a galloping Derby horse in May, fireworks in July, a string of lights in December. It’s decoration only: nothing about your money changes, and the numbers never move.</p>'+
-    '<p style="margin:0 0 8px">Tell SBC your <b>birthday</b> (Settings → Personal information) and your birthday month adds balloons and confetti, a cake joins for the last week, and on the day itself the app greets you with <b>Happy Birthday</b> instead of Good morning. The full date is saved with your account — the year will also power future age-based reports.</p>'+
-    '<p style="margin:0">Not your thing? The <b>Monthly dress-up</b> switch in Settings turns it all off on that device — each person decides for themselves.</p>');
-
-  h += S('↩️','Made a mistake? Nothing is permanent',
-    '<p style="margin:0 0 8px">Every action in SBC Money is recorded and reversible. <b>One tap:</b> when you approve, move, or fund, the green confirmation at the bottom of the screen carries an <b>Undo</b> button for a few seconds — tap it and the action is reversed on the spot. Missed it? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation; nothing expires there.</p>'+
-    '<p style="margin:0 0 8px"><b>One tap back, too:</b> your phone\u2019s back gesture (or the browser\u2019s Back button) now steps back through SBC Money — envelope detail to Envelopes, a Settings page to Settings — instead of leaving the app.</p>'+
-    '<p style="margin:0">You can also un-approve or re-split any transaction from the <b>Transactions</b> page. Relax and click things — you can’t break your money.</p>');
-
-  h += S('📮','When a save doesn\u2019t reach your sheet',
-    '<p style="margin:0 0 8px">When you approve, move, or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes. Nearly always that takes a few seconds. Once in a while Google doesn\u2019t answer, and the write fails.</p>'+
-    '<p style="margin:0 0 8px">SBC Money now <b>retries on its own</b> every time you open the app, and if it still can\u2019t land, a red <b>"save never reached your sheet"</b> banner appears at the top of the Dashboard saying exactly what didn\u2019t save and why. Tap <b>Retry</b> to send it again right now, or <b>Discard</b> if you already redid it by hand.</p>'+
-    '<p style="margin:0 0 8px">Why it matters: the hourly sync always trusts the sheet. If an approval never got there, the sync puts the transaction back in your Inbox and the envelope goes back to what the sheet says — a paycheck you approved can look like $0 again. That isn\u2019t lost money; it\u2019s a save that needs a Retry.</p>'+
-    '<p style="margin:0 0 8px">Since v3.65 a save and its "send to the sheet" ticket are written together — one can\u2019t exist without the other — and each ticket is sent <b>exactly once</b>: if two parts of the app try to send the same one, the sheet recognises the duplicate and answers with the first result instead of moving money twice. If Retry says <b>"already being sent"</b>, another send is in progress; give it a minute.</p>'+
-    '<p style="margin:0"><b>Approve all</b> used to take up to a minute and a half for a big batch (it saved each transaction one at a time), which is exactly what made those writes time out. It now saves the whole batch in a few seconds, however many rows you approve. If the banner ever says <b>"Apps Script was busy"</b>, an earlier save was still finishing — the app waits a couple of minutes and retries by itself.</p>');
-
-  h += S('🔄','Making the app re-read your sheet',
-    '<p style="margin:0 0 8px">Settings → Maintenance → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (the sheet would only put the old numbers back — fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.</p>'+
-    '<p style="margin:0">You rarely need it: the app catches up on its own within the hour, and after a save that had to go the slow way it re-reads before the next Home screen automatically. Reach for it after a repair made directly in the sheet or the Apps Script editor. It cannot pull bank balances forward — that\u2019s <b>↻ Refresh from Tiller</b> on Balances.</p>');
-
-  h += S('🗺️','Every page, one line each',
-    '<p style="margin:0 0 8px">The pages the rest of this guide doesn\u2019t stop to explain. If a page loads with a red ⚠ and a <b>Try again</b> button, tap it — the load failed, nothing else did.</p>'+
-    '<p style="margin:0 0 6px">• <b>Transactions</b> — every approved transaction; search by description, filter by account, envelope or hidden, and tag from here.</p>'+
-    '<p style="margin:0 0 6px">• <b>Fund</b> — moves pool money into envelopes. Type the amount (or take the whole pool), apply a plan or split by hand, and the footer says <b>Fully assigned ✓</b> when every dollar has a job. Plans live at the bottom of this page.</p>'+
-    '<p style="margin:0 0 6px">• <b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one. Envelopes and Tiller categories are one list: creating, renaming, regrouping or archiving an envelope here does the same thing to its category in your Tiller sheet (archive = <b>Hide From Reports</b>), and the confirmation says <b>Tiller ✓</b> when it landed. Hide is the exception — it only quiets the envelope in SBC.</p>'+
-    '<p style="margin:0 0 6px">• <b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour (on the phone, pulling the page down does the same).</p>'+
-    '<p style="margin:0 0 6px">• <b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.</p>'+
-    '<p style="margin:0 0 6px">• <b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the six below.</p>'+
-    '<p style="margin:0 0 6px">• <b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined \u2014 ✎ Add puts them on the Categories tab in one tap.</p>'+
-    '<p style="margin:0 0 6px">• <b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.</p>'+
-    '<p style="margin:0 0 6px">• <b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.</p>'+
-    '<p style="margin:0 0 6px">• <b>Access</b> — who can sign in to <i>your</i> budget; add a family member\u2019s email here.</p>'+
-    '<p style="margin:0 0 6px">• <b>More</b> (phone) — the pages the five tabs have no room for: Transactions, Fund, Obligations, Accounts, Reports, and Settings. On a computer these all live in the left sidebar instead.</p>'+'<p style="margin:0 0 6px">• <b>Sign-ins & activity</b> — every sign-in and who changed what.</p>'+
-    '<p style="margin:0 0 6px">• <b>Health settings</b> — which account groups count as cash and debt for the honesty check.</p>'+
-    '<p style="margin:0"><b>Display density</b>, <b>Monthly dress-up</b>, <b>Back up envelopes to Tiller</b> and the <b>Customize</b> button on Home are all cosmetic or belt-and-suspenders — none of them moves money.</p>');
-
-  h += S('⬆️','Keeping the app current',
-    '<p style="margin:0 0 8px">SBC Money is a web page you\u2019ve added to your home screen, and it now keeps a copy of itself on your device so it opens instantly, even on a bad connection. When Scott ships an update, a teal <b>Update available — tap to reload</b> banner appears at the top of Home within an hour or so. Tap it; the app reloads on the new version and nothing you\u2019ve done is lost.</p>'+
-    '<p style="margin:0"><b>Settings → About</b> shows the version on each part of the app — <b>Server</b>, <b>UI</b> and <b>Mirror</b>. They should match; if they don\u2019t, tap the banner (or reopen the app once) and they will. The <b>Build</b> line under them names the exact release this screen is running.</p>');
-
-  h += S('🔔','Notifications',
-    '<p style="margin:0 0 8px">SBC Money can tap you on the shoulder instead of waiting for you to open it. Turn it on once per device in <b>Settings → Notifications</b> — on a computer it works in a normal Edge or Chrome tab (no install), on an iPhone from the Home Screen app.</p>'+
-    '<p style="margin:0 0 8px">You choose which of four things to hear about: <b>transactions to approve</b>, <b>a bank balance that stopped updating</b>, <b>a bill coming due that is short</b>, and <b>sync or save problems</b>. Each one is announced once, not every hour it stays true, and nothing is sent between 9 PM and 7 AM in your time zone (<b>Settings \u2192 Personal information</b>; Eastern unless you change it).</p>'+
-    '<p style="margin:0">Tap a notification and the app opens on the page it is about. If SBC Money is already in front of you, the alert shows as a message at the bottom of the screen instead. The Inbox count also shows in the browser tab — <b>(3) SBC Money</b> — and on the Home Screen icon.</p>');
-
-  h += S('📈','Wealth — net worth, and can you retire?', wealthHelpHtml_());   // v3.85.0: generated from WEALTH_DEFS
-
-  h += S('📅','Your routines, on one card',
-    '<p style="margin:0 0 6px"><b>Payday (2 min):</b> Inbox → approve paycheck → Move all to pool → Fund with plan.</p>'+
-    '<p style="margin:0 0 6px"><b>Every few days (1 min):</b> clear the Inbox, glance at envelope balances before big purchases.</p>'+
-    '<p style="margin:0 0 6px"><b>Monthly (10 min):</b> review Reports, adjust targets and your funding plan to match real life, cover any negative envelopes, glance at <b>Goals</b> \u2014 are you on pace?</p>'+
-    '<p style="margin:0 0 6px"><b>Once per device (1 min):</b> <b>Settings → Notifications → Turn on</b>, so the app tells you when something needs you.</p>'+
-    '<p style="margin:0 0 8px"><b>Once, ever (5 min):</b> enter your autopays under <b>More → Obligations</b> — every card and loan that pays itself. After that it warns you on its own.</p>'+
-    '<p style="margin:0">Consistency beats perfection. A slightly-wrong budget you touch every payday beats a perfect one you abandon.</p>');
-
+    '<div class="note" style="padding:2px 2px 12px">Five minutes here and the whole app makes sense. Start with the big idea and your first day, then learn the payday routine — everything else is detail.</div>';
+  if(HOWTO_VIDEO_URL){
+    h += '<div class="card" style="padding:12px 16px;margin-bottom:14px">'+
+      '<div style="font-weight:700;font-size:15px;margin-bottom:8px">🎬 Watch the six-minute tour</div>'+
+      '<video controls preload="metadata" playsinline style="width:100%;max-height:420px;border-radius:10px;background:#000" src="'+esc(HOWTO_VIDEO_URL)+'"></video>'+
+      '<div class="note" style="padding:8px 0 0">Envelopes, payday, approving, credit cards and the phone — on a demo household. '+
+      '<a href="'+esc(HOWTO_GUIDE_URL)+'" target="_blank" rel="noopener">Printable guide ↗</a></div></div>';
+  }
+  HOWTO_GROUPS.forEach(function(g){
+    var rows = HOWTO_SECTIONS.map(function(s,i){ return {s:s,i:i}; }).filter(function(r){ return r.s.g===g[0]; });
+    if(!rows.length) return;
+    h += settingsSectionLabel(g[1].toUpperCase());
+    rows.forEach(function(r){ h += card(r.s, r.i); });
+  });
   $('#shell').innerHTML = h;
 }
-
-/* ============================ sign-ins & activity (v3.25) ============================ */
 function renderActivity(){
   $('#shell').innerHTML = '<h2 class="viewtitle">Sign-ins & activity</h2><div class="spin"></div>';
   Promise.all([ run('apiAccessLog',{limit:100}), run('apiHistory', 25) ]).then(function(rs){
@@ -10558,6 +10617,7 @@ document.addEventListener('change', function(ev){
 });
 var SBC = (typeof module!=='undefined' && module.exports) ? module.exports : (window.SBC = {});
 SBC.FE_VERSION = FE_VERSION;
+SBC.howtoSections_ = function(){ howtoMode_='sections'; try{ return renderHowTo(); } finally { howtoMode_=''; } }; SBC.HOWTO_GROUPS = HOWTO_GROUPS; SBC.HOWTO_VIDEO_URL = HOWTO_VIDEO_URL; SBC.HOWTO_GUIDE_URL = HOWTO_GUIDE_URL; SBC.renderHowTo = renderHowTo;   // v3.96.0: one help source
 SBC.BUILD_ID = BUILD_ID;
 SBC.state = state;
 SBC.money = money; SBC.cents = cents; SBC.esc = esc;
@@ -10595,7 +10655,7 @@ SBC.DASH_WIDGETS = DASH_WIDGETS;
 SBC.dashFetchRecent = dashFetchRecent;   // v3.77.1: the guard is the fix - drive it
 SBC.probeServerVersion_ = probeServerVersion_; SBC.abServerVer_ = abServerVer_; SBC.renderAbout = renderAbout;   // v3.77.2
 SBC.refreshBoot = refreshBoot; SBC.refreshBootSafe_ = refreshBootSafe_; SBC.bootMerge_ = bootMerge_;   // v3.78.1
-SBC.oblKnown_ = oblKnown_; SBC.mirrorBootRefresh_ = mirrorBootRefresh_; SBC.importNowUi = importNowUi;
+SBC.oblKnown_ = oblKnown_; SBC.mirrorBootRefresh_ = mirrorBootRefresh_; SBC.envBalancesRefresh_ = envBalancesRefresh_; SBC.afterApprove = afterApprove; SBC.importNowUi = importNowUi;
 SBC.setLastMirrorWrite_ = function(t){ lastMirrorWriteAt_ = t; };
 SBC.rbReset_ = function(){ rbInFlight_ = null; rbAgain_ = false; rbStartedAt_ = 0; };   // tests: forget a stub that never answered
 SBC.renderHealthCard_ = function(health, sz, freeze){
