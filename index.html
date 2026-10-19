@@ -237,7 +237,7 @@ aside.side{display:none}
 .dtile.hero .skv{background:linear-gradient(90deg,rgba(255,255,255,.22) 25%,rgba(255,255,255,.38) 50%,rgba(255,255,255,.22) 75%);background-size:200px 100%}
 .dtile .dlbl{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
 .dtile.hero .dlbl{color:rgba(255,255,255,.72)}
-.dtile .dnum{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.dtile .dnum{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .dtile .dnum.big{font-size:31px}
 .dtile.hero .dnum{font-size:30px}
 .dtile .dsub{font-size:12px;color:var(--ink-3);margin-top:4px}
@@ -1463,11 +1463,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.96.0';
+var FE_VERSION = 'v3.97.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.96.0+20261012.2145';
+var BUILD_ID = 'v3.97.1+20261019.1914';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4189,6 +4189,7 @@ function renderDashNow_(){
   if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
   if(state.homeCustomize) h+=homeCustHtml(st);
   $('#shell').innerHTML = h;
+  fitDnums_();                   // v3.97.1 — $10,000+ no longer clips in a half-width phone tile
   setGreeting_();                // v3.57 — fills #dashGreet (phone Home greeting)
   freezeReval_();                // v3.55 — after paint, never blocking
   // Chart cards: instantiate now that their canvases are in the DOM.
@@ -4205,6 +4206,25 @@ function renderDashNow_(){
   if(vis.accounts) dashFetchBalances();
   if(vis.recent) dashFetchRecent();
   dashFetchDash(); // v3.22: shared loader (no duplicate apiDashboard with prewarm)
+}
+/* v3.97.1: Scott, 10/19/26 — "when I have 10K or more in the ICP it doesn't fit
+   in the widget." A phone's top strip is two tiles wide (~130px of text room),
+   and $10,000.00 at the hero's 30px is ~170px, so the tile's overflow:hidden
+   cut it off. Each big number now keeps its size when it fits and shrinks just
+   enough when it doesn't (floor 14px). Re-run on resize/rotate. */
+function fitDnums_(){
+  var els = document.querySelectorAll('#shell .dtile .dnum');
+  for(var i=0;i<els.length;i++){
+    var el=els[i]; el.style.fontSize='';
+    var room=el.clientWidth, need=el.scrollWidth;
+    if(!room || need<=room) continue;
+    var fs=parseFloat(getComputedStyle(el).fontSize)||23;
+    el.style.fontSize=Math.max(14, Math.floor(fs*room/need*10)/10)+'px';
+  }
+}
+if(typeof window!=='undefined' && window.addEventListener){
+  var fitDnumsT_=0;
+  window.addEventListener('resize', function(){ clearTimeout(fitDnumsT_); fitDnumsT_=setTimeout(fitDnums_, 120); });
 }
 function homeCustHtml(st){
   function row(id, movable){
