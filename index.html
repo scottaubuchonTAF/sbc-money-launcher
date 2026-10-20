@@ -1463,11 +1463,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.97.1';
+var FE_VERSION = 'v3.97.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.97.1+20261019.1914';
+var BUILD_ID = 'v3.97.2+20261019.2123';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4743,6 +4743,7 @@ function drawInbox(){
   var h = '<div class="viewhead"><h2>Inbox</h2>'+
     '<button class="btn ghost sm" data-act="import-now"'+(state.importing?' disabled':'')+
     '>↻ Check for new</button></div>';
+  h += inboxStrayHtml_();   // v3.97.2
   if(!state.inbox.length){
     h += '<div class="empty">Inbox zero. Every transaction has a job.</div>';
     $('#shell').innerHTML = h; return;
@@ -4779,6 +4780,25 @@ function drawInbox(){
    income is included — deposits approve into an income envelope (Regular Pay
    etc., the default suggestion). You then move income → the Income Cash Pool
    and fund envelopes from the pool on the Fund page. */
+/* v3.97.2: rows in the Inbox TAB with no Txn ID can't be shown or approved, and
+   no longer count on the badge — but they are bad data, so say so, with the
+   sheet row, instead of letting them sit there unseen. */
+function inboxStrayHtml_(){
+  var s=(state.boot&&state.boot.inboxStray)||[];
+  if(!s.length) return '';
+  var items=s.map(function(r){
+    var bits=[r.row!=null?'sheet row '+r.row:'row ?'];
+    if(r.date) bits.push(r.date);
+    if(r.description) bits.push(r.description);
+    if(r.amount!=null) bits.push(money(r.amount));
+    if(r.account) bits.push(r.account);
+    return '<li>'+esc(bits.join(' · '))+'</li>';
+  }).join('');
+  return '<div class="txncard" style="border-left:4px solid var(--amber,#d97706)">'+
+    '<div class="desc">⚠️ '+s.length+' row'+(s.length>1?'s':'')+' in your Inbox tab '+(s.length>1?'have':'has')+' no Txn ID</div>'+
+    '<div class="meta">They can\'t be approved and aren\'t counted. Delete '+(s.length>1?'them':'it')+' in the sheet, and tell Scott so he can find out how '+(s.length>1?'they':'it')+' got there.</div>'+
+    '<ul class="meta" style="margin:6px 0 0 18px;padding:0">'+items+'</ul></div>';
+}
 function approveAllEligible(t){
   var sp = state.split[t.txnId];
   if(sp && sp.on) return false;
