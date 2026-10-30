@@ -500,6 +500,10 @@ aside.side{display:none}
 .tagadd{border:1.5px dashed var(--line);background:transparent;color:var(--ink-3);font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;cursor:pointer}
 .regtable .rc-env .tagchip{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
 .tagedit{background:var(--bg);border-radius:12px;padding:10px 12px;margin-top:8px}
+.noteedit input{max-width:none;min-width:200px;flex:1 1 100%} /* v3.98.0: a note is a sentence, not a chip -- full-width line, buttons under it */
+.txnnote{margin-top:7px;font-size:13px;line-height:1.45;color:var(--ink-2);cursor:pointer;overflow-wrap:anywhere}
+.txnnote:hover{color:var(--ink)}
+.rnote{color:var(--ink-3);font-weight:500;cursor:pointer}
 .tagedit .trow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .tagedit input{flex:1;min-width:170px;max-width:340px;padding:8px 11px;border:1.5px solid var(--line);border-radius:10px;font-size:16px}
 .bulkbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));z-index:40;background:var(--teal-800);color:#fff;border-radius:14px;padding:10px 14px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:13px;font-weight:600;flex-wrap:wrap;max-width:94vw}
@@ -1321,6 +1325,7 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
                      // journal write still doing a full 5-20s Apps Script
                      // round trip that the UI WAITED on
   apiSetTxnTags:1, apiAddTagBatch:1, // v3.58.1: tags mirror-first — apiRegister
+  apiSetTxnNote:1,   // v3.98.0: notes mirror-first, same reason as tags
                      // is mirror-served, so a refresh before the hourly sync
                      // must still show the tag that was just saved
   apiRetryWriteBack:1, apiDiscardWriteBack:1, // v3.60: act on the mirror's outbox
@@ -1428,6 +1433,7 @@ var state = {
   report:null, reportData:null, reportLoading:false, reportErr:null,
   tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{}, // v3.58 tags UI
   inboxTags:{}, // v3.73.0: tags typed on an Inbox card, applied BY the approve
+  inboxNotes:{}, noteEdit:{}, // v3.98.0: the Inbox card's note (rides the approve) + the open note editor
   /* v3.79.0: Suggestion rules page. rules = apiRules list in CHECK ORDER (null =
      not loaded); ruleEdit = the open editor's draft; rulePrev = its history preview. */
   rules:null, rulesLoading:null, rulesInboxAsked:false, ruleEdit:null, rulePrev:null,
@@ -1463,11 +1469,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.97.2';
+var FE_VERSION = 'v3.98.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.97.2+20261019.2123';
+var BUILD_ID = 'v3.98.0+20261030.1111';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1672,6 +1678,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   // actually ran), a 30 s client abort on a write (v3.22 rule), no dirty flag,
   // no double-click dedupe.
   apiSetTxnTags:1, apiAddTagBatch:1, apiSaveObligation:1, apiRemoveObligation:1,
+  apiSetTxnNote:1, // v3.98.0
   apiSetBirthday:1, apiSetDensity:1, apiSetSpendingAccount:1, apiSetTimeZone:1, // v3.81.0
   apiSetBudgetSettings:1, // v3.93.0: budget source / pay schedule / plan "How often" (mirror-first, see SUPA_WRITES)
   apiRetryWriteBack:1, apiDiscardWriteBack:1 }; // v3.60: mirror-only (see MIRROR_ONLY)
@@ -2455,7 +2462,8 @@ function actBusy(act, on, label){
 function userBusy(){
   return (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) ||
     Object.keys(state.resplit).length > 0 ||
-    Object.keys(state.tagEdit).length > 0;   // v3.73.0: a background redraw would eat the half-typed tag
+    Object.keys(state.tagEdit).length > 0 ||   // v3.73.0: a background redraw would eat the half-typed tag
+    Object.keys(state.noteEdit).length > 0;    // v3.98.0: ...or the half-typed note
 }
 
 /* ============================ Wealth (v3.85.0 Snapshot) ============================
@@ -4775,6 +4783,7 @@ function drawInbox(){
   if(tIn){ tIn.addEventListener('keydown', function(ev){
     if(ev.key==='Enter'){ ev.preventDefault(); inboxTagAdd(tIn.getAttribute('data-txn')); } });
     tIn.focus(); }
+  wireNoteInput_();   // v3.98.0
 }
 /* Eligible for Approve all: has an envelope and isn't mid-split. v3.6.11:
    income is included — deposits approve into an income envelope (Regular Pay
@@ -4816,6 +4825,7 @@ function inboxCardHtml(t){
     if(sp && sp.on){
       h += splitEditorHtml(t.txnId, t.amount, sp.lines, 'inbox');
       h += inboxTagsHtml(t);   // v3.73.0: a tag describes the purchase, so it rides every leg
+      h += noteLineHtml(t.txnId, inboxNoteOf(t.txnId));   // v3.98.0: so does the note
       h += '<div class="actions">'+
         '<button class="btn" '+(splitReady(t.amount, sp.lines)?'':'disabled')+
           ' data-act="approve-split" data-arg="'+esc(t.txnId)+'">Approve split</button>'+
@@ -4836,7 +4846,7 @@ function inboxCardHtml(t){
         '<button class="pill" data-act="split-on" data-arg="'+esc(t.txnId)+'">Split…</button>';
       // v3.6.9: no per-txn funding — deposits are approved into the Income
       // Cash Pool like everything else; funding happens on the Fund page.
-      h += '</div>'+ruleWhyHtml_(t)+inboxTagsHtml(t)+'<div class="actions">'+   // v3.79.0: which rule suggested it
+      h += '</div>'+ruleWhyHtml_(t)+inboxTagsHtml(t)+noteLineHtml(t.txnId, inboxNoteOf(t.txnId))+'<div class="actions">'+   // v3.98.0: note   // v3.79.0: which rule suggested it
         '<button class="btn" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
         // v3.79.0 (decision 4): say WHICH words the rule will match - the short form, not the whole description
         '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this'+
@@ -4861,7 +4871,8 @@ function inboxTagShim_(t){ return { txnId:t.txnId, key:t.key||'', tags:inboxTags
 function inboxTagsHtml(t){
   var sh = inboxTagShim_(t);
   var open = !!state.tagEdit[t.txnId];
-  return '<div class="tagchips">'+tagChipsHtml(sh, open?'edit':'add')+'</div>'+
+  return '<div class="tagchips">'+tagChipsHtml(sh, open?'edit':'add')+
+    (inboxNoteOf(t.txnId) || state.noteEdit[t.txnId] ? '' : noteAddBtnHtml(t.txnId))+'</div>'+   // v3.98.0
     (open ? tagEditorHtml(sh) : '');
 }
 /* Add the typed tag to THIS card. No network call — the approve carries it. */
@@ -4884,13 +4895,15 @@ function inboxTagRm(txnId, tag){
 /* An approved (or vanished) row must not leave its tags behind to be re-applied
    to whatever row inherits that id later. */
 function clearInboxTags_(ids){
-  (ids||[]).forEach(function(id){ delete state.inboxTags[id]; delete state.tagEdit[id]; });
+  (ids||[]).forEach(function(id){ delete state.inboxTags[id]; delete state.tagEdit[id];
+    delete state.inboxNotes[id]; delete state.noteEdit[id]; });   // v3.98.0: the note goes with it
 }
 
 function approveAll(){
   var items = state.inbox.filter(approveAllEligible).map(function(t){
     return { txnId: t.txnId, key: t.key, envelopeId: state.sel[t.txnId] || t.suggestedId,
-             tags: inboxTagsOf(t.txnId) };   // v3.73.0: per ITEM — each card keeps its own tags
+             tags: inboxTagsOf(t.txnId),     // v3.73.0: per ITEM — each card keeps its own tags
+             note: inboxNoteOf(t.txnId) };   // v3.98.0: ...and its own note
   });
   if(!items.length){ toast('Nothing ready to approve'); return; }
   var taggedN = items.filter(function(it){ return it.tags && it.tags.length; }).length;
@@ -5022,7 +5035,7 @@ function approve(txnId){
   busyButtons(true);
   approvePending_(txnId);
   run('apiApprove', { txnId:txnId, key:t.key, envelopeId:envId, createRule:createRule,
-    tags:inboxTagsOf(txnId) })   // v3.73.0
+    tags:inboxTagsOf(txnId), note:inboxNoteOf(txnId) })   // v3.73.0 tags, v3.98.0 note
     .then(afterApprove(txnId, t.key, createRule ? { text:createRule, envelopeId:envId } : null)).catch(approveErr);
 }
 /* v3.29.1: immediate feedback — an approve takes the server 3-4s and the old
@@ -5042,7 +5055,7 @@ function approveSplit(txnId){
   if(!sp || !t || !splitReady(t.amount, sp.lines)) return;
   busyButtons(true);
   approvePending_(txnId);
-  run('apiApprove', { txnId:txnId, key:t.key, tags:inboxTagsOf(txnId),   // v3.73.0
+  run('apiApprove', { txnId:txnId, key:t.key, tags:inboxTagsOf(txnId), note:inboxNoteOf(txnId),   // v3.73.0, v3.98.0
     splits: sp.lines.map(function(l){ return {envelopeId:l.envelopeId, amount:splitAmt(t.amount, l.amount)}; }) })
     .then(afterApprove(txnId, t.key)).catch(approveErr);
 }
@@ -5492,6 +5505,87 @@ function renderTxns(keepList){
     if(state.view==='txns' && (!cached || (changed && !userBusy()))) drawTxns();
   }).catch(function(e){ if(!cached) fail(e); });
 }
+/* ---------------- v3.98.0: transaction notes ---------------- */
+/* One free-text note per transaction. On the Inbox the note sits in
+   state.inboxNotes and rides INSIDE the approve (like tags: no network call
+   while you type, one Undo for both). On Transactions it is saved straight away
+   (apiSetTxnNote, mirror-first) and written through to Tiller's Note column.
+   One editor open at a time: state.noteEdit[txnId]. */
+var NOTE_MAX_UI = 500;   // matches normNote_ / normNoteMirror
+function inboxNoteOf(txnId){ return state.inboxNotes[txnId] || ''; }
+function noteAddBtnHtml(txnId){
+  return '<button class="tagadd" data-act="note-edit-on" data-arg="'+esc(txnId)+'">+ note</button>';
+}
+function noteEditorHtml(txnId, note){
+  return '<div class="tagedit noteedit"><div class="trow">'+
+    '<input data-note-txn="'+esc(txnId)+'" maxlength="'+NOTE_MAX_UI+'" value="'+esc(note||'')+'" '+
+      'placeholder="Add a note… e.g. Birthday gift for Mom" autocomplete="off">'+
+    '<button class="btn sm" data-act="note-save" data-arg="'+esc(txnId)+'">Save</button>'+
+    (note ? '<button class="btn ghost sm" data-act="note-clear" data-arg="'+esc(txnId)+'">Remove</button>' : '')+
+    '<button class="btn ghost sm" data-act="note-edit-off" data-arg="'+esc(txnId)+'">Cancel</button>'+
+  '</div></div>';
+}
+/* The note line under a card: the editor when open, else the note itself (tap
+   to edit), else nothing — the "+ note" opener sits beside "+ tag". */
+function noteLineHtml(txnId, note){
+  if(state.noteEdit[txnId]) return noteEditorHtml(txnId, note);
+  if(!note) return '';
+  return '<div class="txnnote" data-act="note-edit-on" data-arg="'+esc(txnId)+'" title="Edit note">'+
+    '📝 '+esc(note)+'</div>';
+}
+function noteInputVal_(){
+  var inp = document.querySelector('input[data-note-txn]');
+  return inp ? String(inp.value||'').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().slice(0, NOTE_MAX_UI).trim() : null;
+}
+function drawNoteHost_(){ if(state.view==='inbox') drawInbox(); else drawTxns(); }
+function noteFocus_(){
+  setTimeout(function(){
+    var i = document.querySelector('input[data-note-txn]');
+    if(i){ i.focus(); try{ i.setSelectionRange(i.value.length, i.value.length); }catch(e){} }
+  }, 0);
+}
+/* Inbox: keep the note on the card. Nothing is written until Approve. */
+function inboxNoteSet(txnId, note){
+  if(note) state.inboxNotes[txnId] = note; else delete state.inboxNotes[txnId];
+  delete state.noteEdit[txnId];
+  drawInbox();
+}
+/* Transactions: optimistic save, rollback on failure (the saveTags pattern). */
+function saveNote(txnId, note){
+  var t = (state.register.items||[]).find(function(x){ return x.txnId===txnId; });
+  delete state.noteEdit[txnId];
+  if(!t){ drawTxns(); return; }
+  var prev = t.note || '';
+  if(prev === note){ drawTxns(); return; }
+  t.note = note;
+  drawTxns();
+  run('apiSetTxnNote', { txnId:t.txnId, key:t.key||'', note:note })
+  .then(function(res){
+    t.note = (res && res.note != null) ? res.note : note;
+    toast(note ? 'Note saved ✓' : 'Note removed ✓');
+    if(state.view==='txns') drawTxns();
+  }).catch(function(e){
+    t.note = prev;
+    if(state.view==='txns') drawTxns();
+    toast('Note failed: '+((e&&e.message)||e));
+  });
+}
+function noteSaveAct_(txnId, clear){
+  var v = clear ? '' : noteInputVal_();
+  if(v === null) return;
+  if(state.view==='inbox') inboxNoteSet(txnId, v); else saveNote(txnId, v);
+}
+/* Enter saves, Escape cancels — wired after each Inbox / Transactions draw. */
+function wireNoteInput_(){
+  var nIn = document.querySelector('input[data-note-txn]');
+  if(!nIn) return;
+  nIn.addEventListener('keydown', function(ev){
+    var id = nIn.getAttribute('data-note-txn');
+    if(ev.key==='Enter'){ ev.preventDefault(); noteSaveAct_(id, false); }
+    else if(ev.key==='Escape'){ ev.preventDefault(); delete state.noteEdit[id]; drawNoteHost_(); }
+  });
+  noteFocus_();
+}
 /* ---------------- v3.58: tags UI ---------------- */
 /* Chips render in three modes: 'plain' (chips only — one-line rows), 'add'
    (chips + a "+ tag" opener — stacked cards), 'edit' (chips with x removers —
@@ -5605,13 +5699,15 @@ function txnRowOneLine(t){
   }).join('');
   var h = '<div class="rrow">'+
     '<span class="rc rc-date">'+(state.tagSel?selBoxHtml(t):'')+esc(t.date)+'</span>'+
-    '<span class="rc rc-desc" title="'+esc(t.description)+'">'+esc(t.description)+'</span>'+
+    '<span class="rc rc-desc" title="'+esc(t.description+(t.note?' \u2014 '+t.note:''))+'">'+esc(t.description)+
+      (t.note ? '<span class="rnote" data-act="note-edit-on" data-arg="'+esc(t.txnId)+'"> \ud83d\udcdd '+esc(t.note)+'</span>' : '')+'</span>'+   // v3.98.0
     '<span class="rc rc-acct"><span class="acctchip">'+esc(t.account)+'</span></span>'+
     '<span class="rc rc-env">'+envs+tagChipsHtml(t,'plain')+'</span>'+
     '<span class="rc rc-menu"><details class="rmenu"><summary aria-label="Actions">⋮</summary>'+
       '<div class="rmenu-p">'+
         '<button data-act="resplit-on" data-arg="'+esc(t.txnId)+'">'+(t.legs.length>1?'Edit split':'Split / move')+'</button>'+
         '<button data-act="tag-edit-on" data-arg="'+esc(t.txnId)+'">Tags\u2026</button>'+
+        '<button data-act="note-edit-on" data-arg="'+esc(t.txnId)+'">'+(t.note?'Edit note\u2026':'Add note\u2026')+'</button>'+   // v3.98.0
         '<button class="warn" data-act="unapprove" data-arg="'+esc(t.txnId)+'">Un-approve</button>'+
       '</div></details></span>'+
     '<span class="rc rc-amt amt'+(t.amount>0?' pos':'')+'">'+money(t.amount)+'</span>'+
@@ -5628,6 +5724,9 @@ function txnRowOneLine(t){
   if(state.tagEdit[t.txnId]){ // v3.58: tag editor expands full-width, like the split editor
     h += '<div class="rexpand"><div class="tagchips">'+tagChipsHtml(t,'edit')+'</div>'+tagEditorHtml(t)+'</div>';
   }
+  if(state.noteEdit[t.txnId]){ // v3.98.0: the note editor expands the same way
+    h += '<div class="rexpand">'+noteEditorHtml(t.txnId, t.note||'')+'</div>';
+  }
   return h;
 }
 /* v3.29.1: one stacked-card register row (extracted from drawTxns so chunked
@@ -5639,8 +5738,10 @@ function txnRowCard(t){
     '<div class="legchips">'+t.legs.map(function(l){
       return '<span class="legchip">'+esc(l.envelopeName)+(t.legs.length>1?' '+money(l.amount):'')+'</span>';
     }).join('')+'</div>'+
-    '<div class="tagchips">'+tagChipsHtml(t, state.tagEdit[t.txnId]?'edit':'add')+'</div>'+
-    (state.tagEdit[t.txnId]?tagEditorHtml(t):'');
+    '<div class="tagchips">'+tagChipsHtml(t, state.tagEdit[t.txnId]?'edit':'add')+
+      (t.note || state.noteEdit[t.txnId] ? '' : noteAddBtnHtml(t.txnId))+'</div>'+   // v3.98.0
+    (state.tagEdit[t.txnId]?tagEditorHtml(t):'')+
+    noteLineHtml(t.txnId, t.note||'');   // v3.98.0
   if(state.resplit[t.txnId]){
     h += splitEditorHtml(t.txnId, t.amount, state.resplit[t.txnId], 'resplit');
     h += '<div class="actions" style="margin-top:10px">'+
@@ -5667,7 +5768,7 @@ function drawTxns(){
   var gen = ++drawTxnsGen_;
   var r = state.register;
   var h = '<h2 class="viewtitle">Transactions</h2>'+
-    '<div class="searchbar"><input id="regQ" placeholder="Search description…" value="'+esc(r.q)+'">'+
+    '<div class="searchbar"><input id="regQ" placeholder="Search description or note…" value="'+esc(r.q)+'">'+
     '<button class="btn sm" data-act="reg-search">Search</button></div>'+
     '<div class="filterbar">'+
     /* v3.71.0: the options come from apiAccounts, but the filter can now be set
@@ -5764,6 +5865,7 @@ function drawTxns(){
   var bIn = $('#bulkTag');
   if(bIn) bIn.addEventListener('keydown', function(ev){
     if(ev.key==='Enter'){ ev.preventDefault(); tagBulkGo(); } });
+  wireNoteInput_();   // v3.98.0
 }
 function resplitGo(txnId){
   var lines = state.resplit[txnId];
@@ -9847,6 +9949,7 @@ function renderHowTo(){
     B('<b>✓ Approve all</b> takes everything that already has a suggestion.')+
     B('One purchase, two jobs? <b>Split</b> spreads it across envelopes (the Walmart run that was half groceries, half a game).')+
     B('<b>Tag as you approve</b>: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there ride along with the approval — one entry in History, one Undo.')+
+    B('<b>Add a note</b> the same way: <b>+ note</b> on the card (“Birthday gift for Mom”, “Brady owes me half”). It rides along with the approval and shows under the transaction from then on.')+
     P('<b>Settings \u2192 Suggestion rules</b> lists every rule in the order SBC checks them (the first match wins). Tap one to change its words or envelope, move it up or down, or delete it; the preview shows what it would catch before you save. A ⚠ means a rule above catches everything this one would.')+
     PL('Approving isn\u2019t busywork — it is the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.'), {g:'week'}),
 
@@ -9914,9 +10017,10 @@ function renderHowTo(){
   S('📊','Checking on yourself',
     B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards.')+
     B('<b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full Activity (every movement names the other envelope — tap to jump). With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top. <b>Hide from lists</b> quiets an envelope you never want to see (it stays pickable, leaves the list, and stops counting toward available to fund); <b>Archive</b> is for one that is finished for good.')+
-    B('<b>Transactions</b> — everything approved; search by description, filter by account or envelope, un-approve or re-split, tap <b>+ tag</b> on a row, or <b>🏷 Tag many</b> to tag a whole trip at once.')+
+    B('<b>Transactions</b> — everything approved; search by description, filter by account or envelope, un-approve or re-split, tap <b>+ tag</b> or <b>+ note</b> on a row, or <b>🏷 Tag many</b> to tag a whole trip at once. The search box finds words in notes too.')+
     B('<b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶; every report is scoped to your <b>spending accounts</b> and filters by group, envelope, or tag. Start on <b>Period summary</b>.')+
     B('<b>Tags</b> — label transactions with events that cut across envelopes (“2027 Myrtle Beach Vacation”). Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.')+
+    B('<b>Notes</b> — one line of your own words on any transaction: tap the note to change it, or <b>Remove</b> to clear it. Notes also write to the Note column of your Tiller sheet; a note typed at approve time never overwrites one you already wrote in Tiller.')+
     B('<b>Balances</b> — your real account balances from the bank feeds, assets minus liabilities. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a manual account sets its balance; <b>Reorder</b> arranges groups and accounts.')+
     PL('• <b>Wealth</b> — net worth over time, what you added versus what the market did, and whether you are on pace to retire. Its own section above.'), {g:'tools'}),
 
@@ -10528,7 +10632,7 @@ document.addEventListener('click', function(ev){
     // v3.58 — tags
     // v3.73.0: the same four actions now serve the Inbox editor too. On the
     // Inbox nothing is written until Approve — there is no register row yet.
-    case 'tag-edit-on': state.tagEdit = {}; state.tagEdit[arg] = true; fetchTags(); drawTagHost_(); break;
+    case 'tag-edit-on': state.tagEdit = {}; state.tagEdit[arg] = true; state.noteEdit = {}; fetchTags(); drawTagHost_(); break;
     case 'tag-edit-off': delete state.tagEdit[arg]; drawTagHost_(); break;
     case 'tag-add': if(state.view==='inbox') inboxTagAdd(arg); else tagAdd(arg); break;
     case 'tag-rm': (function(){
@@ -10540,6 +10644,13 @@ document.addEventListener('click', function(ev){
       t.tags = (t.tags||[]).filter(function(x){ return x!==tag; });
       saveTags(t, prev);
     })(); break;
+    // v3.98.0 — notes (Inbox: kept on the card until Approve; Transactions: saved now)
+    case 'note-edit-on':
+      if(el.closest && el.closest('details')) el.closest('details').open = false;
+      state.noteEdit = {}; state.noteEdit[arg] = true; state.tagEdit = {}; drawNoteHost_(); break;
+    case 'note-edit-off': delete state.noteEdit[arg]; drawNoteHost_(); break;
+    case 'note-save': noteSaveAct_(arg, false); break;
+    case 'note-clear': noteSaveAct_(arg, true); break;
     case 'tag-sel-toggle': state.tagSel = !state.tagSel; state.tagSelIds = {}; drawTxns(); break;
     case 'tag-sel':
       if(el.checked) state.tagSelIds[arg] = true; else delete state.tagSelIds[arg];
@@ -10583,7 +10694,11 @@ document.addEventListener('input', function(ev){
         if(lf){ lf.textContent = left===0?'Fully assigned ✓':'Remaining: '+money(Math.abs(left)/100);
           lf.classList.toggle('bad', left!==0); }
         // refresh action buttons enabled state
-        var card = el.closest('.txncard, .regrow');
+        // v3.97.3: + .rexpand - on the DESKTOP Transactions table the split
+        // editor and its Save button live in a .rexpand under the row, not in
+        // a .regrow/.txncard, so the button was never found: "Fully assigned ✓"
+        // showed but Save split stayed grey (Scott 10/21/26).
+        var card = el.closest('.txncard, .regrow, .rexpand');
         if(card){
           var btn = card.querySelector('[data-act="approve-split"],[data-act="resplit-go"],[data-act="fund-go"]');
           if(btn){
@@ -10709,14 +10824,22 @@ SBC.renderHealthCard_ = function(health, sz, freeze){
    the behaviour — a chip per tag, exactly one "+ tag" opener, and the editor
    only while it is open. Scraping the source would pin the template, not what
    a given row actually renders. */
-SBC.renderInboxCard_ = function(t, tags, open){
+SBC.renderInboxCard_ = function(t, tags, open, note, noteOpen){   // v3.98.0: + note, noteOpen
   var prevTags = state.inboxTags, prevEdit = state.tagEdit, prevSplit = state.split;
-  state.inboxTags = {}; state.tagEdit = {}; state.split = {};
+  var prevNotes = state.inboxNotes, prevNoteEdit = state.noteEdit;
+  state.inboxTags = {}; state.tagEdit = {}; state.split = {}; state.inboxNotes = {}; state.noteEdit = {};
   if(tags && tags.length) state.inboxTags[t.txnId] = tags;
   if(open) state.tagEdit[t.txnId] = true;
+  if(note) state.inboxNotes[t.txnId] = note;
+  if(noteOpen) state.noteEdit[t.txnId] = true;
   try { return inboxCardHtml(t); }
-  finally { state.inboxTags = prevTags; state.tagEdit = prevEdit; state.split = prevSplit; }
+  finally { state.inboxTags = prevTags; state.tagEdit = prevEdit; state.split = prevSplit;
+            state.inboxNotes = prevNotes; state.noteEdit = prevNoteEdit; }
 };
+/* v3.98.0: notes */
+SBC.inboxNoteOf = inboxNoteOf; SBC.inboxNoteSet = inboxNoteSet; SBC.noteLineHtml = noteLineHtml;
+SBC.noteEditorHtml = noteEditorHtml; SBC.txnRowOneLine = txnRowOneLine; SBC.txnRowCard = txnRowCard;
+SBC.saveNote = saveNote;
 SBC.inboxTagsOf = inboxTagsOf;
 SBC.inboxTagAdd = inboxTagAdd;
 SBC.inboxTagRm = inboxTagRm;
