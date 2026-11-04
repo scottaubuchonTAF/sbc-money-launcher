@@ -1307,6 +1307,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
+  apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1338,7 +1339,8 @@ var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStat
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: notifications live only in the mirror
   apiPushClear:1,       // v3.94.0
   apiWealth:1, apiWealthSave:1, // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
-  apiRefreshSettings:1 }; // v3.93.4
+  apiRefreshSettings:1, // v3.93.4
+  apiOperatorAccess:1 }; // v3.99.0: no Apps Script fallback - the operator access log lives only in the mirror
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
    8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
@@ -1433,6 +1435,7 @@ var state = {
   report:null, reportData:null, reportLoading:false, reportErr:null,
   tagEdit:{}, tagsList:null, tagSel:false, tagSelIds:{}, // v3.58 tags UI
   inboxTags:{}, // v3.73.0: tags typed on an Inbox card, applied BY the approve
+  opAccess:null, // v3.99.0: the Access page's operator-access card (apiOperatorAccess)
   inboxNotes:{}, noteEdit:{}, // v3.98.0: the Inbox card's note (rides the approve) + the open note editor
   /* v3.79.0: Suggestion rules page. rules = apiRules list in CHECK ORDER (null =
      not loaded); ruleEdit = the open editor's draft; rulePrev = its history preview. */
@@ -1469,11 +1472,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.98.0';
+var FE_VERSION = 'v3.99.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.98.0+20261030.1111';
+var BUILD_ID = 'v3.99.0+20261104.0904';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -9340,7 +9343,90 @@ function drawAdmin(){
       '<div class="actions" style="margin-top:10px"><button class="btn" data-act="admin-add">Add to allowlist</button></div>'+
       '</div></div>';
   }
+  /* v3.99.0: the operator access card - loaded after the list so the page never waits on it */
+  h += '<div class="grp"><h3>Who has read the database</h3><div id="opacc">'+
+    (state.opAccess ? opAccessHtml_(state.opAccess) : '<div class="card"><div class="spin"></div></div>')+'</div></div>';
   $('#shell').innerHTML = h;
+  if(!state.opAccess) opAccessLoad_(0);
+}
+/* ================= v3.99.0: operator access (Scott 11/3: "1 + 2") =================
+   The operator model (v3.96.0) took the operator off every sheet and off the app's
+   access list; this card is the second half - a visible record of any database
+   session that is NOT the app itself (the dashboard, psql, the operator's own
+   check scripts), collected hourly from pgaudit into a hash-chained table. It is
+   for every signed-in user. It cannot say whose rows a statement returned, so it
+   shows the statement text and says so. Red when the recording is off, the
+   collector hasn't run, or the chain is broken. Mirror-only: no mirror, no card. */
+function opAccessLoad_(offset){
+  return run('apiOperatorAccess', { limit:50, offset:offset||0 }).then(function(r){
+    if(offset && state.opAccess && state.opAccess.rows){ r.rows = state.opAccess.rows.concat(r.rows||[]); }
+    state.opAccess = r;
+    var el = $('#opacc'); if(el) el.innerHTML = opAccessHtml_(r);
+  }).catch(function(e){
+    var el = $('#opacc'); if(el) el.innerHTML = '<div class="card"><div class="empty">The access log needs the fast view (mirror), which did not answer: '+esc(e && e.message || e)+'</div></div>';
+  });
+}
+/* Same verdicts as _shared/audit.js heartbeatState() - pinned by tests/v3990_operator_access_test.js. */
+function opAccessStatus_(r, nowMs){
+  var hb = r && r.heartbeat;
+  if(!hb) return { level:'red', text:'No check has run yet' };
+  var ageMin = Math.max(0, Math.round((nowMs - new Date(hb.at).getTime())/60000));
+  var off = (r.rolesExpected||[]).filter(function(x){ return (r.rolesConfiguredNow||[]).indexOf(x)<0; });
+  if(!hb.pgauditInstalled) return { level:'red', text:'Recording OFF — pgaudit is not installed', ageMin:ageMin };
+  if(off.length) return { level:'red', text:'Recording OFF for '+off.join(', '), ageMin:ageMin };
+  if(!hb.collectorOk) return { level:'red', text:'Last check failed'+(hb.error?': '+String(hb.error).slice(0,120):''), ageMin:ageMin };
+  if(ageMin > 180) return { level:'red', text:'No check in '+Math.round(ageMin/60)+' h', ageMin:ageMin };
+  if(r.chain && !r.chain.ok) return { level:'red', text:'Log chain broken at row '+r.chain.brokenAt, ageMin:ageMin };
+  return { level:'green', text:'Recording on', ageMin:ageMin };
+}
+function opAccessWhen_(iso){
+  if(!iso) return '';
+  var d = new Date(iso); if(isNaN(d.getTime())) return String(iso);
+  try{ return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }catch(e){ return d.toISOString(); }
+}
+function opAccessHtml_(r){
+  if(!r || r.applied===false){
+    return '<div class="card"><div class="empty">The operator access log is not set up on this server yet. '+
+      'Until it is, there is no record of who has read the database.</div></div>';
+  }
+  var st = opAccessStatus_(r, Date.now());
+  var color = st.level==='green' ? 'var(--green)' : 'var(--red)';
+  var c = r.counts||{}; var man = c.manual||{d30:0,total:0}, tool = c.tooling||{d30:0,total:0};
+  var h = '<div class="card" style="padding:14px 16px">';
+  h += '<div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px">'+
+    '<span style="width:10px;height:10px;border-radius:50%;background:'+color+';display:inline-block"></span>'+esc(st.text)+'</div>';
+  h += '<div class="note" style="padding:4px 0 0">'+
+    (r.heartbeat ? 'Last checked '+(st.ageMin===0?'just now':st.ageMin+' min ago')+' · ' : '')+
+    (r.chain ? (r.chain.ok ? 'log chain intact ('+r.chain.total+' rows)' : 'log chain BROKEN at row '+r.chain.brokenAt) : 'chain not checked')+'</div>';
+  h += '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 6px">'+
+    '<div><div style="font-size:26px;font-weight:800;line-height:1">'+esc(man.d30)+'</div><div class="note" style="padding:2px 0 0">operator (manual), last 30 days'+(man.total!==man.d30?' · '+esc(man.total)+' ever':'')+'</div></div>'+
+    '<div><div style="font-size:26px;font-weight:800;line-height:1">'+esc(tool.d30)+'</div><div class="note" style="padding:2px 0 0">operator (tooling), last 30 days'+(tool.total!==tool.d30?' · '+esc(tool.total)+' ever':'')+'</div></div>'+
+    '</div>';
+  h += '<div class="note" style="padding:6px 0 0"><b>What this is.</b> The app itself reads the database as its own role and is not listed. '+
+    'Everything else — the operator opening the database console, a command-line session, or the operator’s own check scripts (<i>tooling</i>) — is recorded with the exact statement, every hour, into a log where each row is chained to the one before it. '+
+    '<b>What it can’t tell you:</b> whose rows a statement returned. A statement that names a person is attributable; a whole-table read is visibly a whole-table read. '+
+    'It also does not cover the sheets in your own Drive (Drive’s Activity panel does) or a change to the app’s code (the public repo does). '+
+    'The operator can switch this recording off — and this line would then say so.</div>';
+  h += '</div>';
+  var rows = r.rows||[];
+  h += '<div class="card" style="margin-top:10px">';
+  if(!rows.length){
+    h += '<div class="empty">No operator statements recorded'+(r.heartbeat?' since the log started':'')+'.</div>';
+  } else {
+    rows.forEach(function(x){
+      var rel = (x.relations||[]).filter(function(n){ return /^sbc\./i.test(n); }).map(function(n){ return n.replace(/^sbc\./i,''); });
+      h += '<details class="envrow" style="display:block"><summary style="cursor:pointer;list-style:none;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'+
+        '<span class="bal" style="opacity:.7;min-width:92px">'+esc(opAccessWhen_(x.at))+'</span>'+
+        '<span class="nm" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;flex:1 1 200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(String(x.statement||'').replace(/\s+/g,' ').slice(0,140))+'</span>'+
+        '<span class="bal" style="opacity:.6;font-size:11.5px">'+esc(x.role)+' · '+esc(x.kind)+' · '+esc(String(x.cls||'').toLowerCase())+(rel.length?' · '+esc(rel.join(', ')):'')+'</span></summary>'+
+        '<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;margin:8px 0 0;opacity:.9">'+esc(x.statement)+(x.truncated?'\n… (statement longer than 2,000 characters)':'')+(x.params?'\n-- parameters: '+esc(x.params):'')+'</pre></details>';
+    });
+    if(rows.length >= (r.limit||50) && rows.length < 300){
+      h += '<div class="actions" style="padding:10px 16px"><button class="btn ghost sm" data-act="opacc-more" data-arg="'+rows.length+'">Show more</button></div>';
+    }
+  }
+  h += '</div>';
+  return h;
 }
 function adminSave(list){
   return run('apiSetAllowedEmails', { emails: list }).then(function(a){
@@ -9379,6 +9465,7 @@ function signOut(){
     state.inbox = null; state.plans = null; state.accounts = null;
     state.accountsFull = null; state.balances = null; state.sync = null;
     state.reconcile = null; state.access = null; state.archived = null;
+    state.opAccess = null;   // v3.99.0
     state.reportData = null; state.removeResults = null;
     state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false, limit:50 };
     state.recent = { items:null, loading:false };   // v3.77.1
@@ -10042,7 +10129,7 @@ function renderHowTo(){
 
   S('🔐','Who can see your money',
     P('Your bank data lives in <b>your</b> Tiller sheet and <b>your</b> companion sheet, in your own Google Drive. Two service accounts have access so the app works: the SBC app account (an editor — it imports your transactions hourly and writes your categorizations back) and a read-only account that feeds the fast view. <b>Scott is on neither sheet, is not on your access list, and nothing in the app shows him your numbers.</b>')+
-    P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. He doesn\u2019t, and the app has no screen that would. If that is not enough, say so — the alternative is running your own copy.')+
+    P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. So the app keeps a record: every hour, any database session that is not the app itself — the operator opening the database console, a command line, his own check scripts — is copied, statement by statement, into a log you can read at <b>Settings → Maintenance → Access</b>, under <b>Who has read the database</b>. Each row is chained to the one before it, so a deleted or edited row shows; the card also says whether the recording is switched on and when it last checked. It cannot tell whose rows a statement returned, so it shows you the statement. If that is not enough, say so — the alternative is running your own copy.')+
     PL('<b>Settings → Maintenance → Access</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
 
   S('🗺️','Every page, one line each',
@@ -10536,6 +10623,7 @@ document.addEventListener('click', function(ev){
     case 'hs-save': hsSave(); break;
     case 'admin-add': adminAdd(); break;
     case 'admin-remove': adminRemove(arg); break;
+    case 'opacc-more': opAccessLoad_(Number(arg)||0); break;   // v3.99.0
     case 'logout': signOut(); break;
     case 'rmtxn-search': removeTxnSearch(); break;
     case 'rmtxn-go': removeTxnGo(arg); break;
@@ -10775,6 +10863,7 @@ SBC.FE_VERSION = FE_VERSION;
 SBC.howtoSections_ = function(){ howtoMode_='sections'; try{ return renderHowTo(); } finally { howtoMode_=''; } }; SBC.HOWTO_GROUPS = HOWTO_GROUPS; SBC.HOWTO_VIDEO_URL = HOWTO_VIDEO_URL; SBC.HOWTO_GUIDE_URL = HOWTO_GUIDE_URL; SBC.renderHowTo = renderHowTo;   // v3.96.0: one help source
 SBC.BUILD_ID = BUILD_ID;
 SBC.state = state;
+SBC.opAccessStatus_ = opAccessStatus_; SBC.opAccessHtml_ = opAccessHtml_; SBC.drawAdmin = drawAdmin;   // v3.99.0: the operator access card
 SBC.money = money; SBC.cents = cents; SBC.esc = esc;
 SBC.toastMs = toastMs; SBC.toast = toast;
 SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SBC.markPendingUnapproved = markPendingUnapproved; SBC.PENDING_APPROVED_TTL = PENDING_APPROVED_TTL;
