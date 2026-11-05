@@ -1168,7 +1168,8 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
    (their bound stack stays deployed and untouched). */
 // v3.101.1 (11/5/26, re-home step 7b): EVERYONE on the bridge re-homed to the app account
 // sbcmoney@theaubuchonfamily.com. The old scott@ bridge, the one-line rollback:
-// var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji/exec';
+// rollback: scott@'s bridge was AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji (deployment id; put it back into BRIDGE_URL below)
+// (v3.101.2: written WITHOUT the "var BRIDGE_URL = '" shape on purpose - release.ps1 step 9 read the commented line as the live bridge)
 var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlqqVu5XgeheH3KQczhYpIBY0LCVysDwymxg4BicoMiYeHCb0CjoyxyXYMVUJr9Oyt/exec';
 var BRIDGE_URL_APP = BRIDGE_URL;   // kept so nothing else has to change
 var BACKENDS = {
@@ -1476,11 +1477,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.101.1';
+var FE_VERSION = 'v3.101.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.101.1+20261105.1544';
+var BUILD_ID = 'v3.101.2+20261105.1556';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
