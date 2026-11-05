@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get started — SBC Money</title>
+<link rel="icon" href="icon-192.png">
+<!-- v3.100.0 — the Get Started page: sbc.theaubuchonfamily.com/start.html
+     One page, in order, for a person joining SBC Money with their own Google
+     account and their own Tiller sheet. Ships with the release like guide.html
+     (deploy/release.ps1 step 7). No external scripts, fonts or images; the only
+     script is the page's own (progress ticks, yes/no answers, the copy button).
+     CONFIG below is the one thing to fill in: the template sheet's ID. -->
+<style>
+:root{
+  --teal-900:#0d3b36; --teal-800:#11514a; --teal-700:#0f766e; --teal-600:#0d9488; --teal-400:#2dd4bf;
+  --teal-100:#ccfbf1; --teal-50:#f0fdfa;
+  --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
+  --bg:#f6f8fa; --card:#fff; --line:#e2e8f0;
+  --red:#dc2626; --red-bg:#fef2f2; --green:#059669; --green-bg:#ecfdf5; --amber:#b45309; --amber-bg:#fffbeb;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);background:var(--bg)}
+a{color:var(--teal-700)}
+.hero{background:linear-gradient(160deg,var(--teal-900),var(--teal-800) 60%,var(--teal-700));color:#e6f4f1;padding:34px 16px 30px}
+.hero .in{max-width:720px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.brand img{width:44px;height:44px;border-radius:12px}
+.brand b{font-size:20px;letter-spacing:.01em}
+.brand b span{color:var(--teal-400)}
+.hero h1{font-size:30px;line-height:1.15;margin-bottom:10px}
+.hero p{color:#b9ddd6;max-width:560px}
+.hero .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.hero .meta span{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:5px 12px;font-size:13px;color:#dff5f0}
+main{max-width:720px;margin:0 auto;padding:18px 16px 60px}
+.prog{display:flex;align-items:center;gap:10px;margin:6px 0 18px;font-size:13px;color:var(--ink-2)}
+.prog .bar{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.prog .bar i{display:block;height:100%;width:0;background:var(--teal-600);transition:width .25s}
+.step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:14px;position:relative}
+.step.done{border-color:#99e6d9;background:#f7fdfb}
+.step .hd{display:flex;align-items:flex-start;gap:12px}
+.step .num{flex:none;width:34px;height:34px;border-radius:50%;background:var(--teal-100);color:var(--teal-800);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+.step.done .num{background:var(--teal-600);color:#fff}
+.step h2{font-size:19px;line-height:1.25;margin-top:4px}
+.step .who{font-size:12px;color:var(--ink-3);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
+.step .body{margin-top:12px;padding-left:46px}
+@media (max-width:520px){.step .body{padding-left:0}}
+.step p{margin-bottom:10px;color:var(--ink-2)}
+.step p b,.step li b{color:var(--ink)}
+ol,ul{padding-left:22px;margin-bottom:10px;color:var(--ink-2)}
+li{margin-bottom:6px}
+.yn{display:flex;gap:8px;margin:6px 0 12px;flex-wrap:wrap}
+.yn button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink-2)}
+.yn button.on{background:var(--teal-800);border-color:var(--teal-800);color:#fff}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--teal-600);color:#fff;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:600;font-size:15px;text-decoration:none;cursor:pointer}
+.btn:hover{background:var(--teal-700)}
+.btn.dis{background:#cbd5e1;cursor:not-allowed;pointer-events:none}
+.btn.ghost{background:#fff;color:var(--teal-800);border:1px solid #99e6d9}
+.note{border-radius:10px;padding:10px 12px;font-size:14px;margin:10px 0}
+.note.ok{background:var(--green-bg);color:#065f46}
+.note.warn{background:var(--amber-bg);color:var(--amber)}
+.note.fail{background:var(--red-bg);color:var(--red)}
+.note.info{background:var(--teal-50);color:var(--teal-800)}
+.tick{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);font-size:14px;color:var(--ink-2);cursor:pointer;user-select:none}
+.tick input{width:18px;height:18px;accent-color:var(--teal-600)}
+.kbd{display:inline-block;background:#f1f5f9;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:0 7px;font-size:13px;color:var(--ink)}
+.path{font-weight:600;color:var(--ink)}
+.screen{background:#1e293b;color:#e2e8f0;border-radius:10px;padding:12px 14px;font-size:13px;margin:8px 0 12px;line-height:1.5}
+.screen b{color:#fff}
+.screen .link{color:#93c5fd;text-decoration:underline}
+details{margin:8px 0 4px}
+summary{cursor:pointer;color:var(--teal-800);font-weight:600;font-size:14px}
+.small{font-size:13px;color:var(--ink-3)}
+.quote{border-left:3px solid var(--teal-400);padding:4px 0 4px 14px;color:var(--ink-2);font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}
+td,th{border-top:1px solid var(--line);padding:8px 6px;vertical-align:top;text-align:left}
+th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:uppercase;border-top:0}
+.foot{margin-top:28px;font-size:13px;color:var(--ink-3);text-align:center}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header class="hero"><div class="in">
+  <div class="brand"><img src="icon-192.png" alt=""><b>SBC <span>Money</span></b></div>
+  <h1>Get started with SBC Money</h1>
+  <p>Envelope budgeting on top of your own Tiller spreadsheet. You get your own copy; your bank data stays in spreadsheets you own. This page walks you through it, in order.</p>
+  <div class="meta"><span>About 20 minutes of clicking</span><span>+ one night for Tiller to fill</span><span>Nothing to install</span></div>
+</div></header>
+
+<main>
+  <div class="prog"><span id="progText">0 of 5 done</span><div class="bar"><i id="progBar"></i></div><button type="button" class="yn-reset small" id="reset" style="background:none;border:0;color:var(--ink-3);cursor:pointer;font:inherit;font-size:12px">reset</button></div>
+
+  <!-- 1 Google account -->
+  <section class="step" data-step="google">
+    <div class="hd"><div class="num">1</div><div><h2>A Google account</h2><div class="who">Before anything</div></div></div>
+    <div class="body">
+      <p>Everything here lives in Google Sheets, so you sign in to SBC Money with a Google account. It does <b>not</b> have to be a Gmail address.</p>
+      <p><b>Do you already have a Google account?</b></p>
+      <div class="yn" data-q="google"><button type="button" data-v="yes">Yes</button><button type="button" data-v="no">No</button></div>
+      <div data-show="google=yes">
+        <div class="note ok">Good. Use that account for every step below — the one you'll sign in to SBC Money with. If you have several, pick one now and stick with it.</div>
+      </div>
+      <div data-show="google=no">
+        <p>Make one on the email you already have (Outlook, iCloud, work — anything). Two minutes, no new mailbox:</p>
+        <ol>
+          <li>Open <a href="https://accounts.google.com/signup" target="_blank" rel="noopener">accounts.google.com/signup</a> → <b>For myself</b>.</li>
+          <li>On the email step choose <b>Use my current email address instead</b> and type your usual address.</li>
+          <li>Enter the code Google emails you. Done — that address is now a Google account.</li>
+        </ol>
+      </div>
+      <label class="tick"><input type="checkbox" data-done="google"> I have a Google account and I know which one I'll use</label>
+    </div>
+  </section>
+
+  <!-- 2 Tiller -->
+  <section class="step" data-step="tiller">
+    <div class="hd"><div class="num">2</div><div><h2>Tiller — your bank feed</h2><div class="who">Day 1 · then wait a night</div></div></div>
+    <div class="body">
+      <p>Tiller pulls your bank, card and loan transactions into a Google Sheet every day. SBC Money reads that sheet. <b>Do you have Tiller set up already?</b></p>
+      <div class="yn" data-q="tiller"><button type="button" data-v="yes">Yes</button><button type="button" data-v="no">No</button></div>
+      <div data-show="tiller=no">
+        <ol>
+          <li>Go to <a href="https://www.tiller.com" target="_blank" rel="noopener">tiller.com</a> and start a subscription <b>signed in as the Google account from step 1</b>.</li>
+          <li>Pick <b>Google Sheets</b> (not Excel) and the <b>Tiller Foundation Template</b>.</li>
+          <li>In the Tiller Console, link the bank, credit-card and loan accounts you want to budget. The sheet it makes is <b>your Tiller sheet</b>, in your own Google Drive.</li>
+          <li><b>Leave it overnight.</b> Tiller's first full fill (transactions + balance history) lands on the next morning's run. Come back to step 3 tomorrow.</li>
+        </ol>
+      </div>
+      <div data-show="tiller=yes">
+        <div class="note ok">Then you're a day ahead. One thing to check before you go on:</div>
+      </div>
+      <div data-show="tiller=*">
+        <p><b>Tidy the Categories tab</b> in your Tiller sheet — it becomes your envelopes, name for name (emoji included):</p>
+        <ul>
+          <li>One row per envelope you want. Give every row a <b>Group</b> and a <b>Type</b> (Expense / Income / Transfer).</li>
+          <li>Tick <b>Hide</b> on anything you won't budget. Hidden rows are skipped.</li>
+          <li>Renames later go through the app, not through Tiller — so get the names how you like them now.</li>
+        </ul>
+        <p class="small">Keep the Tiller sheet's address handy (the browser URL while it's open). The setup wizard asks for it.</p>
+      </div>
+      <label class="tick"><input type="checkbox" data-done="tiller"> Tiller has run overnight and my Categories tab is how I want it</label>
+    </div>
+  </section>
+
+  <!-- 3 Make your copy -->
+  <section class="step" data-step="copy">
+    <div class="hd"><div class="num">3</div><div><h2>Make your own copy of the SBC sheet</h2><div class="who">Day 2 · 1 minute</div></div></div>
+    <div class="body">
+      <p>SBC Money keeps your envelopes in a second sheet next to Tiller's — the <b>companion sheet</b>. You copy a blank template; the copy is yours, and it carries the setup wizard with it.</p>
+      <div class="note warn"><b>First, make sure you're signed in to Google as the account from step 1.</b> If you have more than one Google account, the copy lands in whichever one is active — and it has to be the one you'll sign in to SBC Money with.</div>
+      <p><a class="btn" id="copyBtn" href="#" target="_blank" rel="noopener">Make my copy</a></p>
+      <div class="note fail hidden" id="noTemplate">The template link isn't set on this page yet. Ask <span class="op"></span> for it — you'll get a link that ends in <code>/copy</code>.</div>
+      <ol>
+        <li>Google asks <b>Copy document?</b> — name it <b>SBC Money — <i>your name</i> (Companion)</b> and press <b>Make a copy</b>. It opens in a new tab.</li>
+        <li>Keep that tab open for step 4. Don't type anything into the sheet; the wizard builds every tab itself.</li>
+      </ol>
+      <label class="tick"><input type="checkbox" data-done="copy"> My copy is open in a tab</label>
+    </div>
+  </section>
+
+  <!-- 4 Wizard -->
+  <section class="step" data-step="wizard">
+    <div class="hd"><div class="num">4</div><div><h2>Run the setup wizard</h2><div class="who">Day 2 · 5 minutes</div></div></div>
+    <div class="body">
+      <p>In your copy, open the menu <span class="path">Envelope Budget → Set up SBC Money (new user wizard)</span>. (The menu appears a few seconds after the sheet loads. If it isn't there, reload the page.)</p>
+      <p><b>The first click shows Google's authorization screens.</b> This is normal: it's your own copy of the script asking for permission to work on your own sheets. Nobody else is granted anything. The screens look like this — go through them exactly:</p>
+      <div class="screen">
+        <b>Authorization required</b> → press <span class="link">Continue</span> → choose your account.<br>
+        <b>Google hasn't verified this app</b> → press <span class="link">Advanced</span> (small, bottom-left) → <span class="link">Go to SBC Money (unsafe)</span>.<br>
+        <b>SBC Money wants access to your Google Account</b> → press <span class="link">Allow</span>.
+      </div>
+      <p>Then open the menu item <b>once more</b> — the wizard opens. Six short steps:</p>
+      <ol>
+        <li><b>Welcome</b> — checks you're in your copy, signed in as its owner. Add your first name if you like.</li>
+        <li><b>Tiller</b> — paste your Tiller sheet's address and press <b>Check</b>. Green means ready; amber tells you what to tidy in Tiller but lets you carry on.</li>
+        <li><b>Envelopes</b> — your Tiller categories, as envelopes. Untick any you don't want; keep the optional Savings Buffer; set your time zone.</li>
+        <li><b>Create</b> — the only step that writes. Builds your companion sheet. You're the only admin.</li>
+        <li><b>Share</b> — one button: your sheets are shared with the app's own account (editor — it imports hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>Not with any person.</b></li>
+        <li><b>Finish</b> — the sheet registers itself with SBC Money and runs your first import. About 20 seconds. If it says <b>You're in</b>, you are.</li>
+      </ol>
+      <details><summary>If Finish says "Not registered yet"</summary>
+        <p>It tells you why — nearly always a share from step 5 that didn't take. Open that sheet → <b>Share</b> → paste the address it names → pick the role → untick <i>Notify people</i> → Share, then press <b>Try again</b>. If it keeps failing, use the <b>Email the code</b> button on that screen; a person registers you by hand the same day.</p>
+      </details>
+      <details><summary>If the wizard won't open at all</summary>
+        <p>Use <span class="path">Envelope Budget → Migration → Setup — classic prompts (fallback)</span>. It asks the same questions one at a time, then do the four shares by hand and email the code it gives you.</p>
+      </details>
+      <label class="tick"><input type="checkbox" data-done="wizard"> The wizard said "You're in"</label>
+    </div>
+  </section>
+
+  <!-- 5 Sign in -->
+  <section class="step" data-step="signin">
+    <div class="hd"><div class="num">5</div><div><h2>Sign in and put it on your phone</h2><div class="who">2 minutes</div></div></div>
+    <div class="body">
+      <ol>
+        <li>On your phone, open <a class="appurl" href="#"><b>sbc.theaubuchonfamily.com</b></a> → <b>Sign in with Google</b> → the account from step 1.</li>
+        <li>Share → <b>Add to Home Screen</b> (iPhone: the share square, scroll down; Android: the ⋮ menu → <i>Add to Home screen</i>). It then opens like an app, full screen.</li>
+        <li>First session, in this order: <b>Inbox</b> → approve the first batch · <b>Balances → Reconcile to bank</b> into Income Cash Pool · <b>Fund from pool</b>. The <b>CC Payment 💳</b> envelope is pass-through — never fund it.</li>
+      </ol>
+      <p><a class="btn ghost videourl" href="#" target="_blank" rel="noopener">▶ Watch the 6-minute tour</a> &nbsp; <a class="btn ghost guideurl" href="#" target="_blank" rel="noopener">Read the guide</a></p>
+      <p class="small">In the app, Settings → <b>How to use</b> has the same help. Settings → <b>Access</b> shows exactly one address — yours — and that you're the admin.</p>
+      <label class="tick"><input type="checkbox" data-done="signin"> It's on my home screen and I've approved my first transactions</label>
+    </div>
+  </section>
+
+  <section class="step" style="background:var(--teal-50);border-color:#99e6d9">
+    <div class="hd"><div class="num" style="background:#fff">👁</div><div><h2>Who can see your money</h2><div class="who">Plainly</div></div></div>
+    <div class="body">
+      <div class="quote">Your bank data lives in <b>your</b> Tiller spreadsheet and <b>your</b> companion spreadsheet, in your Google Drive, which you own. Two service identities get access so the app works: an app account (editor — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>No person is shared on either sheet, nobody else is on your app's access list, and nothing in the app shows anyone your numbers.</b> One honest caveat: someone runs the server the app uses (a database and the app account's password), so like any app's operator they <i>could</i> technically query it. The app keeps a visible record of every such read — Settings → Access → <b>Who has read the database</b> — so you'd see it. You can leave any time: Tiller keeps your complete history in your own spreadsheet.</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="hd"><div class="num" style="background:#fff">?</div><div><h2>If something's off</h2></div></div>
+    <div class="body">
+      <table>
+        <tr><th>You see</th><th>Why</th><th>Do</th></tr>
+        <tr><td>"…is not a family or registered SBC account" at sign-in</td><td>Finish (step 4.6) didn't complete</td><td>Open your copy → run the wizard again; it goes straight to Share and Finish</td></tr>
+        <tr><td>"…is not on the allowlist"</td><td>You ran the wizard as one Google account and signed in with another</td><td>Sign in with the account that made the copy</td></tr>
+        <tr><td>App shows no transactions a day later</td><td>A share didn't take, or Tiller hasn't filled yet</td><td>Run the wizard again (Share re-checks); open your Tiller sheet and confirm it has transactions</td></tr>
+        <tr><td>Wizard: "This is the template, not your copy"</td><td>You're in the template</td><td>Press <b>Make my copy</b> in step 3 and run the wizard in the copy</td></tr>
+        <tr><td>Wizard: "already has envelope data"</td><td>Ran it twice, or copied the wrong sheet</td><td>Make a fresh copy</td></tr>
+      </table>
+      <p class="small">Still stuck? Email <a class="opmail" href="#"><span class="op"></span></a> with what the screen says. Nothing in these messages is financial data.</p>
+    </div>
+  </section>
+
+  <p class="foot">SBC Money · <a class="appurl" href="#">sbc.theaubuchonfamily.com</a> · <a class="guideurl" href="#">guide</a></p>
+</main>
+
+<script>
+'use strict';
+/* ---- the one block to fill in ----
+   templateId: the ID of the template companion sheet owned by the app account
+   (SBC-New-User-Onboarding-Checklist.md, Part 0). From its URL: /d/<ID>/edit.
+   Leave '' until the template exists: the copy button then says so instead of
+   sending people to a dead link. */
+var CONFIG = {
+  templateId: '',
+  appUrl: 'https://sbc.theaubuchonfamily.com',
+  guideUrl: 'https://sbc.theaubuchonfamily.com/guide.html',
+  videoUrl: 'https://sbc.theaubuchonfamily.com/how-to-sbc-money.mp4',
+  operatorEmail: 'scott@theaubuchonfamily.com'
+};
+var STEPS = ['google', 'tiller', 'copy', 'wizard', 'signin'];
+var KEY = 'sbc-start-v1';
+
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } }
+function save(st) { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* private window: progress just isn't kept */ } }
+var S = load();
+
+function render() {
+  // yes / no answers and the blocks they reveal
+  $$('.yn').forEach(function (g) {
+    var q = g.getAttribute('data-q'), v = S['q:' + q] || '';
+    $$('button', g).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+  });
+  $$('[data-show]').forEach(function (el) {
+    var m = el.getAttribute('data-show').split('='), v = S['q:' + m[0]] || '';
+    el.style.display = (m[1] === '*' ? !!v : v === m[1]) ? '' : 'none';
+  });
+  // ticks + progress
+  var done = 0;
+  STEPS.forEach(function (k) {
+    var on = !!S['d:' + k];
+    if (on) done++;
+    var sec = $('.step[data-step="' + k + '"]');
+    if (sec) sec.classList.toggle('done', on);
+    var cb = $('input[data-done="' + k + '"]');
+    if (cb) cb.checked = on;
+  });
+  $('#progText').textContent = done + ' of ' + STEPS.length + ' done';
+  $('#progBar').style.width = (100 * done / STEPS.length) + '%';
+}
+
+function wire() {
+  $$('.yn button').forEach(function (b) {
+    b.onclick = function () { S['q:' + b.parentNode.getAttribute('data-q')] = b.getAttribute('data-v'); save(S); render(); };
+  });
+  $$('input[data-done]').forEach(function (cb) {
+    cb.onchange = function () { S['d:' + cb.getAttribute('data-done')] = cb.checked; save(S); render(); };
+  });
+  $('#reset').onclick = function () { S = {}; save(S); render(); };
+  // links from CONFIG
+  $$('.appurl').forEach(function (a) { a.href = CONFIG.appUrl; });
+  $$('.guideurl').forEach(function (a) { a.href = CONFIG.guideUrl; });
+  $$('.videourl').forEach(function (a) { a.href = CONFIG.videoUrl; });
+  $$('.op').forEach(function (s) { s.textContent = CONFIG.operatorEmail; });
+  $$('.opmail').forEach(function (a) { a.href = 'mailto:' + CONFIG.operatorEmail + '?subject=' + encodeURIComponent('SBC Money setup'); });
+  var copy = $('#copyBtn');
+  if (/^[A-Za-z0-9_-]{20,}$/.test(CONFIG.templateId)) {
+    copy.href = 'https://docs.google.com/spreadsheets/d/' + CONFIG.templateId + '/copy';
+  } else {
+    copy.classList.add('dis'); copy.removeAttribute('href'); copy.removeAttribute('target');
+    $('#noTemplate').classList.remove('hidden');
+  }
+}
+wire();
+render();
+</script>
+</body>
+</html>
