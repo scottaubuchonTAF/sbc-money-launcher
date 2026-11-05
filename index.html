@@ -1472,11 +1472,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.99.0';
+var FE_VERSION = 'v3.99.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.99.0+20261104.0904';
+var BUILD_ID = 'v3.99.1+20261105.0911';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -9384,6 +9384,97 @@ function opAccessWhen_(iso){
   var d = new Date(iso); if(isNaN(d.getTime())) return String(iso);
   try{ return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }catch(e){ return d.toISOString(); }
 }
+/* v3.99.1 - the plain-English layer (Scott 11/5: "kinda hard for the layman to read").
+   Same rules as _shared/audit.js (TABLE_WORDS / PLUMBING_TABLES / categorize / actorWords /
+   groupSessions / sessionWords) - the test pins them equal. The SQL stays, behind a toggle. */
+var OPACC_TABLE_WORDS = {
+  register:'transactions', inbox:'the inbox', envelopes:'envelopes', journal_entries:'envelope moves',
+  tiller_transactions:'bank transactions', balance_history:'account balances', balance_snapshots:'balance snapshots',
+  accounts:'accounts', categories:'categories', rules:'rules', tags:'tags', targets:'goals',
+  plans:'funding plans', plan_lines:'funding plans', settings:'settings', users:'the user list',
+  wealth_history:'wealth history', wealth_accounts:'wealth accounts', wealth_plan:'the wealth plan',
+  wealth_settings:'wealth settings', health_daily:'budget health', audit_log:'the change history',
+  operator_access:'this access log', operator_access_heartbeat:'this access log',
+  schema_migrations:'setup records', sync_runs:'sync records', outbox:'pending writes',
+  push_subscriptions:'notification devices', push_log:'notification records', push_sent:'notification records',
+  push_state:'notification records' };
+var OPACC_PLUMBING = ['operator_access','operator_access_heartbeat','schema_migrations','sync_runs',
+  'outbox','push_subscriptions','push_log','push_sent','push_state'];
+function opAccessTableWord_(rel){
+  var t = String(rel||'').replace(/^sbc\./i,'').replace(/\(.*$/,'');
+  return OPACC_TABLE_WORDS[t] || t;
+}
+function opAccessCategorize_(row){
+  var cls = String(row.cls||row['class']||'').toUpperCase();
+  if(cls==='DDL' || cls==='ROLE') return 'setup';
+  var rels = (row.relations||[]).map(function(r){ return String(r).replace(/^sbc\./i,''); });
+  var money = rels.filter(function(r){ return OPACC_PLUMBING.indexOf(r)<0; });
+  if(rels.length && !money.length) return 'plumbing';
+  if(!rels.length){
+    var named = (String(row.statement||'').match(/\bsbc\.([a-z_]+)/gi)||[]).map(function(m){ return m.slice(4).toLowerCase(); });
+    if(named.length && named.every(function(t){ return OPACC_PLUMBING.indexOf(t)>-1 || /^operator_access/.test(t); })) return 'plumbing';
+  }
+  return 'money';
+}
+function opAccessActor_(role, kind){
+  if(kind==='tooling') return 'the operator’s check scripts';
+  if(role==='authenticator') return 'the operator, through the dashboard';
+  if(role==='postgres') return 'the operator, by hand';
+  return 'the operator ('+role+')';
+}
+function opAccessGroups_(rows, gapMin){
+  gapMin = gapMin||10;
+  var groups = [], cur = null;
+  rows.forEach(function(r){
+    var t = new Date(r.at).getTime();
+    var sameActor = cur && cur.role===r.role && cur.kind===r.kind;
+    var close = cur && Math.abs(cur.fromMs - t) <= gapMin*60000;
+    if(sameActor && close){ cur.rows.push(r); cur.fromMs = Math.min(cur.fromMs,t); cur.toMs = Math.max(cur.toMs,t); }
+    else { cur = { role:r.role, kind:r.kind, fromMs:t, toMs:t, rows:[r] }; groups.push(cur); }
+  });
+  groups.forEach(function(g){
+    var counts = { money:0, plumbing:0, setup:0, reads:0, writes:0 };
+    var touched = {}, order = [];
+    g.rows.forEach(function(r){
+      var cat = opAccessCategorize_(r); counts[cat]++;
+      var cls = String(r.cls||r['class']||'').toUpperCase();
+      var isWrite = cls==='WRITE';
+      if(cls==='READ') counts.reads++; else if(isWrite) counts.writes++;
+      if(cat!=='setup'){
+        var words = [];
+        (r.relations||[]).forEach(function(x){ var w = opAccessTableWord_(x); if(words.indexOf(w)<0) words.push(w); });
+        if(!words.length){ var m = /\bsbc\.([a-z_]+)/i.exec(String(r.statement||'')); if(m) words.push(opAccessTableWord_(m[1])); }
+        words.forEach(function(w){
+          if(!touched[w]){ touched[w] = { word:w, reads:0, writes:0, plumbing: OPACC_PLUMBING.some(function(t){ return OPACC_TABLE_WORDS[t]===w; }) }; order.push(w); }
+          if(isWrite) touched[w].writes++; else touched[w].reads++;
+        });
+      }
+    });
+    g.counts = counts;
+    g.touched = order.map(function(w){ return touched[w]; }).sort(function(a,b){ return (b.reads+b.writes)-(a.reads+a.writes); });
+    g.hasMoney = counts.money>0;
+  });
+  return groups;
+}
+function opAccessSessionWords_(g){
+  var parts = [];
+  if(g.counts.setup) parts.push(g.counts.setup+' setup / configuration change'+(g.counts.setup===1?'':'s'));
+  var money = g.touched.filter(function(t){ return !t.plumbing; }), plumbing = g.touched.filter(function(t){ return t.plumbing; });
+  var r = money.filter(function(t){ return t.reads; }).map(function(t){ return t.word; });
+  var w = money.filter(function(t){ return t.writes; }).map(function(t){ return t.word; });
+  if(r.length) parts.push('looked at '+r.join(', '));
+  if(w.length) parts.push('changed '+w.join(', '));
+  if(plumbing.length) parts.push('touched app plumbing ('+plumbing.map(function(t){ return t.word; }).join(', ')+')');
+  return parts.length ? parts.join(' · ') : g.rows.length+' statement'+(g.rows.length===1?'':'s');
+}
+function opAccessRange_(g){
+  var a = opAccessWhen_(new Date(g.fromMs).toISOString());
+  if(g.toMs - g.fromMs < 60000) return a;
+  var d2 = new Date(g.toMs);
+  var sameDay = new Date(g.fromMs).toDateString()===d2.toDateString();
+  var b; try{ b = sameDay ? d2.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}) : opAccessWhen_(d2.toISOString()); }catch(e){ b = d2.toISOString(); }
+  return a+'–'+b;
+}
 function opAccessHtml_(r){
   if(!r || r.applied===false){
     return '<div class="card"><div class="empty">The operator access log is not set up on this server yet. '+
@@ -9391,35 +9482,52 @@ function opAccessHtml_(r){
   }
   var st = opAccessStatus_(r, Date.now());
   var color = st.level==='green' ? 'var(--green)' : 'var(--red)';
-  var c = r.counts||{}; var man = c.manual||{d30:0,total:0}, tool = c.tooling||{d30:0,total:0};
+  var cats = r.cats || { d30:{manual:{money:0,plumbing:0,setup:0},tooling:{money:0,plumbing:0,setup:0}}, all:{manual:{money:0,plumbing:0,setup:0},tooling:{money:0,plumbing:0,setup:0}} };
+  var m30 = cats.d30.manual, t30 = cats.d30.tooling, mAll = cats.all.manual;
   var h = '<div class="card" style="padding:14px 16px">';
   h += '<div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px">'+
     '<span style="width:10px;height:10px;border-radius:50%;background:'+color+';display:inline-block"></span>'+esc(st.text)+'</div>';
   h += '<div class="note" style="padding:4px 0 0">'+
     (r.heartbeat ? 'Last checked '+(st.ageMin===0?'just now':st.ageMin+' min ago')+' · ' : '')+
     (r.chain ? (r.chain.ok ? 'log chain intact ('+r.chain.total+' rows)' : 'log chain BROKEN at row '+r.chain.brokenAt) : 'chain not checked')+'</div>';
-  h += '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 6px">'+
-    '<div><div style="font-size:26px;font-weight:800;line-height:1">'+esc(man.d30)+'</div><div class="note" style="padding:2px 0 0">operator (manual), last 30 days'+(man.total!==man.d30?' · '+esc(man.total)+' ever':'')+'</div></div>'+
-    '<div><div style="font-size:26px;font-weight:800;line-height:1">'+esc(tool.d30)+'</div><div class="note" style="padding:2px 0 0">operator (tooling), last 30 days'+(tool.total!==tool.d30?' · '+esc(tool.total)+' ever':'')+'</div></div>'+
+  /* the one number the reader came for */
+  h += '<div style="margin:16px 0 4px"><div style="font-size:34px;font-weight:800;line-height:1;color:'+(m30.money?'var(--red)':'var(--green)')+'">'+esc(m30.money)+'</div>'+
+    '<div style="font-weight:600;margin-top:4px">times the operator read or changed money data by hand, last 30 days'+(mAll.money!==m30.money?' <span class="note" style="padding:0;display:inline">(· '+esc(mAll.money)+' ever)</span>':'')+'</div>'+
+    '<div class="note" style="padding:2px 0 0">“Money data” is transactions, balances, envelopes, goals, plans, settings, the user list — anything that is somebody’s finances. '+
+    (m30.money===0 ? 'Zero is what this should say almost all of the time.' : 'The sessions below say exactly what was looked at.')+'</div></div>';
+  h += '<div style="display:flex;gap:22px;flex-wrap:wrap;margin:12px 0 6px">'+
+    '<div><div style="font-size:20px;font-weight:800;line-height:1">'+esc(m30.setup+m30.plumbing)+'</div><div class="note" style="padding:2px 0 0">setup &amp; app plumbing, by hand</div></div>'+
+    '<div><div style="font-size:20px;font-weight:800;line-height:1">'+esc(t30.money+t30.plumbing+t30.setup)+'</div><div class="note" style="padding:2px 0 0">automatic check scripts'+(t30.money?' ('+esc(t30.money)+' read money data)':'')+'</div></div>'+
     '</div>';
-  h += '<div class="note" style="padding:6px 0 0"><b>What this is.</b> The app itself reads the database as its own role and is not listed. '+
-    'Everything else — the operator opening the database console, a command-line session, or the operator’s own check scripts (<i>tooling</i>) — is recorded with the exact statement, every hour, into a log where each row is chained to the one before it. '+
+  h += '<details><summary class="note" style="cursor:pointer;padding:6px 0 0;list-style:none">What this is, and what it can’t tell you ›</summary>'+
+    '<div class="note" style="padding:6px 0 0">The app itself reads the database as its own role and is not listed. '+
+    'Everything else — the operator opening the database console, a command-line session, or the operator’s own check scripts — is recorded with the exact statement, every hour, into a log where each row is chained to the one before it. '+
+    '<b>Setup &amp; plumbing</b> means configuration changes and the app’s own bookkeeping tables (this log, sync records, notification records): nobody’s money. '+
+    '<b>Check scripts</b> are the operator’s automatic health checks; they do read money tables (to count rows or compare two copies), and are listed as such. '+
     '<b>What it can’t tell you:</b> whose rows a statement returned. A statement that names a person is attributable; a whole-table read is visibly a whole-table read. '+
     'It also does not cover the sheets in your own Drive (Drive’s Activity panel does) or a change to the app’s code (the public repo does). '+
-    'The operator can switch this recording off — and this line would then say so.</div>';
+    'The operator can switch this recording off — and the line at the top would then say so.</div></details>';
   h += '</div>';
   var rows = r.rows||[];
   h += '<div class="card" style="margin-top:10px">';
   if(!rows.length){
-    h += '<div class="empty">No operator statements recorded'+(r.heartbeat?' since the log started':'')+'.</div>';
+    h += '<div class="empty">No operator activity recorded'+(r.heartbeat?' since the log started':'')+'.</div>';
   } else {
-    rows.forEach(function(x){
-      var rel = (x.relations||[]).filter(function(n){ return /^sbc\./i.test(n); }).map(function(n){ return n.replace(/^sbc\./i,''); });
-      h += '<details class="envrow" style="display:block"><summary style="cursor:pointer;list-style:none;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'+
-        '<span class="bal" style="opacity:.7;min-width:92px">'+esc(opAccessWhen_(x.at))+'</span>'+
-        '<span class="nm" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;flex:1 1 200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(String(x.statement||'').replace(/\s+/g,' ').slice(0,140))+'</span>'+
-        '<span class="bal" style="opacity:.6;font-size:11.5px">'+esc(x.role)+' · '+esc(x.kind)+' · '+esc(String(x.cls||'').toLowerCase())+(rel.length?' · '+esc(rel.join(', ')):'')+'</span></summary>'+
-        '<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;margin:8px 0 0;opacity:.9">'+esc(x.statement)+(x.truncated?'\n… (statement longer than 2,000 characters)':'')+(x.params?'\n-- parameters: '+esc(x.params):'')+'</pre></details>';
+    opAccessGroups_(rows).forEach(function(g){
+      var dot = g.hasMoney ? (g.kind==='tooling' ? 'var(--amber)' : 'var(--red)') : 'var(--ink-3)';
+      h += '<details class="envrow" style="display:block"><summary style="cursor:pointer;list-style:none">'+
+        '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'+
+        '<span class="bal" style="opacity:.7;min-width:92px">'+esc(opAccessRange_(g))+'</span>'+
+        '<span class="nm" style="flex:1 1 200px"><span style="width:8px;height:8px;border-radius:50%;background:'+dot+';display:inline-block;margin-right:6px"></span>'+esc(opAccessActor_(g.role,g.kind))+'</span>'+
+        '<span class="bal" style="opacity:.6;font-size:11.5px">'+esc(g.rows.length)+' statement'+(g.rows.length===1?'':'s')+'</span></div>'+
+        '<div class="note" style="padding:2px 0 0 0">'+esc(opAccessSessionWords_(g))+'</div></summary>';
+      h += '<details style="margin-top:8px"><summary class="note" style="cursor:pointer;list-style:none;padding:0">Show the statements ›</summary>';
+      g.rows.forEach(function(x){
+        var rel = (x.relations||[]).map(opAccessTableWord_).filter(function(v,i,a){ return a.indexOf(v)===i; });
+        h += '<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="note" style="padding:0">'+esc(opAccessWhen_(x.at))+' · '+esc(x.role)+' · '+esc(String(x.cls||'').toLowerCase())+(rel.length?' · '+esc(rel.join(', ')):'')+'</div>'+
+          '<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;margin:4px 0 0;opacity:.9">'+esc(x.statement)+(x.truncated?'\n… (statement longer than 2,000 characters)':'')+(x.params?'\n-- parameters: '+esc(x.params):'')+'</pre></div>';
+      });
+      h += '</details></details>';
     });
     if(rows.length >= (r.limit||50) && rows.length < 300){
       h += '<div class="actions" style="padding:10px 16px"><button class="btn ghost sm" data-act="opacc-more" data-arg="'+rows.length+'">Show more</button></div>';
@@ -10864,6 +10972,7 @@ SBC.howtoSections_ = function(){ howtoMode_='sections'; try{ return renderHowTo(
 SBC.BUILD_ID = BUILD_ID;
 SBC.state = state;
 SBC.opAccessStatus_ = opAccessStatus_; SBC.opAccessHtml_ = opAccessHtml_; SBC.drawAdmin = drawAdmin;   // v3.99.0: the operator access card
+SBC.opAccessCategorize_ = opAccessCategorize_; SBC.opAccessActor_ = opAccessActor_; SBC.opAccessGroups_ = opAccessGroups_; SBC.opAccessSessionWords_ = opAccessSessionWords_; SBC.opAccessTableWord_ = opAccessTableWord_; SBC.OPACC_TABLE_WORDS = OPACC_TABLE_WORDS; SBC.OPACC_PLUMBING = OPACC_PLUMBING;   // v3.99.1
 SBC.money = money; SBC.cents = cents; SBC.esc = esc;
 SBC.toastMs = toastMs; SBC.toast = toast;
 SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SBC.markPendingUnapproved = markPendingUnapproved; SBC.PENDING_APPROVED_TTL = PENDING_APPROVED_TTL;
