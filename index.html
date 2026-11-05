@@ -1472,11 +1472,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.99.2';
+var FE_VERSION = 'v3.99.3';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.99.2+20261105.0954';
+var BUILD_ID = 'v3.99.3+20261105.1110';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -9472,6 +9472,15 @@ function opAccessSessionWords_(g){
   if(plumbing.length) parts.push('touched app plumbing ('+plumbing.map(function(t){ return t.word; }).join(', ')+')');
   return parts.length ? parts.join(' · ') : g.rows.length+' statement'+(g.rows.length===1?'':'s');
 }
+/* v3.99.2: the operator's notes for a session - one line per distinct note among its rows */
+function opAccessNotesHtml_(g){
+  var seen = {}, out = '';
+  g.rows.forEach(function(x){
+    var n = x.note; if(!n || seen[n.id]) return; seen[n.id] = 1;
+    out += '<div class="note" style="padding:4px 0 0;font-style:italic">\ud83d\udcdd Operator\u2019s note: '+esc(n.note)+'</div>';
+  });
+  return out;
+}
 function opAccessRange_(g){
   var a = opAccessWhen_(new Date(g.fromMs).toISOString());
   if(g.toMs - g.fromMs < 60000) return a;
@@ -9498,6 +9507,7 @@ function opAccessHtml_(r){
   /* the one number the reader came for */
   h += '<div style="margin:16px 0 4px"><div style="font-size:34px;font-weight:800;line-height:1;color:'+(m30.money?'var(--red)':'var(--green)')+'">'+esc(m30.money)+'</div>'+
     '<div style="font-weight:600;margin-top:4px">times the operator read or changed money data by hand, last 30 days'+(mAll.money!==m30.money?' <span class="note" style="padding:0;display:inline">(· '+esc(mAll.money)+' ever)</span>':'')+'</div>'+
+    (m30.money && r.notedMoney30 ? '<div class="note" style="padding:2px 0 0">'+(r.notedMoney30===m30.money ? 'All '+esc(m30.money) : esc(r.notedMoney30)+' of them')+' carry a note from the operator \u2014 see the sessions below. A note explains a row; it cannot change or remove one.</div>' : '')+
     '<div class="note" style="padding:2px 0 0">“Money data” is transactions, balances, envelopes, goals, plans, settings, the user list — anything that is somebody’s finances. '+
     (m30.money===0 ? 'Zero is what this should say almost all of the time.' : 'The sessions below say exactly what was looked at.')+'</div></div>';
   h += '<div style="display:flex;gap:22px;flex-wrap:wrap;margin:12px 0 6px">'+
@@ -9525,7 +9535,8 @@ function opAccessHtml_(r){
         '<span class="bal" style="opacity:.7;min-width:92px">'+esc(opAccessRange_(g))+'</span>'+
         '<span class="nm" style="flex:1 1 200px"><span style="width:8px;height:8px;border-radius:50%;background:'+dot+';display:inline-block;margin-right:6px"></span>'+esc(opAccessActor_(g.role,g.kind))+'</span>'+
         '<span class="bal" style="opacity:.6;font-size:11.5px">'+esc(g.rows.length)+' statement'+(g.rows.length===1?'':'s')+'</span></div>'+
-        '<div class="note" style="padding:2px 0 0 0">'+esc(opAccessSessionWords_(g))+'</div></summary>';
+        '<div class="note" style="padding:2px 0 0 0">'+esc(opAccessSessionWords_(g))+'</div>'+
+        opAccessNotesHtml_(g)+'</summary>';
       h += '<details style="margin-top:8px"><summary class="note" style="cursor:pointer;list-style:none;padding:0">Show the statements ›</summary>';
       g.rows.forEach(function(x){
         var rel = (x.relations||[]).map(opAccessTableWord_).filter(function(v,i,a){ return a.indexOf(v)===i; });
@@ -10977,7 +10988,7 @@ SBC.howtoSections_ = function(){ howtoMode_='sections'; try{ return renderHowTo(
 SBC.BUILD_ID = BUILD_ID;
 SBC.state = state;
 SBC.opAccessStatus_ = opAccessStatus_; SBC.opAccessHtml_ = opAccessHtml_; SBC.drawAdmin = drawAdmin;   // v3.99.0: the operator access card
-SBC.opAccessCategorize_ = opAccessCategorize_; SBC.opAccessActor_ = opAccessActor_; SBC.opAccessGroups_ = opAccessGroups_; SBC.opAccessSessionWords_ = opAccessSessionWords_; SBC.opAccessTableWord_ = opAccessTableWord_; SBC.OPACC_TABLE_WORDS = OPACC_TABLE_WORDS; SBC.OPACC_PLUMBING = OPACC_PLUMBING;   // v3.99.1
+SBC.opAccessCategorize_ = opAccessCategorize_; SBC.opAccessActor_ = opAccessActor_; SBC.opAccessGroups_ = opAccessGroups_; SBC.opAccessSessionWords_ = opAccessSessionWords_; SBC.opAccessNotesHtml_ = opAccessNotesHtml_; SBC.opAccessTableWord_ = opAccessTableWord_; SBC.OPACC_TABLE_WORDS = OPACC_TABLE_WORDS; SBC.OPACC_PLUMBING = OPACC_PLUMBING;   // v3.99.1
 SBC.money = money; SBC.cents = cents; SBC.esc = esc;
 SBC.toastMs = toastMs; SBC.toast = toast;
 SBC.filterInbox = filterInbox; SBC.markPendingApproved = markPendingApproved; SBC.markPendingUnapproved = markPendingUnapproved; SBC.PENDING_APPROVED_TTL = PENDING_APPROVED_TTL;
