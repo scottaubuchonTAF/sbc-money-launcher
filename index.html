@@ -1166,12 +1166,13 @@ var CLIENT_ID = '284358082799-1jm14talthngajlaeope3reaq4qk7968.apps.googleuserco
    the wrong person's sheet, so each entry moves only after the previous one has
    done real reads and writes. Rolling one back = point it at their own /exec again
    (their bound stack stays deployed and untouched). */
-var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji/exec';
-// v3.101.0 (11/5/26, re-home step 7a): the bridge re-homed to the app account sbcmoney@theaubuchonfamily.com.
-// Scott moves first and soaks a day; the next release sets BRIDGE_URL = BRIDGE_URL_APP for everyone.
-var BRIDGE_URL_APP = 'https://script.google.com/macros/s/AKfycbxlqqVu5XgeheH3KQczhYpIBY0LCVysDwymxg4BicoMiYeHCb0CjoyxyXYMVUJr9Oyt/exec';
+// v3.101.1 (11/5/26, re-home step 7b): EVERYONE on the bridge re-homed to the app account
+// sbcmoney@theaubuchonfamily.com. The old scott@ bridge, the one-line rollback:
+// var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlbiew1VELnxUhygIszy2S-NxOtqayeiR5Hx5H0S_qECLF_Iq_0enWp4VVenC0wbji/exec';
+var BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbxlqqVu5XgeheH3KQczhYpIBY0LCVysDwymxg4BicoMiYeHCb0CjoyxyXYMVUJr9Oyt/exec';
+var BRIDGE_URL_APP = BRIDGE_URL;   // kept so nothing else has to change
 var BACKENDS = {
-  'scott@theaubuchonfamily.com': BRIDGE_URL_APP,   // v3.39 — first onto the bridge; v3.101.0 — first onto the re-homed bridge
+  'scott@theaubuchonfamily.com': BRIDGE_URL,   // v3.39 — first onto the bridge; v3.101.x — re-homed bridge
   // Corey, 7/25: his own /exec was UNREACHABLE (Drive won't serve his web app
   // anonymously — the cause of "Server (checking…)" and of his writes never
   // reaching his sheet), so the bridge is his FIX, not a risk. His retired stack:
@@ -1475,11 +1476,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.101.0';
+var FE_VERSION = 'v3.101.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.101.0+20261105.1535';
+var BUILD_ID = 'v3.101.1+20261105.1544';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
