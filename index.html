@@ -1477,11 +1477,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
 /* Frontend build label — bump on EVERY GitHub upload, in lockstep with
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
-var FE_VERSION = 'v3.102.3';
+var FE_VERSION = 'v3.102.4';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.102.3+20261105.1735';
+var BUILD_ID = 'v3.102.4+20261105.1823';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -10126,7 +10126,7 @@ function renderHowTo(){
     PL('Do that consistently and something great happens: you stop living paycheck to paycheck, because each envelope fills up <i>before</i> its bill arrives. The long-term goal is to be a full month ahead.'), {g:'start', open:true}),
 
   S('🚀','Your first day',
-    P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you gave Scott — any Google account works once it is registered. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
+    P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you set SBC Money up with (the one that owns your SBC sheet) — any Google account works once it is registered. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
     P('<b>What you will see.</b> Your envelopes already exist — one per category in your Tiller sheet — and every one of them is <b>$0</b>. That is on purpose: your history is kept, but budgeting starts today. The <b>Inbox</b> only shows transactions from today onward.')+
     P('<b>Put your real money on the books (5 minutes, once).</b> Open <b>Balances</b> and check that the bank balances look right. Then <b>Settings → Maintenance → Reconcile accounts → Reconcile to bank</b>: SBC puts the cash you actually have into the <b>Income Cash Pool</b>. Now open <b>Fund</b> and deal that money out — this month\u2019s rent, groceries until payday, a little in each envelope you will touch before the next paycheck. Leave what is left in the pool or park it in savings.')+
     P('<b>Leave 💳 CC Payment at $0.</b> It is plumbing, not a spending envelope — the credit-card section below explains why.')+

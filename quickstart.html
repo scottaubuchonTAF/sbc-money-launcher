@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick start — SBC Money</title>
+<link rel="icon" href="icon-192.png">
+<!-- v3.102.4 — the quick start: sbc.theaubuchonfamily.com/quickstart.html
+     A ten-minute read that teaches envelope budgeting the way SBC Money does it,
+     for someone who has never done it. Written from the in-app help (Settings →
+     How to use: The big idea, Your first day, Words, Payday, During the week, When
+     an envelope runs dry, Credit cards) so it cannot say something the app doesn't.
+     Ships with the release like start.html (deploy/release.ps1 step 7). No external
+     loads; the only script fills the links from CONFIG. -->
+<style>
+:root{
+  --teal-900:#0d3b36; --teal-800:#11514a; --teal-700:#0f766e; --teal-600:#0d9488; --teal-400:#2dd4bf;
+  --teal-100:#ccfbf1; --teal-50:#f0fdfa;
+  --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
+  --bg:#f6f8fa; --card:#fff; --line:#e2e8f0;
+  --red:#dc2626; --red-bg:#fef2f2; --green:#059669; --green-bg:#ecfdf5; --amber:#b45309; --amber-bg:#fffbeb;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);background:var(--bg)}
+a{color:var(--teal-700)}
+.hero{background:linear-gradient(160deg,var(--teal-900),var(--teal-800) 60%,var(--teal-700));color:#e6f4f1;padding:34px 16px 30px}
+.hero .in{max-width:720px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.brand img{width:44px;height:44px;border-radius:12px}
+.brand b{font-size:20px;letter-spacing:.01em}
+.brand b span{color:var(--teal-400)}
+.hero h1{font-size:30px;line-height:1.15;margin-bottom:10px}
+.hero p{color:#b9ddd6;max-width:560px}
+.hero .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.hero .meta span{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:5px 12px;font-size:13px;color:#dff5f0}
+main{max-width:720px;margin:0 auto;padding:18px 16px 60px}
+.toc{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin:6px 0 16px;font-size:14px;color:var(--ink-2)}
+.toc a{margin-right:12px;white-space:nowrap}
+.sec{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:14px}
+.sec h2{font-size:20px;line-height:1.25;margin-bottom:10px;color:var(--teal-900)}
+.sec h2 span{font-size:22px;margin-right:6px}
+.sec p{margin-bottom:10px;color:var(--ink-2)}
+.sec p b,.sec li b{color:var(--ink)}
+ol,ul{padding-left:22px;margin-bottom:10px;color:var(--ink-2)}
+li{margin-bottom:7px}
+.rule{display:flex;gap:12px;align-items:flex-start;background:var(--teal-50);border-radius:10px;padding:12px 14px;margin:8px 0}
+.rule .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--teal-600);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+.rule p{margin:0;color:var(--ink)}
+.note{border-radius:10px;padding:10px 12px;font-size:14px;margin:10px 0}
+.note.ok{background:var(--green-bg);color:#065f46}
+.note.warn{background:var(--amber-bg);color:var(--amber)}
+.note.info{background:var(--teal-50);color:var(--teal-800)}
+.path{font-weight:600;color:var(--ink)}
+.env{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:8px;padding:1px 8px;font-size:14px;color:var(--ink);white-space:nowrap}
+dl{margin:6px 0 4px}
+dt{font-weight:600;color:var(--ink);margin-top:8px}
+dd{color:var(--ink-2);margin-left:0;margin-bottom:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--teal-600);color:#fff;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:600;font-size:15px;text-decoration:none}
+.btn.ghost{background:#fff;color:var(--teal-800);border:1px solid #99e6d9}
+.small{font-size:13px;color:var(--ink-3)}
+.foot{margin-top:28px;font-size:13px;color:var(--ink-3);text-align:center}
+.cal{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+.cal td,.cal th{border-top:1px solid var(--line);padding:8px 6px;vertical-align:top;text-align:left}
+.cal th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:uppercase;border-top:0}
+</style>
+</head>
+<body>
+<header class="hero"><div class="in">
+  <div class="brand"><img src="icon-192.png" alt=""><b>SBC <span>Money</span></b></div>
+  <h1>Envelope budgeting, in ten minutes</h1>
+  <p>How SBC Money thinks about your money, what to do on day one, and the two-minute routine that makes it work. Read this before your first session — nothing here needs the app open.</p>
+  <div class="meta"><span>10-minute read</span><span>No numbers to enter</span><span>Two rules, one routine</span></div>
+</div></header>
+
+<main>
+  <div class="toc">
+    <a href="#idea">The big idea</a><a href="#words">Six words</a><a href="#day1">Day one</a><a href="#payday">Payday</a><a href="#week">During the week</a><a href="#dry">When an envelope runs dry</a><a href="#cards">Credit cards</a><a href="#month">Your first month</a>
+  </div>
+
+  <section class="sec" id="idea">
+    <h2><span>💡</span>The big idea</h2>
+    <p>SBC Money is <b>envelope budgeting</b>. Picture cash envelopes with names on them: Rent, Groceries, Eating Out. Every dollar you have sits in exactly one envelope — that is the dollar's job. Two rules make the whole system work:</p>
+    <div class="rule"><div class="n">1</div><p><b>Only budget money you actually have.</b> Not next week's paycheck, not what you hope to earn — just what is in your accounts right now.</p></div>
+    <div class="rule"><div class="n">2</div><p><b>Before you spend, look at the envelope, not the bank account.</b> Your bank balance lies to you: it includes rent money that isn't spent yet. The envelope tells the truth about what is really free to spend.</p></div>
+    <p>Do that consistently and something great happens: you stop living paycheck to paycheck, because each envelope fills up before its bill arrives. The long-term goal is to be a full month ahead.</p>
+  </section>
+
+  <section class="sec" id="words">
+    <h2><span>📚</span>Six words you'll see everywhere</h2>
+    <dl>
+      <dt>Envelope</dt><dd>A named job for money (<span class="env">Groceries</span>, <span class="env">Rent</span>). Its balance is what is truly available for that job. Envelopes live in <b>groups</b> (Bills, Everyday, Savings).</dd>
+      <dt>Income Cash Pool</dt><dd>The loading dock. New money lands here first, then you deal it out. Money in the pool has no job yet. <b>Available to fund</b> on Home is the pool, and nothing else.</dd>
+      <dt>Fund</dt><dd>Moving money from the pool into envelopes — "giving every dollar a job." A <b>funding plan</b> is a saved recipe ("every paycheck: $500 rent, $200 groceries, the rest to savings") so payday takes one tap.</dd>
+      <dt>Inbox / Approve</dt><dd>New bank transactions waiting for you to confirm which envelope they belong to. Approve is that confirmation; the envelope moves the moment you do.</dd>
+      <dt>Rollover</dt><dd>Envelope balances carry forward forever. Grocery money you didn't spend this month is still yours next month.</dd>
+      <dt>Reconcile</dt><dd>Making the envelopes add up to what the bank actually holds. You do it once on day one; the app checks it quietly after that.</dd>
+    </dl>
+  </section>
+
+  <section class="sec" id="day1">
+    <h2><span>🚀</span>Day one — put your real money on the books (5 minutes, once)</h2>
+    <p>When you first sign in, your envelopes already exist — one per category in your Tiller sheet — and every one of them is <b>$0</b>. That is on purpose: your history is kept, but budgeting starts today. The Inbox only shows transactions from today onward.</p>
+    <ol>
+      <li>Open <span class="path">Balances</span> and check that the bank balances look right.</li>
+      <li><span class="path">Settings → Maintenance → Reconcile accounts → Reconcile to bank</span>. SBC puts the cash you actually have into the <b>Income Cash Pool</b>.</li>
+      <li>Open <span class="path">Fund</span> and deal that money out — this month's rent, groceries until payday, a little in each envelope you'll touch before the next paycheck. Leave what's left in the pool or park it in savings.</li>
+    </ol>
+    <div class="note warn"><b>Leave 💳 CC Payment at $0.</b> It is plumbing, not a spending envelope — the credit-card section below explains why.</div>
+    <p>From here on it is the routine below. Give it two paydays before judging it; the first one is always the slowest.</p>
+  </section>
+
+  <section class="sec" id="payday">
+    <h2><span>💵</span>Payday — the routine that matters most</h2>
+    <p>Three steps, about two minutes:</p>
+    <ol>
+      <li><b>Approve the paycheck.</b> Open <span class="path">Inbox</span> — your deposit is waiting. Approve it into your income envelope (<span class="env">Regular Pay 💵</span>).</li>
+      <li><b>Move it to the pool.</b> Open the Regular Pay envelope and tap <b>→ Move $… to pool</b>. (No "are you sure" — the message after has Undo.)</li>
+      <li><b>Fund your envelopes.</b> Tap <b>Available to fund</b> on Home (or More → Fund on a phone). Apply your funding plan, or split it by hand, and confirm when the footer says <b>Fully assigned ✓</b>.</li>
+    </ol>
+    <p>That is it — every dollar of the paycheck has a job. Money left over goes to a savings envelope; never leave dollars jobless in the pool for long. Paid more than once a month? Save a plan per paycheck and give each its <i>How often</i>.</p>
+  </section>
+
+  <section class="sec" id="week">
+    <h2><span>🧾</span>During the week — approve your spending</h2>
+    <p>As you spend, transactions flow into the Inbox on their own (from your bank, every hour). A few times a week, clear it:</p>
+    <ul>
+      <li>Most items arrive with a <b>suggestion</b> — one tap to approve if it's right. Tick <b>Always suggest this</b> once and that store is suggested automatically from then on.</li>
+      <li><b>✓ Approve all</b> takes everything that already has a suggestion.</li>
+      <li>One purchase, two jobs? <b>Split</b> spreads it across envelopes (the Walmart run that was half groceries, half a game).</li>
+    </ul>
+    <p>Approving isn't busywork — it is the moment you <i>see</i> your spending. That ten-second glance is what makes the budget real.</p>
+  </section>
+
+  <section class="sec" id="dry">
+    <h2><span>🚨</span>When an envelope runs dry</h2>
+    <p>Eating Out is empty and it's only the 20th? That is the system working — it caught the overspend while you can still do something about it.</p>
+    <ul>
+      <li><b>Cover it:</b> open an envelope with slack and use <b>Move money</b>. You are choosing the trade-off ("less clothes money this month") instead of discovering it later.</li>
+      <li><b>Or let it ride negative:</b> negative envelopes are allowed — they stay red and roll forward until you cover them at the next funding. Nothing hides.</li>
+    </ul>
+    <p>Moving money between envelopes is normal and healthy. The budget is a plan, not a punishment.</p>
+  </section>
+
+  <section class="sec" id="cards">
+    <h2><span>💳</span>Credit cards — and why CC Payment stays empty</h2>
+    <p>Cards are the one thing that trips people up, and the rule is simpler than you'd guess: <b>a card purchase is spending, and it counts the moment you swipe.</b> When the charge arrives in your Inbox you approve it into Groceries or Gas like any other purchase, and that envelope goes down right then.</p>
+    <p>So don't put money in <span class="env">CC Payment 💳</span>. When you pay the card bill, money leaves checking and the card balance drops; both sides land in CC Payment and cancel out, which is why it sits at about $0. Funding it would count the same spending twice.</p>
+    <p>On Home, <b>Cash in accounts</b> is what's in checking and savings, and <b>Cards owed</b> (amber) is the part that belongs to the card companies. Amber, not red — an obligation, not a problem.</p>
+  </section>
+
+  <section class="sec" id="month">
+    <h2><span>🗓️</span>Your first month, on one card</h2>
+    <table class="cal">
+      <tr><th>When</th><th>Do</th><th>How long</th></tr>
+      <tr><td>Day one</td><td>Balances → Reconcile to bank → Fund</td><td>5 min, once</td></tr>
+      <tr><td>Every payday</td><td>Approve the paycheck → Move to pool → Fund (apply your plan)</td><td>2 min</td></tr>
+      <tr><td>A few times a week</td><td>Clear the Inbox</td><td>1 min</td></tr>
+      <tr><td>Before you buy something big</td><td>Look at the envelope, not the bank</td><td>10 sec</td></tr>
+      <tr><td>Month two onward</td><td>Start filling the <b>Savings Buffer</b> — next month's bills, funded before the month starts</td><td>ongoing</td></tr>
+    </table>
+    <div class="note ok">Three mistakes everyone makes once: funding CC Payment; skipping the day-one reconcile (the envelopes then describe money you don't have); and leaving a paycheck sitting in the pool with no job. The app flags the first two on Home.</div>
+    <p>Going deeper: in the app, <span class="path">Settings → How to use</span> has the same material plus goals, autopay obligations, budget health and more. Or the printable guide and the six-minute tour below.</p>
+    <p><a class="btn appurl" href="#">Open SBC Money</a> &nbsp; <a class="btn ghost guideurl" href="#" target="_blank" rel="noopener">Read the guide</a> &nbsp; <a class="btn ghost videourl" href="#" target="_blank" rel="noopener">▶ Watch the tour</a></p>
+  </section>
+
+  <p class="foot">SBC Money · <a class="appurl" href="#">sbc.theaubuchonfamily.com</a> · <a class="starturl" href="#">Get started</a> · <a class="guideurl" href="#">guide</a></p>
+</main>
+
+<script>
+'use strict';
+var CONFIG = {
+  appUrl: 'https://sbc.theaubuchonfamily.com',
+  startUrl: 'https://sbc.theaubuchonfamily.com/start.html',
+  guideUrl: 'https://sbc.theaubuchonfamily.com/guide.html',
+  videoUrl: 'https://sbc.theaubuchonfamily.com/how-to-sbc-money.mp4'
+};
+function $$(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
+$$('.appurl').forEach(function (a) { a.href = CONFIG.appUrl; });
+$$('.starturl').forEach(function (a) { a.href = CONFIG.startUrl; });
+$$('.guideurl').forEach(function (a) { a.href = CONFIG.guideUrl; });
+$$('.videourl').forEach(function (a) { a.href = CONFIG.videoUrl; });
+</script>
+</body>
+</html>

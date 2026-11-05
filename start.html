@@ -97,18 +97,14 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
     <div class="hd"><div class="num">1</div><div><h2>A Google account</h2><div class="who">Before anything</div></div></div>
     <div class="body">
       <p>Everything here lives in Google Sheets, so you sign in to SBC Money with a Google account. It does <b>not</b> have to be a Gmail address.</p>
+      <div class="note info"><b>Tip:</b> if you already use Tiller, use the Google account your Tiller spreadsheet lives in. Whatever you pick here is the account for every step below.</div>
       <p><b>Do you already have a Google account?</b></p>
       <div class="yn" data-q="google"><button type="button" data-v="yes">Yes</button><button type="button" data-v="no">No</button></div>
       <div data-show="google=yes">
-        <div class="note ok">Good. Use that account for every step below — the one you'll sign in to SBC Money with. If you have several, pick one now and stick with it.</div>
+        <div class="note ok">Good. If you have several, pick one now and stick with it.</div>
       </div>
       <div data-show="google=no">
-        <p>Make one on the email you already have (Outlook, iCloud, work — anything). Two minutes, no new mailbox:</p>
-        <ol>
-          <li>Open <a href="https://accounts.google.com/signup" target="_blank" rel="noopener">accounts.google.com/signup</a> → <b>For myself</b>.</li>
-          <li>On the email step choose <b>Use my current email address instead</b> and type your usual address.</li>
-          <li>Enter the code Google emails you. Done — that address is now a Google account.</li>
-        </ol>
+        <p>Two minutes at <a href="https://accounts.google.com/signup" target="_blank" rel="noopener">accounts.google.com/signup</a> → <b>For myself</b>. On the email step you can either make a new Gmail address or choose <b>Use my current email address instead</b> and keep the email you already have (Outlook, iCloud, work — anything). Either way, that's the account you'll use for everything below.</p>
       </div>
       <label class="tick"><input type="checkbox" data-done="google"> I have a Google account and I know which one I'll use</label>
     </div>
@@ -118,13 +114,13 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
   <section class="step" data-step="tiller">
     <div class="hd"><div class="num">2</div><div><h2>Tiller — your bank feed</h2><div class="who">Day 1 · then wait a night</div></div></div>
     <div class="body">
-      <p>Tiller pulls your bank, card and loan transactions into a Google Sheet every day. SBC Money reads that sheet. <b>Do you have Tiller set up already?</b></p>
+      <p>Tiller pulls your bank, credit card and loan transactions into a Google Sheet every day. SBC Money reads that sheet. <b>Do you have Tiller set up already?</b></p>
       <div class="yn" data-q="tiller"><button type="button" data-v="yes">Yes</button><button type="button" data-v="no">No</button></div>
       <div data-show="tiller=no">
         <ol>
           <li>Go to <a href="https://www.tiller.com" target="_blank" rel="noopener">tiller.com</a> and start a subscription <b>signed in as the Google account from step 1</b>.</li>
           <li>Pick <b>Google Sheets</b> (not Excel) and the <b>Tiller Foundation Template</b>.</li>
-          <li>In the Tiller Console, link the bank, credit-card and loan accounts you want to budget. The sheet it makes is <b>your Tiller sheet</b>, in your own Google Drive.</li>
+          <li>In the Tiller Console, link the bank, credit card and loan accounts you want to budget. The sheet it makes is <b>your Tiller sheet</b>, in your own Google Drive.</li>
           <li><b>Leave it overnight.</b> Tiller's first full fill (transactions + balance history) lands on the next morning's run. Come back to step 3 tomorrow.</li>
         </ol>
       </div>
@@ -153,7 +149,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
       <p><a class="btn" id="copyBtn" href="#" target="_blank" rel="noopener">Make my copy</a></p>
       <div class="note fail hidden" id="noTemplate">The template link isn't set on this page yet. Ask <span class="op"></span> for it — you'll get a link that ends in <code>/copy</code>.</div>
       <ol>
-        <li>Google asks <b>Copy document?</b> — name it <b>SBC Money — <i>your name</i> (Companion)</b> and press <b>Make a copy</b>. It opens in a new tab.</li>
+        <li>Google asks <b>Copy document?</b> — name it <b>SBC Money - <i>your name</i> (Companion)</b> and press <b>Make a copy</b>. It opens in a new tab.</li>
         <li>Keep that tab open for step 4. Don't type anything into the sheet; the wizard builds every tab itself.</li>
       </ol>
       <label class="tick"><input type="checkbox" data-done="copy"> My copy is open in a tab</label>
@@ -175,13 +171,13 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
       <ol>
         <li><b>Welcome</b> — checks you're in your copy, signed in as its owner. Add your first name if you like.</li>
         <li><b>Tiller</b> — paste your Tiller sheet's address and press <b>Check</b>. Green means ready; amber tells you what to tidy in Tiller but lets you carry on.</li>
-        <li><b>Envelopes</b> — your Tiller categories, as envelopes. Untick any you don't want; keep the optional Savings Buffer; set your time zone.</li>
+        <li><b>Envelopes</b> — your Tiller categories, as envelopes. Untick any you don't want and set your time zone. The optional <b>Savings Buffer</b> is one extra envelope for getting a month ahead: money you set aside now so next month's bills are already covered before the month starts. Keep it unless you know you won't use it.</li>
         <li><b>Create</b> — the only step that writes. Builds your companion sheet. You're the only admin.</li>
         <li><b>Share</b> — one button: your sheets are shared with the app's own account (editor — it imports hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>Not with any person.</b></li>
         <li><b>Finish</b> — the sheet registers itself with SBC Money and runs your first import. About 20 seconds. If it says <b>You're in</b>, you are.</li>
       </ol>
       <details><summary>If Finish says "Not registered yet"</summary>
-        <p>It tells you why — nearly always a share from step 5 that didn't take. Open that sheet → <b>Share</b> → paste the address it names → pick the role → untick <i>Notify people</i> → Share, then press <b>Try again</b>. If it keeps failing, use the <b>Email the code</b> button on that screen; a person registers you by hand the same day.</p>
+        <p>It tells you why — nearly always a share from step 5 that didn't take. Open that sheet → <b>Share</b> → paste the address it names → pick the role → untick <i>Notify people</i> → Share, then press <b>Try again</b>. If it keeps failing, use the <b>Email the code</b> button on that screen and you'll be registered by hand.</p>
       </details>
       <details><summary>If the wizard won't open at all</summary>
         <p>Use <span class="path">Envelope Budget → Migration → Setup — classic prompts (fallback)</span>. It asks the same questions one at a time, then do the four shares by hand and email the code it gives you.</p>
@@ -199,7 +195,8 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
         <li>Share → <b>Add to Home Screen</b> (iPhone: the share square, scroll down; Android: the ⋮ menu → <i>Add to Home screen</i>). It then opens like an app, full screen.</li>
         <li>First session, in this order: <b>Inbox</b> → approve the first batch · <b>Balances → Reconcile to bank</b> into Income Cash Pool · <b>Fund from pool</b>. The <b>CC Payment 💳</b> envelope is pass-through — never fund it.</li>
       </ol>
-      <p><a class="btn ghost videourl" href="#" target="_blank" rel="noopener">▶ Watch the 6-minute tour</a> &nbsp; <a class="btn ghost guideurl" href="#" target="_blank" rel="noopener">Read the guide</a></p>
+      <div class="note info"><b>New to envelope budgeting?</b> Read the <a class="quickurl" href="#">ten-minute quick start</a> before your first session — the two rules, day one, and the payday routine.</div>
+      <p><a class="btn ghost quickurl" href="#">Quick start (10 min)</a> &nbsp; <a class="btn ghost videourl" href="#" target="_blank" rel="noopener">▶ Watch the 6-minute tour</a> &nbsp; <a class="btn ghost guideurl" href="#" target="_blank" rel="noopener">Read the guide</a></p>
       <p class="small">In the app, Settings → <b>How to use</b> has the same help. Settings → <b>Access</b> shows exactly one address — yours — and that you're the admin.</p>
       <label class="tick"><input type="checkbox" data-done="signin"> It's on my home screen and I've approved my first transactions</label>
     </div>
@@ -208,7 +205,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
   <section class="step" style="background:var(--teal-50);border-color:#99e6d9">
     <div class="hd"><div class="num" style="background:#fff">👁</div><div><h2>Who can see your money</h2><div class="who">Plainly</div></div></div>
     <div class="body">
-      <div class="quote">Your bank data lives in <b>your</b> Tiller spreadsheet and <b>your</b> companion spreadsheet, in your Google Drive, which you own. Two service identities get access so the app works: an app account (editor — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>No person is shared on either sheet, nobody else is on your app's access list, and nothing in the app shows anyone your numbers.</b> One honest caveat: someone runs the server the app uses (a database and the app account's password), so like any app's operator they <i>could</i> technically query it. The app keeps a visible record of every such read — Settings → Access → <b>Who has read the database</b> — so you'd see it. You can leave any time: Tiller keeps your complete history in your own spreadsheet.</div>
+      <div class="quote">Your bank data lives in <b>your</b> Tiller spreadsheet and <b>your</b> companion spreadsheet, in your Google Drive, which you own. Two service identities get access so the app works: an app account (editor — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>No person is shared on either sheet, nobody else is on your app's access list, and nothing in the app shows anyone your numbers.</b> Your bank login never leaves Tiller, and the sheets hold only account names with the last four digits — nobody, operator included, can see full account numbers or passwords. One honest caveat: someone runs the server the app uses (a database and the app account's password), so like any app's operator they <i>could</i> technically query it. The app keeps a visible record of every such read — Settings → Access → <b>Who has read the database</b> — so you'd see it. You can leave any time: Tiller keeps your complete history in your own spreadsheet.</div>
     </div>
   </section>
 
@@ -217,7 +214,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
     <div class="body">
       <table>
         <tr><th>You see</th><th>Why</th><th>Do</th></tr>
-        <tr><td>"…is not a family or registered SBC account" at sign-in</td><td>Finish (step 4.6) didn't complete</td><td>Open your copy → run the wizard again; it goes straight to Share and Finish</td></tr>
+        <tr><td>"…is not registered with SBC Money yet" at sign-in</td><td>Finish (step 4.6) didn't complete</td><td>Open your copy → run the wizard again; it goes straight to Share and Finish</td></tr>
         <tr><td>"…is not on the allowlist"</td><td>You ran the wizard as one Google account and signed in with another</td><td>Sign in with the account that made the copy</td></tr>
         <tr><td>App shows no transactions a day later</td><td>A share didn't take, or Tiller hasn't filled yet</td><td>Run the wizard again (Share re-checks); open your Tiller sheet and confirm it has transactions</td></tr>
         <tr><td>Wizard: "This is the template, not your copy"</td><td>You're in the template</td><td>Press <b>Make my copy</b> in step 3 and run the wizard in the copy</td></tr>
@@ -227,7 +224,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
     </div>
   </section>
 
-  <p class="foot">SBC Money · <a class="appurl" href="#">sbc.theaubuchonfamily.com</a> · <a class="guideurl" href="#">guide</a></p>
+  <p class="foot">SBC Money · <a class="appurl" href="#">sbc.theaubuchonfamily.com</a> · <a class="quickurl" href="#">quick start</a> · <a class="guideurl" href="#">guide</a></p>
 </main>
 
 <script>
@@ -241,6 +238,7 @@ var CONFIG = {
   templateId: '1IAgbyaLinqZb0jQzOfCM1xKGWX3-8IqsQvxz-OJnsac',   // 11/5/26: SBC Money — Companion (TEMPLATE — make a copy), owned by the app account
   appUrl: 'https://sbc.theaubuchonfamily.com',
   guideUrl: 'https://sbc.theaubuchonfamily.com/guide.html',
+  quickUrl: 'https://sbc.theaubuchonfamily.com/quickstart.html',
   videoUrl: 'https://sbc.theaubuchonfamily.com/how-to-sbc-money.mp4',
   operatorEmail: 'scott@theaubuchonfamily.com'
 };
@@ -288,6 +286,7 @@ function wire() {
   // links from CONFIG
   $$('.appurl').forEach(function (a) { a.href = CONFIG.appUrl; });
   $$('.guideurl').forEach(function (a) { a.href = CONFIG.guideUrl; });
+  $$('.quickurl').forEach(function (a) { a.href = CONFIG.quickUrl; });
   $$('.videourl').forEach(function (a) { a.href = CONFIG.videoUrl; });
   $$('.op').forEach(function (s) { s.textContent = CONFIG.operatorEmail; });
   $$('.opmail').forEach(function (a) { a.href = 'mailto:' + CONFIG.operatorEmail + '?subject=' + encodeURIComponent('SBC Money setup'); });
