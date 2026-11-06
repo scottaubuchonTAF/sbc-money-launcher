@@ -1480,11 +1480,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.103.0';
+var FE_VERSION = 'v3.104.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.103.0+20261106.0948';
+var BUILD_ID = 'v3.104.0+20261106.1003';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1549,6 +1549,7 @@ function undoNow_(opId, what){
   toast('Undoing'+(what?' '+what:'')+'…');
   run('apiUndo', opId).then(function(){
     toast('Undone ✓');
+    state.pendingRemoved = {};   // v3.104.0: an undone removal must show again at once
     state.inbox=null; state.history=null; state.rules=null;   // v3.79.0: +rules
     invalidateData();
     refreshBoot().catch(function(){});
@@ -1673,6 +1674,7 @@ function ensureAuth(){
 // (Tiller writes aren't idempotent, so a double-click could double-apply). Reads
 // are never blocked.
 var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, apiMove:1,
+  apiRemoveInbox:1, // v3.104.0 — Apps-Script-only (the Inbox tab is the truth); the next Inbox read re-reads the sheet
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
   apiSetEnvelopeHidden:1, // v3.51
@@ -2450,6 +2452,11 @@ function filterInbox(rows){
     if(have[k] || (now - e.ts) >= PENDING_APPROVED_TTL){ delete state.pendingUnapproved[k]; return; }
     out.unshift(e.row);
   });
+  // v3.104.0: rows just removed as duplicates stay hidden until the mirror's next
+  // sheet re-read stops carrying them (≤ 2 min). Any undo clears the whole set.
+  var rm = state.pendingRemoved || {};
+  Object.keys(rm).forEach(function(k){ if(!present[k] || (now - rm[k]) >= 2*60*1000) delete rm[k]; });
+  out = out.filter(function(t){ return !(pendingKeyOf(t) in rm); });
   return out;
 }
 /* v3.27 SWR helpers: a view whose data was fetched in the last TTL (and not
@@ -4783,10 +4790,11 @@ function drawInbox(){
     else if(state.sel[t.txnId] || t.suggestedId) autoTs.push(t); else otherTs.push(t);
   });
   if(dupTs.length){
-    h += '<div class="grp"><h3>Possible duplicates · '+dupTs.length+'</h3>'+
+    h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">Possible duplicates · '+dupTs.length+
+      (dupTs.length>1 ? '<button class="btn sm danger" data-act="inbox-remove-dups">Remove all ('+dupTs.length+')</button>' : '')+'</h3>'+
       '<div class="note" style="padding:0 2px 10px">Each of these matches a transaction on another account — same amount, a few days apart, same merchant. '+
       'That usually means a card was re-linked under a new name and the bank sent the same charges again. '+
-      'If it is a copy, delete it from the Inbox tab of your SBC sheet. If it is real, approve it as usual.</div>';
+      'If it is a copy, remove it. If it is real, approve it as usual. Every removal can be undone from History.</div>';
     dupTs.forEach(function(t){ h += inboxCardHtml(t); });
     h += '</div>';
   }
@@ -4877,7 +4885,8 @@ function inboxCardHtml(t){
       // v3.6.9: no per-txn funding — deposits are approved into the Income
       // Cash Pool like everything else; funding happens on the Fund page.
       h += '</div>'+ruleWhyHtml_(t)+inboxTagsHtml(t)+noteLineHtml(t.txnId, inboxNoteOf(t.txnId))+'<div class="actions">'+   // v3.98.0: note   // v3.79.0: which rule suggested it
-        '<button class="btn" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
+        (t.dup ? '<button class="btn danger" data-act="inbox-remove" data-arg="'+esc(t.txnId)+'">Remove duplicate</button>' : '')+   // v3.104.0
+        '<button class="btn'+(t.dup?' ghost':'')+'" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
         // v3.79.0 (decision 4): say WHICH words the rule will match - the short form, not the whole description
         '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this'+
           '<span class="rulewords">\u201c'+esc(ruleMatchText_(t.description))+'\u201d</span></label>'+
@@ -5008,6 +5017,44 @@ function approveAll(){
       else if(r.tillerWrite && r.tillerWrite.written) msg += ' · Tiller ✓';
       toast(msg);
     }).catch(function(e){ toast('⚠ '+(e.message||e)); drawInbox(); });
+  });
+}
+/* v3.104.0 — remove Inbox rows the duplicate monitor flagged. One row: no dialog,
+   an Undo on the toast. Several: confirm first (Remove all is a big button).
+   Apps-Script-only write (Ledger.gs apiRemoveInbox): one audit op per row, so
+   History can put any single one back. pendingApproved hides the rows until the
+   mirror's next sheet re-read stops carrying them — same as an approve. */
+function inboxRemove_(txnIds){
+  var rows = (state.inbox||[]).filter(function(t){ return txnIds.indexOf(t.txnId)>-1; });
+  if(!rows.length){ toast('Nothing to remove'); return; }
+  var items = rows.map(function(t){ var d=t.dup||{};
+    return { txnId:t.txnId, key:t.key, reason:'duplicate of '+(d.description||'')+' '+(d.date||'')+' on '+(d.account||'') }; });
+  var go = rows.length===1 ? Promise.resolve(true) :
+    confirmUi('Remove '+rows.length+' possible duplicates from the Inbox?\n\n'+
+      'They are not approved and change no balances. Each one can be put back from History.', 'Remove '+rows.length);
+  go.then(function(ok){
+    if(!ok) return;
+    busyButtons(true);
+    toast('Removing '+rows.length+'…');
+    run('apiRemoveInbox', items).then(function(r){
+      var done = {}, ops = [];
+      (r.results||[]).forEach(function(x){ if(!x.error){ done[x.txnId]=1; if(x.opId) ops.push(x.opId); } });
+      var gone = rows.filter(function(t){ return done[t.txnId]; });
+      state.pendingRemoved = state.pendingRemoved || {};
+      gone.forEach(function(t){ state.pendingRemoved[pendingKeyOf(t)] = Date.now(); });
+      state.inbox = state.inbox.filter(function(t){ return !done[t.txnId]; });
+      gone.forEach(function(t){ delete state.sel[t.txnId]; delete state.split[t.txnId]; });
+      clearInboxTags_(Object.keys(done));
+      setInboxCount_(state.inbox.length);
+      state.history = null;
+      busyButtons(false);
+      drawInbox();
+      var failed = rows.length - gone.length;
+      var msg = 'Removed '+gone.length+(failed ? ' · '+failed+' failed (still in inbox)' : ' ✓');
+      // one row: Undo right here. Clear its pending mark first or the restored row stays hidden.
+      if(ops.length===1) toast(msg, { label:'Undo', fn:function(){ undoNow_(ops[0], 'removal'); } });
+      else toast(msg + (gone.length ? ' · undo any of them from History' : ''));
+    }).catch(function(e){ busyButtons(false); toast('⚠ '+(e.message||e)); drawInbox(); });
   });
 }
 function cssId(s){ return String(s).replace(/[^a-zA-Z0-9_-]/g,'_'); }
@@ -10306,7 +10353,8 @@ function renderHowTo(){
     P('As you spend, transactions flow into the <b>Inbox</b> on their own (it syncs from your bank every hour; <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour, and on the phone, pulling the page down does the same). A few times a week, clear it:')+
     B('Most items arrive with a <b>suggestion pill</b> — one tap to approve if it is right.')+
     B('Tick <b>Always suggest this</b> when approving and that store is suggested automatically from then on. The card shows the words the rule will look for (“Hannaford Supermarket”, not “Hannaford Supermarket 8123”); the message after has <b>Edit rule</b>. An Inbox card filled in by a rule says <b>Suggested by rule …</b> — tap <b>edit</b> to fix a wrong one right there.')+
-    B('<b>✓ Approve all</b> takes everything that already has a suggestion.')+
+    B('<b>✓ Approve all</b> takes everything that already has a suggestion — except <b>possible duplicates</b>.')+
+    B('<b>Possible duplicates</b> sit at the top of the Inbox. A card lands there when another account already has the same charge — same amount, same store, a few days apart — which is what happens when a bank re-links a card under a new name and sends its recent charges again. The card says what it matches. <b>Remove duplicate</b> takes it out (no balance changes; History can put it back); if it is real, approve it as usual.')+
     B('One purchase, two jobs? <b>Split</b> spreads it across envelopes (the Walmart run that was half groceries, half a game).')+
     B('<b>Tag as you approve</b>: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there ride along with the approval — one entry in History, one Undo.')+
     B('<b>Add a note</b> the same way: <b>+ note</b> on the card (“Birthday gift for Mom”, “Brady owes me half”). It rides along with the approval and shows under the transaction from then on.')+
@@ -10530,6 +10578,7 @@ function doUndo(opId){
     actBusy('undo', true, 'Undoing…'); // v3.27: instant feedback
     run('apiUndo', opId).then(function(){
       toast('Undone ✓');
+      state.pendingRemoved = {};   // v3.104.0
       state.inbox=null; state.rules=null;   // v3.79.0: an undone rule change must not show from cache
       invalidateData();
       refreshBoot();
@@ -10799,6 +10848,9 @@ document.addEventListener('click', function(ev){
     case 'home-move': homeMove_(p[0], p[1]); break;
     case 'approve': approve(arg); break;
     case 'approve-all': approveAll(); break;
+    case 'inbox-remove': inboxRemove_([arg]); break;          // v3.104.0
+    case 'inbox-remove-dups': inboxRemove_((state.inbox||[]).filter(function(t){ return t.dup; })
+      .map(function(t){ return t.txnId; })); break;
     case 'approve-split': approveSplit(arg); break;
     case 'pick-sel': state.sel[p[0]]=p[1]; drawInbox(); break;
     case 'split-on':
