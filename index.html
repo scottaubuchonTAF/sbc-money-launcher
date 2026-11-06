@@ -1483,11 +1483,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.106.0';
+var FE_VERSION = 'v3.106.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.106.0+20261106.1405';
+var BUILD_ID = 'v3.106.1+20261106.1448';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -8478,6 +8478,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.106.1', d:'Nov 6, 2026', items:[
+    'What’s new now goes all the way back to the first releases in June.' ]},
   { v:'v3.106.0', d:'Nov 6, 2026', items:[
     'This page. Settings → What’s new lists what changed in each release.' ]},
   { v:'v3.105.2', d:'Nov 6, 2026', items:[
@@ -8510,7 +8512,89 @@ var WHATS_NEW = [
     'Suggestion rules (Settings → Suggestion rules) open much faster.' ]},
   { v:'v3.94', d:'Oct 8, 2026', items:[
     'Notifications clear themselves: open the app or empty the Inbox and they go away, on every device. Alerts about a problem close once the problem is gone.',
-    'On a phone, <b>pull down</b> on a page to refresh it.' ]}
+    'On a phone, <b>pull down</b> on a page to refresh it.' ]},
+  { v:'v3.93', d:'Oct 1–2, 2026', items:[
+    '<b>The month’s budget comes from your funding plans</b> (Settings → Budget &amp; paychecks). Old and seasonal plans no longer pile into it.',
+    'The “balance stopped updating” banner goes away by itself once the balance moves again, and the Obligations card keeps up with your balances.',
+    'Changes in Settings show up everywhere right away.' ]},
+  { v:'v3.92', d:'Oct 1, 2026', items:[
+    'Balances update together with the transactions, instead of up to an hour later.',
+    'A yearly contribution setting for accounts whose bank sends balances but no transactions (an HSA, for example).' ]},
+  { v:'v3.91', d:'Oct 1, 2026', items:[
+    '<b>Wealth</b> shows on Home and in Reports. “You added” is itemized.',
+    'A HealthEquity HSA shows as one account, and an account whose bank stopped sending data is named.' ]},
+  { v:'v3.89', d:'Sep 30 – Oct 1, 2026', items:[
+    'A new <b>Wealth</b> page: <b>Snapshot</b> (what you own and owe), <b>Growth</b> (net worth over time, which replaces the Net worth report), <b>Analysis</b>, <b>Planning</b> and <b>Estate</b>.' ]},
+  { v:'v3.83', d:'Sep 29, 2026', items:[
+    '<b>Notifications</b> (Settings → Notifications): new transactions to approve, a bank balance that stops updating, a bill coming due that’s short, or a sync problem. They arrive right after the import.',
+    'Dates follow your own time zone.',
+    'Home opens faster, and Undo keeps dates as dates.' ]},
+  { v:'v3.79', d:'Sep 25–28, 2026', items:[
+    '<b>Suggestion rules</b> (Settings → Suggestion rules): see every “Always suggest this” rule, change its words or envelope, reorder or delete it, and preview what it would catch.',
+    'An Inbox card filled in by a rule says so, with a quick way to fix it.',
+    'The “balance stopped updating” alert no longer counts a deposit twice.' ]},
+  { v:'v3.78', d:'Sep 23, 2026', items:[
+    '<b>Budget health accounts for every cent</b>: money awaiting approval, charges the bank hasn’t sent yet and payments still in flight are each shown, so only a real problem is flagged.',
+    'Saving never waits on a slow refresh.' ]},
+  { v:'v3.77', d:'Sep 21–22, 2026', items:[
+    'Home’s Recent activity always shows everything, whatever filter you used elsewhere.',
+    'About shows which version is running.' ]},
+  { v:'v3.76', d:'Sep 16–18, 2026', items:[
+    '<b>Envelopes and Tiller categories are one list</b>: creating, renaming, grouping, hiding or archiving an envelope does the same to the Tiller category.',
+    'A <b>Log out</b> button, and Settings sits next to it at the bottom of the menu.',
+    '“Available to fund” is the money in the pool, and the card says where the rest is.',
+    'Accounts you keep by hand can be updated right on the Balances page.' ]},
+  { v:'v3.75', d:'Sep 2026', items:[
+    '<b>Goals</b>: save toward something by a date, and see how far along you are. An envelope can also have a <b>Max</b>.' ]},
+  { v:'v3.73', d:'Sep 2026', items:[
+    'Add tags right on the Inbox card as you approve.',
+    'A new funding plan shows up right away.' ]},
+  { v:'v3.72', d:'Sep 2026', items:[
+    'Tap an account on Balances to see its transactions.',
+    '<b>More</b> is for pages, <b>Settings</b> is for settings. Balances has its own tab; Obligations has its own page and opens fast.',
+    'Budget health is quiet when everything adds up, and plain about it when it doesn’t.',
+    'One tap back, and Undo right on the message after you save.' ]},
+  { v:'v3.66', d:'Early Sep 2026', items:[
+    'If a save doesn’t reach your Tiller sheet, a banner on Home says so and offers to retry.',
+    'Approve all is fast, however many you approve.',
+    'The refresh button tells you whether it actually refreshed.',
+    'Activity says where the money went.' ]},
+  { v:'v3.59', d:'Late Aug 2026', items:[
+    '<b>Obligations</b>: will the money be in the right account when a bill is due?',
+    '<b>Tags</b> on transactions, and new <b>Reports</b> that use them.',
+    'Seasonal themes, and a little something on your birthday.' ]},
+  { v:'v3.55', d:'Mid Aug 2026', items:[
+    'Moving money between envelopes is fast, in either direction.',
+    '<b>Hide</b> an envelope you don’t use.',
+    'Renaming an envelope renames it in Tiller too.',
+    'You can approve a $0.00 transaction.',
+    'SBC tells you when a bank balance stops updating.' ]},
+  { v:'v3.49', d:'Late Jul – early Aug 2026', items:[
+    'Approving on a phone works smoothly.',
+    'Account groups whose names start with “_” (like “_Checking”) count in Budget health, and Settings has quick links to your Tiller sheet.',
+    'Budget health shows money still in flight between accounts.',
+    'Home keeps up as you approve, and <b>Refresh from Tiller</b> pulls the latest on demand.' ]},
+  { v:'v3.38', d:'Jul 2026', items:[
+    '<b>Much faster</b>: Home, approvals, funding and the Inbox respond instantly instead of after a few seconds.',
+    'A new Home screen.' ]},
+  { v:'v3.28', d:'Early Jul 2026', items:[
+    'The app opens faster.',
+    'Choose how dense the screens are (Settings), and see transactions on a single line.' ]},
+  { v:'v3.25', d:'Late Jun – early Jul 2026', items:[
+    '<b>Reports</b>.',
+    'Tiller syncs in the background, so you don’t wait for it.',
+    'A <b>How to use SBC Money</b> guide.',
+    'More than one person can use the app, and Sign-ins &amp; activity shows who opened it.' ]},
+  { v:'v3.19', d:'Jun 2026', items:[
+    '<b>Funding plans</b>: fund all your envelopes in one step.',
+    'Create, rename and archive envelopes, and fund part of what an envelope needs.',
+    'Spot when the bank feed is running behind.',
+    'A Home screen you can arrange, with charts.' ]},
+  { v:'v3.10', d:'Jun 2026', items:[
+    'Splits carry over to your Tiller sheet.',
+    'Settings, with who can sign in, a Log out, and Remove a transaction.',
+    'Put your accounts in the order you like.',
+    'Reconcile an account, and update a balance by hand (it’s written to Tiller too).' ]}
 ];
 var WHATS_NEW_SEEN_KEY = 'sbcWhatsNewSeen';
 function whatsNewUnseen_(){
