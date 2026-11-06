@@ -1478,11 +1478,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.102.10';
+var FE_VERSION = 'v3.102.11';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.102.10+20261105.2216';
+var BUILD_ID = 'v3.102.11+20261105.2231';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1679,6 +1679,7 @@ var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, 
   apiRecategorizeTxn:1, apiRemoveTxn:1, apiMirrorSplitToTiller:1, apiSnapshotBalances:1,
   apiSnapshotEnvelopesToTiller:1, apiBackfillCategories:1, apiSetManualAccount:1,
   apiAddMissingTillerCategories:1, // v3.76.1
+  apiDeleteAccount:1, // v3.102.11: never abort it client-side (the bridge keeps going); the live test's "Failed to fetch" was a finished delete
   apiSetHealthSettings:1, apiSetAllowedEmails:1, apiPlanFromTiller:1, apiUndo:1,
   apiImportNow:1, apiSetAccountHidden:1, apiSetBalanceGroupOrder:1,
   apiSetBalanceAccountOrder:1, apiAcceptTillerTxn:1, apiSetDashLayout:1,
@@ -1843,7 +1844,8 @@ function apiCall_(fn, args, retry, mutating){
    then drop the views that read it. Never blocks or fails the write - it is a background tidy-up. */
 var SETTINGS_WRITE_FNS = { apiSetAccountHidden:1, apiSetBalanceGroupOrder:1, apiSetBalanceAccountOrder:1,
   apiSetSpendingAccount:1, apiSetHealthSettings:1, apiSetManualAccount:1, apiSetAllowedEmails:1,
-  apiSetDashLayout:1, apiSetDensity:1, apiSetBirthday:1, apiSetTimeZone:1 };
+  apiSetDashLayout:1, apiSetDensity:1, apiSetBirthday:1, apiSetTimeZone:1,
+  apiDeleteAccount:1 };   // v3.102.11: a member leaving edits the owner's Allowed Emails; for an owner the refresh just finds no row (harmless)
 function settingsMirrorRefresh_(fn){
   if(!supaOn_()) return Promise.resolve(null);
   return supaCall_('apiRefreshSettings', []).then(function(r){
@@ -9430,13 +9432,21 @@ function deleteAccountRun_(){
         ? (errs.length ? 'Your access is removed, but part of the clean-up did not finish: '+errs.join('; ')+'.' : 'Your access to this budget has been removed. The budget itself is untouched.')
         : errs.length
         ? 'Your account is deleted, but part of the clean-up did not finish: '+errs.join('; ')+'. Scott has been emailed and will finish it by hand.'
-        : 'Your SBC Money account is deleted'+(db.rows!=null?' ('+db.rows+' rows removed)':'')+'. Your sheets are still in your Google Drive.';
+        : 'Your SBC Money account is deleted. Your sheets are still in your Google Drive.';
       $('#ovl').innerHTML = '';
       signOutNow_();
       confirmUi(msg, 'OK');
     }).catch(function(e){
       $('#ovl').innerHTML = '';
-      confirmUi('The account could not be deleted: '+String(e && e.message || e)+'. Nothing was changed. Try again, or email '+OPERATOR_EMAIL_+'.', 'OK');
+      var m = String(e && e.message || e);
+      // v3.102.11: a network-level failure ("Failed to fetch", "took too long") means the browser
+      // never saw the answer - the bridge may well have finished. Say that, instead of "nothing
+      // was changed" (which was false in the 11/5 live test).
+      if(/failed to fetch|took too long|network/i.test(m)){
+        confirmUi('The answer did not come back from the server, so it is not certain whether the deletion finished. Reload the page and sign in again: if sign-in says you are not registered, your account is gone. If you get back in, press Delete my account once more.', 'OK');
+      } else {
+        confirmUi('The account could not be deleted: '+m+'. Nothing was changed. Try again, or email '+OPERATOR_EMAIL_+'.', 'OK');
+      }
     });
   }
 }
