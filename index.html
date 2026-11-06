@@ -1478,11 +1478,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.102.9';
+var FE_VERSION = 'v3.102.10';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.102.9+20261105.2204';
+var BUILD_ID = 'v3.102.10+20261105.2216';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -9658,13 +9658,24 @@ function adminAdd(){
   var list = (state.access.allowed||[]).slice();
   if(list.indexOf(em)>-1){ toast('Already on the list'); return; }
   list.push(em);
-  adminSave(list).then(function(ok){ if(ok) toast('Access granted ✓ — they can sign in now'); });
+  // v3.102.10 (Scott: "it takes a while and you kinda don't know what's going on"): the button
+  // says what it is doing and the card explains the wait until the answer comes back.
+  var btn = $('[data-act="admin-add"]'); if(btn){ btn.disabled = true; btn.textContent = 'Giving access…'; }
+  el.disabled = true;
+  var wait = document.createElement('div'); wait.className = 'note'; wait.style.padding = '8px 2px 0';
+  wait.innerHTML = '<span class="spin" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:6px"></span>Registering '+esc(em)+' so they can sign in — a few seconds.';
+  el.parentNode.appendChild(wait);
+  adminSave(list).then(function(ok){
+    if(ok) toast('Access granted ✓ — they can sign in now');
+    else { if(btn){ btn.disabled = false; btn.textContent = 'Give access'; } el.disabled = false; try{ wait.remove(); }catch(e){} }
+  });
 }
 function adminRemove(em){
   confirmUi('Remove access for '+em+'?', 'Remove').then(function(ok){
     if(!ok) return;
     var list = (state.access.allowed||[]).filter(function(x){ return x!==em; });
-    adminSave(list).then(function(ok){ if(ok) toast('Access removed ✓'); });
+    var btn = $('[data-act="admin-remove"][data-arg="'+em.replace(/"/g,'')+'"]'); if(btn){ btn.disabled = true; btn.textContent = 'Removing…'; }   // v3.102.10
+    adminSave(list).then(function(ok){ if(ok) toast('Access removed ✓'); else if(btn){ btn.disabled = false; btn.textContent = 'Remove'; } });
   });
 }
 
