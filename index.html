@@ -1483,11 +1483,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.105.2';
+var FE_VERSION = 'v3.106.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.105.2+20261106.1349';
+var BUILD_ID = 'v3.106.0+20261106.1405';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3334,7 +3334,7 @@ function render(){
     try{ rptChart.destroy(); }catch(e){} rptChart=null;
   }
   var shell = $('#shell');
-  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='rules' || state.view==='notify' || state.view==='budgetset' ? ' narrow':'');   // v3.79.0: +rules   // v3.80.0: +notify
+  shell.className = 'shell' + (['inbox','fund','more','settings','maint','admin','removetxn','reconcile','history','envelopes','envdetail','about','healthset','howto','activity','obligations','personal','goals'].indexOf(state.view)!==-1 || state.view==='whatsnew' || state.view==='rules' || state.view==='notify' || state.view==='budgetset' ? ' narrow':'');   // v3.79.0: +rules   // v3.80.0: +notify
   if(state.view==='dash') renderDash();
   else if(state.view==='inbox') renderInbox();
   else if(state.view==='fund') renderFund();
@@ -3362,6 +3362,7 @@ function render(){
   else if(state.view==='wealth') renderWealth();        // v3.85.0
   else if(state.view==='about') renderAbout();
   else if(state.view==='howto') renderHowTo();
+  else if(state.view==='whatsnew') renderWhatsNew();   // v3.106.0
   else if(state.view==='activity') renderActivity();
   else renderHistory();
 }
@@ -8462,9 +8463,69 @@ function renderSettings(){
   h += densityControl();                                   // emits its own DISPLAY label
   h += '<div class="card morelist" style="margin-top:14px">'+seasonControl()+'</div>';
   h += settingsSectionLabel('APP')+settingsList([
+    ['whatsnew','What’s new'+(whatsNewUnseen_() ? ' <span class="pill sugg" style="margin-left:6px;padding:1px 8px;font-size:11px">New</span>' : '')],   // v3.106.0
     ['howto','How to use SBC Money'],
     ['maint','Maintenance'],
     ['about','About']]);
+  $('#shell').innerHTML = h;
+}
+
+/* ============================ What's new (v3.106.0) ============================
+   Scott, 11/6/26: an in-app release log for the people using the app - "the
+   stripped down version" - with the full technical log in CHANGELOG.md for him.
+   Plain language only: what you will notice, never how. Leave out releases a user
+   would not notice. Newest first; the first entry's version drives the "New" pill
+   on Settings until this page is opened on this device. Add an entry with every
+   release that changes something a person can see. */
+var WHATS_NEW = [
+  { v:'v3.106.0', d:'Nov 6, 2026', items:[
+    'This page. Settings → What’s new lists what changed in each release.' ]},
+  { v:'v3.105.2', d:'Nov 6, 2026', items:[
+    'The Areas report leaves out envelopes you’ve hidden. You can still pick a hidden envelope in the filter to see it.' ]},
+  { v:'v3.105.1', d:'Nov 6, 2026', items:[
+    'Top spending areas on Home leaves out envelopes you’ve hidden.' ]},
+  { v:'v3.105.0', d:'Nov 6, 2026', items:[
+    '<b>When a card is replaced.</b> If your bank links a card as a new account and sends its recent charges again (like Discover becoming Capital One), a note at the top of the Inbox tells you which charges are copies. <b>Remove the copies</b> takes them out of Tiller and SBC, and each one can be put back from History. If both accounts really are yours, tap <b>They’re both real</b>.' ]},
+  { v:'v3.102.12', d:'Nov 6, 2026', items:[
+    'Budget health names the account that has gone longest without an update, e.g. “Oldest balance row · Rewards Checking 9/18/26”. Only the accounts counted in your budget are checked.' ]},
+  { v:'v3.102', d:'Nov 5, 2026', items:[
+    'Settings → <b>Account &amp; privacy</b> (it used to be “Access”) is where you see who can sign in to your budget.',
+    '<b>Delete my account</b> on that page removes you and everything of yours from SBC Money. Your Tiller sheet and SBC sheet stay in your Google Drive.' ]},
+  { v:'v3.100', d:'Nov 5, 2026', items:[
+    'New people can set themselves up from a <b>Get Started</b> page: it checks they have a Google account and Tiller, makes their copy of the SBC sheet, and walks them through setup.' ]},
+  { v:'v3.99', d:'Nov 4–5, 2026', items:[
+    '<b>Who has read the database</b> (Settings → Account &amp; privacy) shows, in plain English, every time anyone other than the app itself looked at the database — including the person who runs it.' ]},
+  { v:'v3.98.0', d:'Oct 30, 2026', items:[
+    '<b>Notes on transactions.</b> Add a note on the Inbox card when you approve, or later on Transactions (“Birthday gift for Mom”). It’s saved to your Tiller sheet too.',
+    'On a computer, <b>Save split</b> on the Transactions page now turns on as soon as the split adds up.' ]},
+  { v:'v3.97', d:'Oct 13–19, 2026', items:[
+    'The Inbox badge counts only what the Inbox actually shows.',
+    'Top spending areas no longer counts card payments (the purchases already count in their own envelopes).',
+    'Big numbers fit the small tiles on a phone.',
+    'A setup wizard for new people, right inside their SBC sheet.' ]},
+  { v:'v3.96.0', d:'Oct 12, 2026', items:[
+    'People outside the family can be given their own SBC Money, signing in with any Google account.',
+    'A rewritten <b>How to use SBC Money</b> guide, plus a short video.' ]},
+  { v:'v3.95', d:'Oct 8, 2026', items:[
+    'Suggestion rules (Settings → Suggestion rules) open much faster.' ]},
+  { v:'v3.94', d:'Oct 8, 2026', items:[
+    'Notifications clear themselves: open the app or empty the Inbox and they go away, on every device. Alerts about a problem close once the problem is gone.',
+    'On a phone, <b>pull down</b> on a page to refresh it.' ]}
+];
+var WHATS_NEW_SEEN_KEY = 'sbcWhatsNewSeen';
+function whatsNewUnseen_(){
+  try{ return localStorage.getItem(WHATS_NEW_SEEN_KEY) !== WHATS_NEW[0].v; }catch(e){ return false; }
+}
+function renderWhatsNew(){
+  try{ localStorage.setItem(WHATS_NEW_SEEN_KEY, WHATS_NEW[0].v); }catch(e){}
+  var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
+    '<h2 class="viewtitle">What’s new</h2>';
+  WHATS_NEW.forEach(function(r){
+    h += '<div class="grp"><h3>'+esc(r.d)+' <span style="opacity:.55;font-weight:500">· '+esc(r.v)+'</span></h3>'+
+      '<div class="card" style="padding:12px 14px"><ul style="margin:0;padding-left:18px">'+
+      r.items.map(function(t){ return '<li style="margin:4px 0;line-height:1.45">'+t+'</li>'; }).join('')+
+      '</ul></div></div>';
+  });
   $('#shell').innerHTML = h;
 }
 
