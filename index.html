@@ -331,7 +331,9 @@ aside.side{display:none}
 .txncard .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .txncard .desc{font-weight:700;font-size:15.5px;min-width:0}
 .txncard .dupwarn{margin:8px 0 2px;padding:7px 10px;border-radius:8px;font-size:13px;line-height:1.35;
-  background:color-mix(in srgb,var(--amber,#d97706) 12%,transparent);color:var(--ink);border-left:3px solid var(--amber,#d97706)} /* v3.103.0 */
+  background:color-mix(in srgb,var(--amber,#d97706) 12%,transparent);color:var(--ink);border-left:3px solid var(--amber,#d97706)} /* v3.105.0: "copy of a charge on …" */
+.replnote{border-left:4px solid var(--amber,#d97706)} .replnote ul{margin:6px 0 0 18px;padding:0} .replnote li{margin:2px 0}
+.replnote .actions{flex-wrap:wrap;gap:8px} /* v3.105.0 replaced-account notice */
 .txncard .amt{font-weight:800;font-size:17px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .txncard .amt.neg{color:var(--ink)} .txncard .amt.pos{color:var(--green)}
 .txncard .meta{color:var(--ink-3);font-size:12.5px;margin-top:3px}
@@ -1308,6 +1310,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiArchivedEnvelopes:1, apiPlans:1, apiEnvelopeTxns:1, apiInspectTxn:1, apiAccountsFull:1, // v3.37 slice 2 cont: plans/drilldowns/accounts-full
   apiGetInbox:1, // v3.38 slice 2c: inbox (edge fn refreshes it from the sheet first)
   apiWriteBackStatus:1, // v3.60: failed write-backs (mirror-only)
+  apiReplacements:1,    // v3.105.0: replaced-account notice on the Inbox (mirror-only; reads the Tiller feed's Date Added)
   apiGoals:1,           // v3.75.0: goals + max (targets rows; its write is Apps-Script-only → MIRROR_REFRESH_ONE)
   apiWealth:1,          // v3.85.0: the Wealth page's one call (mirror-only; SBC-owned tables + the mirror)
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
@@ -1342,7 +1345,7 @@ var SUPA_WRITES = { apiApprove:1, apiApproveBatch:1, apiRecategorizeTxn:1,
    Apps Script has never heard of it). A definitive mirror error must NOT fall
    back to Apps Script — it would just answer "unknown function" after a slow
    round trip — and it must never set the dirty flag (nothing in the sheet moved). */
-var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1, // v3.62: +apiRefreshMirror
+var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStatus:1, apiRefreshMirror:1, apiReplacements:1, // v3.105.0 // v3.62: +apiRefreshMirror
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: notifications live only in the mirror
   apiPushClear:1,       // v3.94.0
   apiWealth:1, apiWealthSave:1, // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
@@ -1480,11 +1483,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.104.0';
+var FE_VERSION = 'v3.105.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.104.0+20261106.1003';
+var BUILD_ID = 'v3.105.0+20261106.1056';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1549,7 +1552,7 @@ function undoNow_(opId, what){
   toast('Undoing'+(what?' '+what:'')+'…');
   run('apiUndo', opId).then(function(){
     toast('Undone ✓');
-    state.pendingRemoved = {};   // v3.104.0: an undone removal must show again at once
+    try{ localStorage.removeItem(REPL_GONE_KEY); }catch(e){}   // v3.105.0: ...and an undone copy removal
     state.inbox=null; state.history=null; state.rules=null;   // v3.79.0: +rules
     invalidateData();
     refreshBoot().catch(function(){});
@@ -1674,7 +1677,8 @@ function ensureAuth(){
 // (Tiller writes aren't idempotent, so a double-click could double-apply). Reads
 // are never blocked.
 var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, apiMove:1,
-  apiRemoveInbox:1, // v3.104.0 — Apps-Script-only (the Inbox tab is the truth); the next Inbox read re-reads the sheet
+  apiDismissReplacement:1, // v3.105.0 — "They're both real": a Settings row the mirror's apiReplacements reads
+  apiRemoveCopies:1,       // v3.105.0 — a replaced account's copies out of Tiller + the Inbox (Apps Script; re-checks every row)
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
   apiSetEnvelopeHidden:1, // v3.51
@@ -1849,6 +1853,7 @@ function apiCall_(fn, args, retry, mutating){
 var SETTINGS_WRITE_FNS = { apiSetAccountHidden:1, apiSetBalanceGroupOrder:1, apiSetBalanceAccountOrder:1,
   apiSetSpendingAccount:1, apiSetHealthSettings:1, apiSetManualAccount:1, apiSetAllowedEmails:1,
   apiSetDashLayout:1, apiSetDensity:1, apiSetBirthday:1, apiSetTimeZone:1,
+  apiDismissReplacement:1, // v3.105.0
   apiDeleteAccount:1 };   // v3.102.11: a member leaving edits the owner's Allowed Emails; for an owner the refresh just finds no row (harmless)
 function settingsMirrorRefresh_(fn){
   if(!supaOn_()) return Promise.resolve(null);
@@ -2452,11 +2457,6 @@ function filterInbox(rows){
     if(have[k] || (now - e.ts) >= PENDING_APPROVED_TTL){ delete state.pendingUnapproved[k]; return; }
     out.unshift(e.row);
   });
-  // v3.104.0: rows just removed as duplicates stay hidden until the mirror's next
-  // sheet re-read stops carrying them (≤ 2 min). Any undo clears the whole set.
-  var rm = state.pendingRemoved || {};
-  Object.keys(rm).forEach(function(k){ if(!present[k] || (now - rm[k]) >= 2*60*1000) delete rm[k]; });
-  out = out.filter(function(t){ return !(pendingKeyOf(t) in rm); });
   return out;
 }
 /* v3.27 SWR helpers: a view whose data was fetched in the last TTL (and not
@@ -4760,6 +4760,7 @@ function sweepToPool(){
 /* ============================ inbox + splits ============================ */
 function renderInbox(){
   ensureRulesForInbox_();   // v3.79.0: background, for the "Suggested by rule" line
+  replLoad_();              // v3.105.0: background, the replaced-account notice
   if(state.inbox){ drawInbox(); if(freshEnough('inbox')) return; } // v3.27: warm+fresh → no network
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Inbox</h2><div class="spin"></div>'; }
   run('apiGetInbox').then(function(rows){ // …refresh in background
@@ -4777,27 +4778,19 @@ function drawInbox(){
     '>↻ Check for new</button></div>';
   h += inboxStrayHtml_();   // v3.97.2
   if(!state.inbox.length){
+    h += replNoticesHtml_();   // v3.105.0: approved copies / the old account can still need a step
     h += '<div class="empty">Inbox zero. Every transaction has a job.</div>';
     $('#shell').innerHTML = h; return;
   }
   // v3.6.2: two sections — auto-categorized (rule suggestion or hand-picked
   // envelope) with Approve all, and the rest that still need a category.
-  // v3.103.0: rows the duplicate monitor flagged get their own section, first,
-  // and never ride Approve all (approveAllEligible says no too).
-  var autoTs=[], otherTs=[], dupTs=[];
+  // v3.105.0: a replaced account (a card re-linked under a new name) is ONE notice
+  // at the top, not a flag per row. Its copies stay out of Approve all.
+  h += replNoticesHtml_();
+  var autoTs=[], otherTs=[];
   state.inbox.forEach(function(t){
-    if(t.dup) dupTs.push(t);
-    else if(state.sel[t.txnId] || t.suggestedId) autoTs.push(t); else otherTs.push(t);
+    if(state.sel[t.txnId] || t.suggestedId) autoTs.push(t); else otherTs.push(t);
   });
-  if(dupTs.length){
-    h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">Possible duplicates · '+dupTs.length+
-      (dupTs.length>1 ? '<button class="btn sm danger" data-act="inbox-remove-dups">Remove all ('+dupTs.length+')</button>' : '')+'</h3>'+
-      '<div class="note" style="padding:0 2px 10px">Each of these matches a transaction on another account — same amount, a few days apart, same merchant. '+
-      'That usually means a card was re-linked under a new name and the bank sent the same charges again. '+
-      'If it is a copy, remove it. If it is real, approve it as usual. Every removal can be undone from History.</div>';
-    dupTs.forEach(function(t){ h += inboxCardHtml(t); });
-    h += '</div>';
-  }
   var readyN = autoTs.filter(approveAllEligible).length;
   if(autoTs.length){
     h += '<div class="grp"><h3 style="display:flex;justify-content:space-between;align-items:center">'+
@@ -4845,7 +4838,7 @@ function inboxStrayHtml_(){
     '<ul class="meta" style="margin:6px 0 0 18px;padding:0">'+items+'</ul></div>';
 }
 function approveAllEligible(t){
-  if(t.dup) return false;   // v3.103.0: a possible duplicate is approved one at a time, on purpose
+  if(replCopyOf_(t.txnId)) return false;   // v3.105.0: a copy from a replaced account is never bulk-approved
   var sp = state.split[t.txnId];
   if(sp && sp.on) return false;
   return !!(state.sel[t.txnId] || t.suggestedId);
@@ -4859,7 +4852,7 @@ function inboxCardHtml(t){
       '<div class="top"><div class="desc">'+esc(t.description)+'</div>'+
       '<div class="amt '+(t.amount<0?'neg':'pos')+'">'+money(t.amount)+'</div></div>'+
       '<div class="meta">'+esc(t.date)+' · '+esc(t.account)+'</div>'+
-      dupLineHtml_(t);   // v3.103.0
+      replCopyLineHtml_(t);   // v3.105.0
     if(sp && sp.on){
       h += splitEditorHtml(t.txnId, t.amount, sp.lines, 'inbox');
       h += inboxTagsHtml(t);   // v3.73.0: a tag describes the purchase, so it rides every leg
@@ -4885,8 +4878,8 @@ function inboxCardHtml(t){
       // v3.6.9: no per-txn funding — deposits are approved into the Income
       // Cash Pool like everything else; funding happens on the Fund page.
       h += '</div>'+ruleWhyHtml_(t)+inboxTagsHtml(t)+noteLineHtml(t.txnId, inboxNoteOf(t.txnId))+'<div class="actions">'+   // v3.98.0: note   // v3.79.0: which rule suggested it
-        (t.dup ? '<button class="btn danger" data-act="inbox-remove" data-arg="'+esc(t.txnId)+'">Remove duplicate</button>' : '')+   // v3.104.0
-        '<button class="btn'+(t.dup?' ghost':'')+'" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
+        (replCopyOf_(t.txnId) ? '<button class="btn danger" data-act="repl-remove-one" data-arg="'+esc(t.txnId)+'">Remove copy</button>' : '')+   // v3.105.0
+        '<button class="btn'+(replCopyOf_(t.txnId)?' ghost':'')+'" '+(selId?'':'disabled')+' data-act="approve" data-arg="'+esc(t.txnId)+'">Approve</button>'+
         // v3.79.0 (decision 4): say WHICH words the rule will match - the short form, not the whole description
         '<label class="rulechk"><input type="checkbox" id="rule-'+cssId(t.txnId)+'"> Always suggest this'+
           '<span class="rulewords">\u201c'+esc(ruleMatchText_(t.description))+'\u201d</span></label>'+
@@ -4896,15 +4889,118 @@ function inboxCardHtml(t){
   }
   return h;
 }
-/* v3.103.0 — duplicate monitor. The mirror's apiGetInbox attaches t.dup when
-   another transaction on a DIFFERENT account has the same amount, the same first
-   merchant word, and a date within 4 days. Say exactly what it matches. */
-function dupLineHtml_(t){
-  var d=t&&t.dup; if(!d) return '';
-  var what = d.kind==='approved' ? 'Already approved' : 'Also in your Inbox';
-  var bits=[d.date, d.account].concat(d.envelope?['→ '+d.envelope]:[]);
-  return '<div class="dupwarn">⚠️ <b>Possible duplicate.</b> '+what+': '+
-    esc(d.description)+' · '+esc(bits.join(' · '))+'</div>';
+/* v3.105.0 — replaced accounts. apiReplacements (mirror) finds an account whose
+   first Tiller batch was a backfill that re-plays most of an older account that
+   then went quiet — a card re-linked under a new name (Brady 11/6/26: Discover ->
+   Capital One). One notice per event: what happened, the copies in the Inbox (one
+   tap removes them, each undoable), copies already approved (undo in History), and
+   the old account still counted. "They're both real" dismisses it for good. */
+function replLoad_(){
+  run('apiReplacements').then(function(r){
+    var ev = (r && r.events) || [];
+    var changed = JSON.stringify(ev) !== JSON.stringify(state.replacements||[]);
+    state.replacements = ev;
+    if(changed && state.view==='inbox' && state.inbox && !userBusy()) drawInbox();
+  }).catch(function(){ /* a notice that can't load is just not shown */ });
+}
+function replCopyOf_(txnId){
+  var ev = state.replacements||[];
+  for(var i=0;i<ev.length;i++){
+    var c = replLive_(ev[i]).inbox;
+    for(var j=0;j<c.length;j++) if(c[j].txnId===txnId) return ev[i];
+  }
+  return null;
+}
+function replCopyLineHtml_(t){
+  var ev = replCopyOf_(t.txnId); if(!ev) return '';
+  return '<div class="dupwarn">⚠️ <b>Copy.</b> This charge is already on <b>'+esc(ev.oldAccount)+'</b> — see the note at the top of the Inbox.</div>';
+}
+/* v3.105.0: copies already removed here, hidden until the mirror's hourly copy of
+   Tiller stops carrying them (per viewer, best-effort). */
+var REPL_GONE_KEY = 'sbcCopiesRemoved', REPL_GONE_TTL = 90*60*1000;
+function replGone_(){
+  try{ var o = JSON.parse(localStorage.getItem(REPL_GONE_KEY)||'{}'), now=Date.now(), keep={};
+    Object.keys(o).forEach(function(k){ if(now-o[k] < REPL_GONE_TTL) keep[k]=o[k]; }); return keep; }catch(e){ return {}; }
+}
+function replGoneAdd_(ids){
+  try{ var o = replGone_(); ids.forEach(function(id){ o[id]=Date.now(); }); localStorage.setItem(REPL_GONE_KEY, JSON.stringify(o)); }catch(e){}
+}
+function replLive_(e){
+  var g = replGone_(), not = function(c){ return !g[c.txnId]; };
+  return { tiller:(e.tillerCopies||[]).filter(not), inbox:(e.inboxCopies||[]).filter(not), approved:e.approvedCopies||[] };
+}
+function replNoticesHtml_(){
+  var ev = state.replacements||[]; if(!ev.length) return '';
+  return ev.map(function(e, i){
+    var L = replLive_(e), tc = L.tiller, ic = L.inbox, ac = L.approved;
+    if(!tc.length && !ac.length && !e.oldCounted) return '';
+    var open = !!(state.replOpen && state.replOpen[i]);
+    var line = function(c){ return '<li>'+esc(c.date)+' · '+esc(c.description)+' · '+money(c.amount)+
+      (c.envelopeId ? ' → '+esc(envName(c.envelopeId)) : '')+'</li>'; };
+    var h = '<div class="txncard replnote">'+
+      '<div class="desc">⚠️ “'+esc(e.newAccount)+'” looks like a replacement for “'+esc(e.oldAccount)+'”</div>'+
+      '<div class="meta" style="margin-top:4px">Tiller added “'+esc(e.newAccount)+'” on '+esc(e.linked)+' with charges going back to '+esc(e.from)+
+      ' — and '+e.matched+' of its '+e.overlap+' charges from '+esc(e.from)+' to '+esc(e.to)+' are ones “'+esc(e.oldAccount)+'” already had. '+
+      'That is what a bank change or a replaced card looks like (Discover became Capital One, for example).</div>';
+    if(tc.length){
+      h += '<div class="meta" style="margin-top:8px"><b>'+tc.length+' cop'+(tc.length===1?'y is':'ies are')+' in your Tiller sheet</b>'+
+        (ic.length ? ' ('+ic.length+' also in this Inbox)' : '')+'. Removing them deletes those rows from Tiller’s Transactions tab and from the Inbox, '+
+        'so they are not counted twice anywhere. Each one can be put back from History.</div>';
+      if(open) h += '<ul class="meta">'+tc.map(line).join('')+'</ul>';
+    }
+    if(ac.length){
+      h += '<div class="meta" style="margin-top:8px"><b>'+ac.length+' cop'+(ac.length===1?'y was':'ies were')+' already approved</b>, so '+(ac.length===1?'that charge counts':'those charges count')+
+        ' twice. Undo '+(ac.length===1?'it':'them')+' in <b>Settings → History &amp; undo</b>; '+(ac.length===1?'it comes':'they come')+' back here to remove:</div><ul class="meta">'+ac.map(line).join('')+'</ul>';
+    }
+    if(e.oldCounted){
+      h += '<div class="meta" style="margin-top:8px"><b>“'+esc(e.oldAccount)+'” is still counted.</b> Its last balance is frozen, so the card is counted twice in Budget health. '+
+        'In your Tiller sheet’s <b>Accounts</b> tab, set <b>Hide</b> on “'+esc(e.oldAccount)+'”.</div>';
+    }
+    h += '<div class="actions" style="margin-top:10px">'+
+      (tc.length ? '<button class="btn danger" data-act="repl-remove" data-arg="'+i+'">Remove the '+tc.length+' cop'+(tc.length===1?'y':'ies')+'</button>'+
+        '<button class="btn ghost" data-act="repl-review" data-arg="'+i+'">'+(open?'Hide the list':'Review them')+'</button>' : '')+
+      '<button class="btn ghost" data-act="repl-dismiss" data-arg="'+i+'">They’re both real</button></div></div>';
+    return h;
+  }).join('');
+}
+/* Remove copies (all of an event's, or one card's) from Tiller + the Inbox. */
+function replRemove_(e, ids){
+  if(!e || !ids.length){ toast('Nothing to remove'); return; }
+  confirmUi('Remove '+ids.length+' cop'+(ids.length===1?'y':'ies')+' from Tiller and SBC?\n\n'+
+    'This deletes '+(ids.length===1?'that row':'those rows')+' from the Transactions tab of your Tiller sheet (on “'+e.newAccount+'”) and from the Inbox. '+
+    'Each one is checked against “'+e.oldAccount+'” first, and each can be put back from History.', 'Remove '+ids.length)
+  .then(function(ok){
+    if(!ok) return;
+    busyButtons(true);
+    toast('Removing '+ids.length+'… (a few seconds each in Tiller)');
+    run('apiRemoveCopies', { newAccount:e.newAccount, oldAccount:e.oldAccount, txnIds:ids }).then(function(r){
+      var done = {}, errs = [];
+      (r.results||[]).forEach(function(x){ if(!x.error) done[x.txnId]=1; else errs.push(x.error); });
+      var gone = Object.keys(done);
+      replGoneAdd_(gone);
+      state.inbox = (state.inbox||[]).filter(function(t){ return !done[t.txnId]; });
+      gone.forEach(function(id){ delete state.sel[id]; delete state.split[id]; });
+      clearInboxTags_(gone);
+      setInboxCount_(state.inbox.length);
+      state.history = null; invalidateData();
+      busyButtons(false);
+      drawInbox();
+      toast('Removed '+gone.length+' ✓'+(errs.length ? ' · '+errs.length+' left alone ('+errs[0]+(errs.length>1?' …':'')+')' : '')+
+        ' · Budget health catches up at the next hourly sync');
+    }).catch(function(err){ busyButtons(false); toast('⚠ '+(err.message||err)); drawInbox(); });
+  });
+}
+function replDismiss_(i){
+  var e = (state.replacements||[])[i]; if(!e) return;
+  confirmUi('Keep both “'+e.newAccount+'” and “'+e.oldAccount+'”?\n\nThis notice goes away for good, and the '+(e.inboxCopies||[]).length+
+    ' charges stay in the Inbox as ordinary transactions. Undo from History if you change your mind.', 'Both are real')
+  .then(function(ok){
+    if(!ok) return;
+    run('apiDismissReplacement', { newAccount:e.newAccount, oldAccount:e.oldAccount }).then(function(){
+      state.replacements = (state.replacements||[]).filter(function(x){ return x!==e; });
+      drawInbox(); toast('Got it — both kept');
+    }).catch(function(err){ toast('⚠ '+(err.message||err)); });
+  });
 }
 /* v3.73.0 — tagging at approve time.
    The Inbox card carries the SAME chips + "+ tag" editor the Transactions page
@@ -5017,44 +5113,6 @@ function approveAll(){
       else if(r.tillerWrite && r.tillerWrite.written) msg += ' · Tiller ✓';
       toast(msg);
     }).catch(function(e){ toast('⚠ '+(e.message||e)); drawInbox(); });
-  });
-}
-/* v3.104.0 — remove Inbox rows the duplicate monitor flagged. One row: no dialog,
-   an Undo on the toast. Several: confirm first (Remove all is a big button).
-   Apps-Script-only write (Ledger.gs apiRemoveInbox): one audit op per row, so
-   History can put any single one back. pendingApproved hides the rows until the
-   mirror's next sheet re-read stops carrying them — same as an approve. */
-function inboxRemove_(txnIds){
-  var rows = (state.inbox||[]).filter(function(t){ return txnIds.indexOf(t.txnId)>-1; });
-  if(!rows.length){ toast('Nothing to remove'); return; }
-  var items = rows.map(function(t){ var d=t.dup||{};
-    return { txnId:t.txnId, key:t.key, reason:'duplicate of '+(d.description||'')+' '+(d.date||'')+' on '+(d.account||'') }; });
-  var go = rows.length===1 ? Promise.resolve(true) :
-    confirmUi('Remove '+rows.length+' possible duplicates from the Inbox?\n\n'+
-      'They are not approved and change no balances. Each one can be put back from History.', 'Remove '+rows.length);
-  go.then(function(ok){
-    if(!ok) return;
-    busyButtons(true);
-    toast('Removing '+rows.length+'…');
-    run('apiRemoveInbox', items).then(function(r){
-      var done = {}, ops = [];
-      (r.results||[]).forEach(function(x){ if(!x.error){ done[x.txnId]=1; if(x.opId) ops.push(x.opId); } });
-      var gone = rows.filter(function(t){ return done[t.txnId]; });
-      state.pendingRemoved = state.pendingRemoved || {};
-      gone.forEach(function(t){ state.pendingRemoved[pendingKeyOf(t)] = Date.now(); });
-      state.inbox = state.inbox.filter(function(t){ return !done[t.txnId]; });
-      gone.forEach(function(t){ delete state.sel[t.txnId]; delete state.split[t.txnId]; });
-      clearInboxTags_(Object.keys(done));
-      setInboxCount_(state.inbox.length);
-      state.history = null;
-      busyButtons(false);
-      drawInbox();
-      var failed = rows.length - gone.length;
-      var msg = 'Removed '+gone.length+(failed ? ' · '+failed+' failed (still in inbox)' : ' ✓');
-      // one row: Undo right here. Clear its pending mark first or the restored row stays hidden.
-      if(ops.length===1) toast(msg, { label:'Undo', fn:function(){ undoNow_(ops[0], 'removal'); } });
-      else toast(msg + (gone.length ? ' · undo any of them from History' : ''));
-    }).catch(function(e){ busyButtons(false); toast('⚠ '+(e.message||e)); drawInbox(); });
   });
 }
 function cssId(s){ return String(s).replace(/[^a-zA-Z0-9_-]/g,'_'); }
@@ -10353,8 +10411,8 @@ function renderHowTo(){
     P('As you spend, transactions flow into the <b>Inbox</b> on their own (it syncs from your bank every hour; <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour, and on the phone, pulling the page down does the same). A few times a week, clear it:')+
     B('Most items arrive with a <b>suggestion pill</b> — one tap to approve if it is right.')+
     B('Tick <b>Always suggest this</b> when approving and that store is suggested automatically from then on. The card shows the words the rule will look for (“Hannaford Supermarket”, not “Hannaford Supermarket 8123”); the message after has <b>Edit rule</b>. An Inbox card filled in by a rule says <b>Suggested by rule …</b> — tap <b>edit</b> to fix a wrong one right there.')+
-    B('<b>✓ Approve all</b> takes everything that already has a suggestion — except <b>possible duplicates</b>.')+
-    B('<b>Possible duplicates</b> sit at the top of the Inbox. A card lands there when another account already has the same charge — same amount, same store, a few days apart — which is what happens when a bank re-links a card under a new name and sends its recent charges again. The card says what it matches. <b>Remove duplicate</b> takes it out (no balance changes; History can put it back); if it is real, approve it as usual.')+
+    B('<b>✓ Approve all</b> takes everything that already has a suggestion.')+
+    B('<b>When a card is replaced</b> — the bank changes (Discover became Capital One), or a lost card gets a new number — Tiller can link it as a brand-new account and send its last few months again. SBC notices: a note at the top of the Inbox names the new and old account, and offers <b>Remove the copies</b>: it deletes them from your Tiller sheet and the Inbox, after checking each one against the old account, so nothing is counted twice and they can’t be imported again (History can put any one back). A copy that was already approved is listed for you to undo first. It also reminds you to hide the old account in Tiller. If both accounts really are yours, tap <b>They’re both real</b>.')+
     B('One purchase, two jobs? <b>Split</b> spreads it across envelopes (the Walmart run that was half groceries, half a game).')+
     B('<b>Tag as you approve</b>: every <b>Inbox</b> card has a <b>+ tag</b> opener, and the tags you add there ride along with the approval — one entry in History, one Undo.')+
     B('<b>Add a note</b> the same way: <b>+ note</b> on the card (“Birthday gift for Mom”, “Brady owes me half”). It rides along with the approval and shows under the transaction from then on.')+
@@ -10578,7 +10636,7 @@ function doUndo(opId){
     actBusy('undo', true, 'Undoing…'); // v3.27: instant feedback
     run('apiUndo', opId).then(function(){
       toast('Undone ✓');
-      state.pendingRemoved = {};   // v3.104.0
+      try{ localStorage.removeItem(REPL_GONE_KEY); }catch(e){}   // v3.105.0
       state.inbox=null; state.rules=null;   // v3.79.0: an undone rule change must not show from cache
       invalidateData();
       refreshBoot();
@@ -10848,9 +10906,11 @@ document.addEventListener('click', function(ev){
     case 'home-move': homeMove_(p[0], p[1]); break;
     case 'approve': approve(arg); break;
     case 'approve-all': approveAll(); break;
-    case 'inbox-remove': inboxRemove_([arg]); break;          // v3.104.0
-    case 'inbox-remove-dups': inboxRemove_((state.inbox||[]).filter(function(t){ return t.dup; })
-      .map(function(t){ return t.txnId; })); break;
+    case 'repl-remove-one': replRemove_(replCopyOf_(arg), [arg]); break;   // v3.105.0: one copy, out of Tiller + the Inbox
+    case 'repl-remove': (function(e){ if(!e) return;   // v3.105.0
+        replRemove_(e, replLive_(e).tiller.map(function(c){ return c.txnId; })); })((state.replacements||[])[+arg]); break;
+    case 'repl-review': state.replOpen = state.replOpen||{}; state.replOpen[arg] = !state.replOpen[arg]; drawInbox(); break;
+    case 'repl-dismiss': replDismiss_(+arg); break;
     case 'approve-split': approveSplit(arg); break;
     case 'pick-sel': state.sel[p[0]]=p[1]; drawInbox(); break;
     case 'split-on':
