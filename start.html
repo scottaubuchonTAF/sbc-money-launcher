@@ -149,7 +149,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
       <p><a class="btn" id="copyBtn" href="#" target="_blank" rel="noopener">Make my copy</a></p>
       <div class="note fail hidden" id="noTemplate">The template link isn't set on this page yet. Ask <span class="op"></span> for it — you'll get a link that ends in <code>/copy</code>.</div>
       <ol>
-        <li>Google asks <b>Copy document?</b> — name it <b>SBC Money - <i>your name</i> (Companion)</b> and press <b>Make a copy</b>. It opens in a new tab.</li>
+        <li>Google asks <b>Copy document?</b> and notes that the attached Apps Script file is copied too — that's the setup wizard. Press <b>Make a copy</b>. It opens in a new tab, named <i>Copy of SBC Money — Companion…</i>; the wizard renames it to <b>SBC Money - <i>your name</i> (Companion)</b> in step 4.</li>
         <li>Keep that tab open for step 4. Don't type anything into the sheet; the wizard builds every tab itself.</li>
       </ol>
       <label class="tick"><input type="checkbox" data-done="copy"> My copy is open in a tab</label>
@@ -205,7 +205,7 @@ th{color:var(--ink-3);font-size:12px;letter-spacing:.04em;text-transform:upperca
   <section class="step" style="background:var(--teal-50);border-color:#99e6d9">
     <div class="hd"><div class="num" style="background:#fff">👁</div><div><h2>Who can see your money</h2><div class="who">Plainly</div></div></div>
     <div class="body">
-      <div class="quote">Your bank data lives in <b>your</b> Tiller spreadsheet and <b>your</b> companion spreadsheet, in your Google Drive, which you own. Two service identities get access so the app works: an app account (editor — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>No person is shared on either sheet, nobody else is on your app's access list, and nothing in the app shows anyone your numbers.</b> Your bank login never leaves Tiller, and the sheets hold only account names with the last four digits — nobody, operator included, can see full account numbers or passwords. One honest caveat: someone runs the server the app uses (a database and the app account's password), so like any app's operator they <i>could</i> technically query it. The app keeps a visible record of every such read — Settings → Access → <b>Who has read the database</b> — so you'd see it. You can leave any time: Tiller keeps your complete history in your own spreadsheet.</div>
+      <div class="quote">Your bank data lives in <b>your</b> Tiller spreadsheet and <b>your</b> companion spreadsheet, in your Google Drive, which you own. Two service identities get access so the app works: an app account (editor — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. <b>No person is shared on either sheet, nobody else is on your app's access list, and nothing in the app shows anyone your numbers.</b> Your bank login never leaves Tiller, and the sheets hold only account names with the last four digits — nobody, operator included, can see full account numbers or passwords. One honest caveat: someone runs the server the app uses (a database and the app account's password), so like any app's operator they <i>could</i> technically query it. The app keeps a visible record of every such read — Settings → Access → <b>Who has read the database</b> — so you'd see it. You can leave any time: Tiller keeps your complete history in your own spreadsheet. The full <a class="privurl" href="#">privacy page</a> says the same in a few more words.</div>
     </div>
   </section>
 
@@ -239,6 +239,7 @@ var CONFIG = {
   appUrl: 'https://sbc.theaubuchonfamily.com',
   guideUrl: 'https://sbc.theaubuchonfamily.com/guide.html',
   quickUrl: 'https://sbc.theaubuchonfamily.com/quickstart.html',
+  privUrl: 'https://sbc.theaubuchonfamily.com/privacy.html',
   videoUrl: 'https://sbc.theaubuchonfamily.com/how-to-sbc-money.mp4',
   operatorEmail: 'sbc-money-support@theaubuchonfamily.com'   // 11/5/26: an alias on Scott's account
 };
@@ -287,6 +288,7 @@ function wire() {
   $$('.appurl').forEach(function (a) { a.href = CONFIG.appUrl; });
   $$('.guideurl').forEach(function (a) { a.href = CONFIG.guideUrl; });
   $$('.quickurl').forEach(function (a) { a.href = CONFIG.quickUrl; });
+  $$('.privurl').forEach(function (a) { a.href = CONFIG.privUrl; });
   $$('.videourl').forEach(function (a) { a.href = CONFIG.videoUrl; });
   $$('.op').forEach(function (s) { s.textContent = CONFIG.operatorEmail; });
   $$('.opmail').forEach(function (a) { a.href = 'mailto:' + CONFIG.operatorEmail + '?subject=' + encodeURIComponent('SBC Money setup'); });

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — SBC Money</title>
+<link rel="icon" href="icon-192.png">
+<!-- v3.102.6 — sbc.theaubuchonfamily.com/privacy.html. The privacy policy the Google sign-in
+     consent screen links to (Google Auth Platform → Branding). Plain words, the same facts the
+     in-app help gives under "Who can see your money". Ships with the release (release.ps1 step 7). -->
+<style>
+:root{--teal-900:#0d3b36;--teal-800:#11514a;--teal-700:#0f766e;--teal-600:#0d9488;--teal-400:#2dd4bf;--teal-50:#f0fdfa;
+  --ink:#0f172a;--ink-2:#475569;--ink-3:#94a3b8;--bg:#f6f8fa;--card:#fff;--line:#e2e8f0;--radius:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;color:var(--ink);background:var(--bg)}
+a{color:var(--teal-700)}
+.hero{background:linear-gradient(160deg,var(--teal-900),var(--teal-800) 60%,var(--teal-700));color:#e6f4f1;padding:34px 16px 30px}
+.hero .in{max-width:720px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.brand img{width:44px;height:44px;border-radius:12px}
+.brand b{font-size:20px}.brand b span{color:var(--teal-400)}
+.hero h1{font-size:30px;line-height:1.15;margin-bottom:10px}
+.hero p{color:#b9ddd6;max-width:560px}
+main{max-width:720px;margin:0 auto;padding:18px 16px 60px}
+.sec{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:14px}
+.sec h2{font-size:19px;line-height:1.25;margin-bottom:10px;color:var(--teal-900)}
+.sec p,.sec li{color:var(--ink-2);margin-bottom:10px}
+.sec p b,.sec li b{color:var(--ink)}
+ul{padding-left:22px}
+.small{font-size:13px;color:var(--ink-3)}
+.foot{margin-top:28px;font-size:13px;color:var(--ink-3);text-align:center}
+</style>
+</head>
+<body>
+<header class="hero"><div class="in">
+  <div class="brand"><img src="icon-192.png" alt=""><b>SBC <span>Money</span></b></div>
+  <h1>Privacy</h1>
+  <p>SBC Money is a private, family-run envelope-budgeting app. This page says, in plain words, what it reads, what it keeps, who can see it, and how to leave.</p>
+</div></header>
+<main>
+  <section class="sec">
+    <h2>What SBC Money is</h2>
+    <p>A budgeting app built and run by one person for family and friends. It is not a company, it has no customers, and it does not sell, share, advertise with, or monetize anything. It runs on top of <b>Tiller</b>, a separate service you subscribe to, which puts your bank transactions into a Google Sheet that you own.</p>
+  </section>
+  <section class="sec">
+    <h2>What it reads, and from where</h2>
+    <ul>
+      <li><b>Your Google account's email address</b>, when you sign in with Google. That is the only thing sign-in gives the app — no contacts, no mail, no Drive browsing.</li>
+      <li><b>Two spreadsheets you own in your Google Drive</b>: your Tiller sheet (transactions, account balances) and your SBC companion sheet (your envelopes, your choices). You share them with the app's service accounts yourself, during setup, and you can unshare them at any time.</li>
+    </ul>
+    <p>Your bank login never leaves Tiller. The sheets hold account names with the last four digits only — the app never sees, stores or shows full account numbers or passwords.</p>
+  </section>
+  <section class="sec">
+    <h2>What it keeps</h2>
+    <p>To open quickly, the app keeps a copy of the rows in those two sheets in a database it runs (hosted on Supabase, in the United States). That copy is refreshed from your sheets every hour and rebuilt each time; your sheets stay the source of truth. The app also keeps your settings, your approvals and the notes you add, and a record of each time the database is read outside the app (see below).</p>
+  </section>
+  <section class="sec">
+    <h2>Who can see your money</h2>
+    <p><b>You.</b> Your data is visible only to the Google account you set the app up with; nobody else is on your access list and the app has no screen that shows one person another person's numbers.</p>
+    <p><b>Two service identities</b>, so the app can work: an app account (editor on your two sheets — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. They are not people.</p>
+    <p><b>The operator</b> — the person who runs the server. Like any app's operator he could technically query the database. He does not, the app has no screen that would, and the app keeps a visible record of every such read: <i>Settings → Access → Who has read the database</i>, inside your own account, so you would see it.</p>
+  </section>
+  <section class="sec">
+    <h2>What it does not do</h2>
+    <ul>
+      <li>No advertising, no analytics trackers, no selling or sharing of data with anyone.</li>
+      <li>No access to your Google account beyond the email address and the two sheets you shared.</li>
+      <li>No cookies beyond what the sign-in needs and what your browser keeps to remember you.</li>
+    </ul>
+  </section>
+  <section class="sec">
+    <h2>Leaving</h2>
+    <p>Unshare your two sheets from the app's service accounts and stop using the app; ask to have your rows removed from the database and they will be. Tiller keeps your complete history in your own spreadsheet either way.</p>
+  </section>
+  <section class="sec">
+    <h2>Questions</h2>
+    <p>Email <a class="opmail" href="#"><span class="op"></span></a>.</p>
+    <p class="small">Last updated November 5, 2026.</p>
+  </section>
+  <p class="foot">SBC Money · <a class="appurl" href="#">sbc.theaubuchonfamily.com</a></p>
+</main>
+<script>
+'use strict';
+var CONFIG = { appUrl: 'https://sbc.theaubuchonfamily.com', operatorEmail: 'sbc-money-support@theaubuchonfamily.com' };
+Array.prototype.forEach.call(document.querySelectorAll('.appurl'), function (a) { a.href = CONFIG.appUrl; });
+Array.prototype.forEach.call(document.querySelectorAll('.op'), function (s) { s.textContent = CONFIG.operatorEmail; });
+Array.prototype.forEach.call(document.querySelectorAll('.opmail'), function (a) { a.href = 'mailto:' + CONFIG.operatorEmail; });
+</script>
+</body>
+</html>

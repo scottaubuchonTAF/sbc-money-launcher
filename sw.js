@@ -20,8 +20,8 @@
    Never cached: anything that is not GET, anything cross-origin except the
    pinned Chart.js build, the Google Identity script, and every API call
    (Apps Script / Supabase are POSTs — they never touch this file). */
-var SW_VERSION = 'v3.102.5';
-var BUILD_ID = 'v3.102.5+20261105.1917';   // v3.78.7: stamped by deploy/set-version.mjs
+var SW_VERSION = 'v3.102.6';
+var BUILD_ID = 'v3.102.6+20261105.1953';   // v3.78.7: stamped by deploy/set-version.mjs
 var CACHE = 'sbc-' + BUILD_ID;
 var CHART_JS = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 var SHELL = ['./', './index.html', './manifest.json'];                        // required — install fails without these
@@ -137,14 +137,19 @@ function isShell_(req) {
   if (req.url === CHART_JS) return true;
   var u = new URL(req.url);
   if (u.origin !== self.location.origin) return false;
-  if (req.mode === 'navigate') return true;
+  // v3.102.6: only the APP's own page is the shell. start.html, quickstart.html and guide.html are
+  // ordinary pages on the same origin - a navigation to them used to be answered with the cached
+  // index.html (the app painted over the Get Started page) AND its response was then stored under
+  // the index.html key, poisoning the shell. Those go straight to the network, untouched.
+  if (req.mode === 'navigate') return isAppPage_(u.pathname);
   return /\/(index\.html|manifest\.json|icon-192\.png|icon-512\.png|apple-touch-icon\.png)$/.test(u.pathname) || u.pathname === '/';
 }
+function isAppPage_(pathname) { return pathname === '/' || /\/index\.html$/.test(pathname); }
 
 self.addEventListener('fetch', function (ev) {
   var req = ev.request;
   if (!isShell_(req)) return;                       // everything else: straight to the network, untouched
-  var isPage = req.mode === 'navigate' || /\/(index\.html)?$/.test(new URL(req.url).pathname);
+  var isPage = isAppPage_(new URL(req.url).pathname);   // v3.102.6: by path, never by mode alone
   var key = isPage ? './index.html' : req;
   ev.respondWith(
     caches.open(CACHE).then(function (c) {
