@@ -1478,11 +1478,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.102.11';
+var FE_VERSION = 'v3.102.12';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.102.11+20261105.2231';
+var BUILD_ID = 'v3.102.12+20261106.0904';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3727,8 +3727,11 @@ var DASH_WIDGETS = {
         esc(staleAccts.join(', '))+'</span><span class="v" style="color:var(--amber)">'+
         (H.staleDays?H.staleDays+' days':'stale')+'</span></div>';
     }
+    // v3.102.12: it was labelled "Newest balance row" but the value has always been
+    // the OLDEST account's latest row (min over accounts) — Brady read 9/18/26 as
+    // "nothing since September". Say oldest, and say which account.
     if(H.stalest)
-      extra+='<div class="dkv"><span class="k">Newest balance row</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
+      extra+='<div class="dkv"><span class="k">Oldest balance row'+(H.stalestAccount?' · '+esc(H.stalestAccount):'')+'</span><span class="v" style="color:var(--ink-3)">'+esc(H.stalest)+'</span></div>';
     return head+'<div style="margin-bottom:6px">'+pill+'</div>'+note+'<div class="dscroll">'+kv+extra+'</div>';}},
 
   /* v3.56.4 — "Obligations". Needs attention says what's WRONG; this says what is
