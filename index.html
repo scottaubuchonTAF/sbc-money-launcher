@@ -1478,11 +1478,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.102.7';
+var FE_VERSION = 'v3.102.8';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.102.7+20261105.2120';
+var BUILD_ID = 'v3.102.8+20261105.2150';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4201,6 +4201,7 @@ function renderDashNow_(){
   h += updateBanner_();          // v3.69.0 (U4) — a stale shell explains every other oddity, so it goes first
   h += writeBackBanner_();       // v3.60 — first: "the app said ✓ but your sheet never got it"
   h += freezeBanner_();          // v3.55 — above everything; it explains the health card
+  h += bdayNudge_();             // v3.102.7 — "Add your birthday?" once, for people who left it blank in the wizard
   if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
   h+='<div class="hbody">'+body.map(tile_).join('')+'</div>';
   if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
@@ -6688,6 +6689,25 @@ function freezeClearAccount_(account, balance){
   state.freeze = keep.length ? next : null;
   try{ if(state.boot && state.boot.attention) state.boot.attention.freeze = next; }catch(e){}
 }
+/* v3.102.7 (Scott: "should we somehow prompt the user to enter their birthday?" -> both the
+   wizard and here). A small Home card for a signed-in person whose account has no birthday.
+   "Not now" hides it for 30 days; a second "Not now" hides it for good (this device). The
+   Personal information page still has the field. Nothing shows until the bootstrap has
+   actually told us the birthday is blank (state.boot carries it as a string). */
+function bdayNudgeState_(){ try{ return JSON.parse(localStorage.getItem('sbcBdayNudge')||'{}')||{}; }catch(e){ return {}; } }
+function bdayNudge_(){
+  if(!state.boot || typeof state.boot.birthday !== 'string' || state.birthday) return '';
+  var n = bdayNudgeState_();
+  if(n.off) return '';
+  if(n.until && Date.now() < n.until) return '';
+  return '<div class="dtile" style="padding:14px 16px;display:block;margin:0 0 14px">'+
+    '<div style="font-weight:700;margin-bottom:4px">Add your birthday?</div>'+
+    '<div class="note" style="margin-bottom:10px">The Wealth page uses your age for its retirement view, and the app says happy birthday. Optional — you can also add it later under Settings → Personal information.</div>'+
+    '<div class="actions" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">'+
+    '<input type="date" id="bdayNudgeInp" class="amt" style="width:auto">'+
+    '<button class="btn" data-act="bday-nudge-save">Save</button>'+
+    '<button class="btn ghost" data-act="bday-nudge-later">Not now</button></div></div>';
+}
 function freezeBanner_(){
   var f = state.freeze;
   if(!f || !f.anyStuck || !f.stuck || !f.stuck.length) return '';
@@ -8299,7 +8319,8 @@ function renderSettings(){
     ['healthset','Health settings'],
     ['rules','Suggestion rules'],            // v3.79.0 — see + edit "Always suggest this"
     ['notify','Notifications'],              // v3.80.0
-    ['personal','Personal information']]);
+    ['personal','Personal information'],
+    ['admin','Account & privacy']]);        // v3.102.7 (was Maintenance -> "Access (who can sign in)")
   h += settingsSectionLabel('RECORDS')+settingsList([
     ['history','History & undo'],
     ['activity','Sign-ins & activity']]);
@@ -9294,8 +9315,7 @@ function renderMaintenance(){
   h += settingsList([
     ['sync','Tiller sync'],
     ['reconcile','Reconcile accounts'],
-    ['removetxn','Remove a transaction'],
-    ['admin','Access (who can sign in)']]);
+    ['removetxn','Remove a transaction']]);   // v3.102.7: Access moved to Settings -> Account & privacy
   h += '<div class="card" style="margin-top:14px;padding:12px">'+
     '<div class="actions"><button class="btn ghost" data-act="snapshot-tiller">\u2b07 Back up envelopes to Tiller</button></div>'+
     '<div class="note" style="padding:6px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>'+
@@ -9314,20 +9334,23 @@ function renderMaintenance(){
 
 /* ============================ access / admin (v3.8) ============================ */
 function renderAdmin(){
-  $('#shell').innerHTML = '<h2 class="viewtitle">Access</h2><div class="spin"></div>';
+  $('#shell').innerHTML = '<h2 class="viewtitle">Account &amp; privacy</h2><div class="spin"></div>';
   run('apiAccess').then(function(a){ state.access = a; drawAdmin(); }).catch(fail);
 }
 function drawAdmin(){
   var a = state.access;
   var h = '<button class="backlink" data-act="goview" data-arg="settings">‹ Settings</button>'+
-    '<h2 class="viewtitle">Access</h2>';
+    '<h2 class="viewtitle">Account &amp; privacy</h2>';
   /* v3.96.0: outside accounts. Family addresses are recognised by domain; any
      other Google account must first be registered on the bridge
-     (SBC_EXTERNAL_EMAILS) — the page just says so and tags them. */
+     (SBC_EXTERNAL_EMAILS) — the page just says so and tags them.
+     v3.102.7 (Scott): retitled from "Access (who can sign in)"; plain intro. */
   var ext = (a.external||[]).map(function(e){ return String(e).toLowerCase(); });
-  h += '<div class="note" style="padding:4px 0 14px">These accounts can sign in to SBC Money — '+esc('@'+a.domain)+
-    ' family accounts, plus any outside Google account the app operator has registered. '+
-    (a.isAdmin?'Add an email to give them access to <b>your</b> books.':'Only an admin can change this list.')+'</div>';
+  h += '<div class="grp"><h3>Who can sign in to your budget</h3></div>';
+  h += '<div class="note" style="padding:4px 0 14px">Normally just you. '+
+    (a.isAdmin
+      ? 'To let someone else see and work in your budget — a spouse, say — add the Google address they sign in with below. They see exactly what you see; remove them here any time.'
+      : 'Only the owner of this budget can change this list.')+'</div>';
   h += '<div class="card">';
   a.allowed.forEach(function(em){
     var isAdm = a.admins.indexOf(em)>-1;
@@ -9335,7 +9358,6 @@ function drawAdmin(){
     var isExt = ext.indexOf(em)>-1;
     h += '<div class="envrow"><span class="nm">'+esc(em)+
       (isAdm?' <span class="bal" style="opacity:.6">· admin</span>':'')+
-      (isExt?' <span class="bal" style="opacity:.6">· outside account</span>':'')+
       (isMe?' <span class="bal" style="opacity:.6">· you</span>':'')+'</span>'+
       (a.isAdmin && !isAdm ? '<button class="btn danger sm" data-act="admin-remove" data-arg="'+esc(em)+'">Remove</button>'
         : '<span style="opacity:.3">—</span>')+
@@ -9343,20 +9365,23 @@ function drawAdmin(){
   });
   h += '</div>';
   if(a.isAdmin){
-    h += '<div class="grp"><h3>Add access</h3><div class="card" style="padding:12px">'+
+    h += '<div class="grp"><h3>Add a person</h3><div class="card" style="padding:12px">'+
       '<input id="adminEmail" class="amt" style="width:100%;box-sizing:border-box" '+
-        'placeholder="name@…" autocomplete="off">'+
-      '<div class="actions" style="margin-top:10px"><button class="btn" data-act="admin-add">Add to allowlist</button></div>'+
+        'placeholder="their Google address" autocomplete="off" inputmode="email">'+
+      '<div class="actions" style="margin-top:10px"><button class="btn" data-act="admin-add">Give access</button></div>'+
+      '<div class="note" style="padding:8px 2px 0">Any Google account works. They open sbc.theaubuchonfamily.com, press Sign in with Google, and they’re in — nothing to install and no setup wizard, because it’s your budget they’re joining. Someone who already runs their own SBC Money budget can’t be added.</div>'+
       '</div></div>';
   }
   /* v3.99.0: the operator access card - loaded after the list so the page never waits on it */
   h += '<div class="grp"><h3>Who has read the database</h3><div id="opacc">'+
     (state.opAccess ? opAccessHtml_(state.opAccess) : '<div class="card"><div class="spin"></div></div>')+'</div></div>';
   /* v3.102.7: delete my account - the person's own row and everything under it */
-  h += '<div class="grp"><h3>Delete my account</h3><div class="card" style="padding:12px">'+
-    '<div class="note" style="padding:0 0 10px">Removes you from SBC Money and deletes <b>all</b> of your data from its database. '+
-    'Your Tiller sheet and your SBC companion sheet are your own files and stay in your Google Drive; Tiller itself is a separate subscription you cancel with Tiller.</div>'+
-    '<div class="actions"><button class="btn danger" data-act="account-delete">Delete my account…</button></div>'+
+  h += '<div class="grp"><h3>'+(a.isAdmin?'Delete my account':'Remove my access')+'</h3><div class="card" style="padding:12px">'+
+    (a.isAdmin
+      ? '<div class="note" style="padding:0 0 10px">Removes you from SBC Money and deletes <b>all</b> of your data from its database. '+
+        'Your Tiller sheet and your SBC companion sheet are your own files and stay in your Google Drive; Tiller itself is a separate subscription you cancel with Tiller.</div>'
+      : '<div class="note" style="padding:0 0 10px">Takes your sign-in off this budget. The budget belongs to the person who added you and is not changed.</div>')+
+    '<div class="actions"><button class="btn danger" data-act="account-delete">'+(a.isAdmin?'Delete my account…':'Remove my access…')+'</button></div>'+
     '</div></div>';
   $('#shell').innerHTML = h;
   if(!state.opAccess) opAccessLoad_(0);
@@ -9366,6 +9391,13 @@ function drawAdmin(){
    one bridge call (apiDeleteAccount) does the database, the bridge lists and the
    sheet shares, and the app signs the person out. */
 function deleteAccountFlow(){
+  if(state.access && !state.access.isAdmin){   // v3.102.8: a person on someone else's budget just removes their own access
+    confirmUi('Remove your access to this budget? You will no longer be able to sign in to it. The person who owns it can add you back at any time.', 'Yes, remove me').then(function(ok){
+      if(!ok) return;
+      deleteAccountRun_();
+    });
+    return;
+  }
   confirmUi('Are you sure you want to delete your SBC Money account? The next screen asks you to type DELETE.', 'Yes, continue').then(function(ok){
     if(!ok) return;
     if(state.confirmRes){ var prev=state.confirmRes; state.confirmRes=null; try{ prev(false); }catch(e){} }
@@ -9385,11 +9417,18 @@ function deleteAccountWord(){
   confirmUi('Once you click Yes, all of your SBC Money data will be deleted and cannot be retrieved. '+
     'Your Tiller sheet and your SBC companion sheet stay in your Google Drive, untouched. If you also want to stop Tiller, cancel it with Tiller (my.tiller.com).', 'Yes, delete everything').then(function(ok){
     if(!ok) return;
-    $('#ovl').innerHTML = '<div class="ovl"><div class="panel confirm"><div class="cmsg">Deleting your account…</div><div class="spin"></div></div></div>';
+    deleteAccountRun_();
+  });
+}
+function deleteAccountRun_(){
+  {
+    $('#ovl').innerHTML = '<div class="ovl"><div class="panel confirm"><div class="cmsg">One moment…</div><div class="spin"></div></div></div>';
     run('apiDeleteAccount', 'DELETE').then(function(r){
       var errs = (r && r.errors) || [];
       var db = (r && r.database) || {};
-      var msg = errs.length
+      var msg = (r && r.member)
+        ? (errs.length ? 'Your access is removed, but part of the clean-up did not finish: '+errs.join('; ')+'.' : 'Your access to this budget has been removed. The budget itself is untouched.')
+        : errs.length
         ? 'Your account is deleted, but part of the clean-up did not finish: '+errs.join('; ')+'. Scott has been emailed and will finish it by hand.'
         : 'Your SBC Money account is deleted'+(db.rows!=null?' ('+db.rows+' rows removed)':'')+'. Your sheets are still in your Google Drive.';
       $('#ovl').innerHTML = '';
@@ -9399,7 +9438,7 @@ function deleteAccountWord(){
       $('#ovl').innerHTML = '';
       confirmUi('The account could not be deleted: '+String(e && e.message || e)+'. Nothing was changed. Try again, or email '+OPERATOR_EMAIL_+'.', 'OK');
     });
-  });
+  }
 }
 /* ================= v3.99.0: operator access (Scott 11/3: "1 + 2") =================
    The operator model (v3.96.0) took the operator off every sheet and off the app's
@@ -9616,7 +9655,7 @@ function adminAdd(){
   var list = (state.access.allowed||[]).slice();
   if(list.indexOf(em)>-1){ toast('Already on the list'); return; }
   list.push(em);
-  adminSave(list).then(function(){ toast('Access granted ✓'); });
+  adminSave(list).then(function(){ toast('Access granted ✓ — they can sign in now'); });
 }
 function adminRemove(em){
   confirmUi('Remove access for '+em+'?', 'Remove').then(function(ok){
@@ -10311,8 +10350,8 @@ function renderHowTo(){
 
   S('🔐','Who can see your money',
     P('Your bank data lives in <b>your</b> Tiller sheet and <b>your</b> companion sheet, in your own Google Drive. Two service accounts have access so the app works: the SBC app account (an editor — it imports your transactions hourly and writes your categorizations back) and a read-only account that feeds the fast view. <b>Scott is on neither sheet, is not on your access list, and nothing in the app shows him your numbers.</b>')+
-    P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. So the app keeps a record: every hour, any database session that is not the app itself — the operator opening the database console, a command line, his own check scripts — is copied, statement by statement, into a log you can read at <b>Settings → Maintenance → Access</b>, under <b>Who has read the database</b>. Each row is chained to the one before it, so a deleted or edited row shows; the card also says whether the recording is switched on and when it last checked. It cannot tell whose rows a statement returned, so it shows you the statement. If that is not enough, say so — the alternative is running your own copy.')+
-    PL('<b>Settings → Maintenance → Access</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
+    P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. So the app keeps a record: every hour, any database session that is not the app itself — the operator opening the database console, a command line, his own check scripts — is copied, statement by statement, into a log you can read at <b>Settings → Account &amp; privacy</b>, under <b>Who has read the database</b>. Each row is chained to the one before it, so a deleted or edited row shows; the card also says whether the recording is switched on and when it last checked. It cannot tell whose rows a statement returned, so it shows you the statement. If that is not enough, say so — the alternative is running your own copy.')+
+    PL('<b>Settings → Account &amp; privacy</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: <b>Delete my account</b> on the same page removes everything of yours from the app, and Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
 
   S('🗺️','Every page, one line each',
     P('The pages the rest of this guide doesn\u2019t stop to explain. If a page loads with a red ⚠ and a <b>Try again</b> button, tap it — the load failed, nothing else did.')+
@@ -10626,6 +10665,23 @@ document.addEventListener('click', function(ev){
       }).catch(function(e2){ toast('⚠ Time zone not saved: '+(e2 && e2.message || e2)); });
     })(); break;
     case 'bday-cancel': state.bdayEdit = false; renderPersonal(); break; // v3.57.3
+    case 'bday-nudge-save': (function(){ // v3.102.7 — the Home card
+      var inp = $('#bdayNudgeInp');
+      var v = inp ? String(inp.value||'').trim() : '';
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ toast('Pick a full date'); return; }
+      run('apiSetBirthday', {value:v}).then(function(){
+        state.birthday = v;
+        try{ localStorage.setItem('sbcBday', v); }catch(e2){}
+        toast('Birthday saved');
+        applySeason(); renderDash();
+      }).catch(function(e2){ toast('Could not save: '+String(e2 && e2.message || e2)); });
+    })(); break;
+    case 'bday-nudge-later': (function(){
+      var n = bdayNudgeState_();
+      n = n.until ? { off:true } : { until: Date.now() + 30*24*3600*1000 };   // second "Not now" = never again on this device
+      try{ localStorage.setItem('sbcBdayNudge', JSON.stringify(n)); }catch(e){}
+      renderDash();
+    })(); break;
     case 'bday-save': (function(){ // v3.57 — save full DOB to the account
       var inp = $('#bdayInp');
       var v = inp ? String(inp.value||'').trim() : '';
