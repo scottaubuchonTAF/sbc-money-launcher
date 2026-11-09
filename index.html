@@ -1483,11 +1483,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.106.1';
+var FE_VERSION = 'v3.106.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.106.1+20261106.1448';
+var BUILD_ID = 'v3.106.2+20261109.1146';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -1678,7 +1678,8 @@ function ensureAuth(){
 // are never blocked.
 var MUTATING = { apiApprove:1, apiApproveBatch:1, apiResplit:1, apiUnapprove:1, apiMove:1,
   apiDismissReplacement:1, // v3.105.0 — "They're both real": a Settings row the mirror's apiReplacements reads
-  apiRemoveCopies:1,       // v3.105.0 — a replaced account's copies out of Tiller + the Inbox (Apps Script; re-checks every row)
+  apiRemoveCopies:1,
+  apiRemoveNoIdTxn:1,      // v3.106.2 — Remove a transaction for a row with no transaction ID (Apps Script)       // v3.105.0 — a replaced account's copies out of Tiller + the Inbox (Apps Script; re-checks every row)
   apiFund:1, apiFundFromPool:1, apiSavePlan:1, apiReconcileToBank:1, apiManualBalance:1,
   apiCreateEnvelope:1, apiRenameEnvelope:1, apiSetEnvelopeGroup:1, apiArchiveEnvelope:1,
   apiSetEnvelopeHidden:1, // v3.51
@@ -8478,6 +8479,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.106.2', d:'Nov 9, 2026', items:[
+    'The “looks like a replacement” note in the Inbox no longer mistakes a transaction you typed into Tiller by hand for a replaced card, and it only says an old account is “still counted” when Budget health really counts it.',
+    '<b>Remove a transaction</b> also finds transactions that were typed into Tiller by hand (they have no transaction ID).' ]},
   { v:'v3.106.1', d:'Nov 6, 2026', items:[
     'What’s new now goes all the way back to the first releases in June.' ]},
   { v:'v3.106.0', d:'Nov 6, 2026', items:[
@@ -10021,8 +10025,9 @@ function renderRemoveTxn(){
         var legs = (t.legs||[]).map(function(l){ return envName(l.envelopeId)+' '+money(l.amount); }).join(', ');
         h += '<div class="oprow"><div class="what">'+
           '<div class="note">'+esc(t.description)+' · '+money(t.amount)+'</div>'+
-          '<div class="sub">'+esc(t.date)+' · '+esc(t.account||'')+(legs?' · '+esc(legs):'')+'</div></div>'+
-          '<button class="btn danger sm" data-act="rmtxn-go" data-arg="'+esc(t.txnId)+'">Remove</button></div>';
+          '<div class="sub">'+esc(t.date)+' · '+esc(t.account||'')+(legs?' · '+esc(legs):'')+'</div>'+
+          (t.txnId ? '' : '<div class="sub">No transaction ID — typed into Tiller by hand</div>')+'</div>'+   // v3.106.2
+          '<button class="btn danger sm" data-act="rmtxn-go" data-arg="'+esc(t.key||t.txnId)+'">Remove</button></div>';
       });
       h += '</div>';
     }
@@ -10033,22 +10038,26 @@ function removeTxnSearch(){
   var q = String(($('#rmQ')||{}).value||'').trim();
   state.removeq = q;
   if(!q){ state.removeResults=[]; renderRemoveTxn(); return; }
-  run('apiRegister',{q:q, includeHidden:true, limit:50}).then(function(items){
+  run('apiRegister',{q:q, includeHidden:true, includeNoId:true, limit:50}).then(function(items){   // v3.106.2: + rows with no transaction ID
     state.removeResults = items||[];
     if(state.view==='removetxn') renderRemoveTxn();
   }).catch(function(e){ toast('⚠ '+(e.message||e)); });
 }
 function removeTxnGo(txnId){
-  var t = (state.removeResults||[]).find(function(x){ return x.txnId===txnId; });
+  // v3.106.2: the button carries the KEY, so a row with no transaction ID is reachable too
+  var t = (state.removeResults||[]).find(function(x){ return (x.key||x.txnId)===txnId; });
+  var noId = !!(t && !t.txnId && /^noid\|/.test(t.key||''));
   var label = t ? (t.description+' · '+money(t.amount)) : txnId;
   confirmUi('Remove this transaction?\n\n"'+label+'"\n\nThis can be undone from History.', 'Remove').then(function(ok){
     if(!ok) return;
     // v3.27 OPTIMISTIC: drop the result row and redraw now; restore on failure.
     var prev = state.removeResults||[];
-    state.removeResults = prev.filter(function(x){ return x.txnId!==txnId; });
+    state.removeResults = prev.filter(function(x){ return (x.key||x.txnId)!==txnId; });
     if(state.view==='removetxn') renderRemoveTxn();
     toast('Removing…');
-    run('apiRemoveTxn',{txnId:txnId, key:(t&&t.key)||''}).then(function(){
+    var p = t && t.key ? t.key.split('|') : [];
+    (noId ? run('apiRemoveNoIdTxn', { date:p[1], amount:Number(p[2])/100, account:t.account })
+          : run('apiRemoveTxn',{txnId:t ? t.txnId : txnId, key:(t&&t.key)||''})).then(function(){
       toast('Removed ✓');
       invalidateData(); refreshBoot();
     }).catch(function(e){
