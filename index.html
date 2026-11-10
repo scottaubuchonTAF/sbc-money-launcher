@@ -1316,6 +1316,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushConfig:1, apiPushSubscribe:1, apiPushUnsubscribe:1, apiPushTest:1, // v3.80.0: push device calls - READS on purpose (no budget data, idempotent, must not queue behind a Tiller write)
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
+  apiMirrorAccountHide:1, // v3.107.0: the Accounts page's Hide wrote Tiller's Accounts tab; carry that flag into the mirror now
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
@@ -1350,6 +1351,7 @@ var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStat
   apiPushClear:1,       // v3.94.0
   apiWealth:1, apiWealthSave:1, // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
   apiRefreshSettings:1, // v3.93.4
+  apiMirrorAccountHide:1, // v3.107.0
   apiOperatorAccess:1 }; // v3.99.0: no Apps Script fallback - the operator access log lives only in the mirror
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
@@ -1483,11 +1485,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.106.2';
+var FE_VERSION = 'v3.107.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.106.2+20261109.1146';
+var BUILD_ID = 'v3.107.0+20261110.1408';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4956,7 +4958,7 @@ function replNoticesHtml_(){
     }
     if(e.oldCounted){
       h += '<div class="meta" style="margin-top:8px"><b>“'+esc(e.oldAccount)+'” is still counted.</b> Its last balance is frozen, so the card is counted twice in Budget health. '+
-        'In your Tiller sheet’s <b>Accounts</b> tab, set <b>Hide</b> on “'+esc(e.oldAccount)+'”.</div>';
+        'Hide “'+esc(e.oldAccount)+'” on <b>More → Accounts</b>.</div>';
     }
     h += '<div class="actions" style="margin-top:10px">'+
       (tc.length ? '<button class="btn danger" data-act="repl-remove" data-arg="'+i+'">Remove the '+tc.length+' cop'+(tc.length===1?'y':'ies')+'</button>'+
@@ -6080,54 +6082,126 @@ function renderAccounts(){
     if(state.view==='accounts' && changed) drawAccounts();
   }).catch(function(e){ if(!state.accountsFull) fail(e); });
 }
+/* v3.107.0 (Scott 11/10: "Does the show/hide even work? Mine seems very messy").
+   It half worked: Hide only filtered Transactions, matched the name exactly
+   (case and all), and the list showed most accounts twice - Tiller's Accounts
+   tab title-cases its names ("Amazon Cc"), the feed does not ("Amazon CC").
+   Now: ONE row per account (old feed names folded in), grouped like Balances,
+   and Hide means hidden EVERYWHERE - it sets Hide on the Tiller Accounts tab,
+   which every other page already honours. A name Tiller has no row for can
+   only appear on Transactions and Reports, so that is what its Hide covers. */
+function acctRowHtml_(a){
+  var bits = [ a.txnCount ? Number(a.txnCount).toLocaleString()+' transaction'+(a.txnCount===1?'':'s') : 'No transactions' ];
+  if(a.lastTxn) bits.push('last '+a.lastTxn);
+  var sub = '<div style="color:var(--ink-3);font-size:12px;margin-top:1px">'+esc(bits.join(' · '))+'</div>';
+  if(a.names && a.names.length){
+    sub += '<div style="color:var(--ink-3);font-size:12px;margin-top:1px;white-space:normal">Also seen as '+esc(a.names.join(', '))+'</div>';
+  }
+  if(a.txnOnly){
+    sub += '<div style="color:var(--amber);font-size:12px;margin-top:1px;white-space:normal">Hidden on Transactions only — from before Hide covered every page.</div>';
+  }
+  var arg = ' data-arg="'+esc(a.name)+'"';
+  var btn = a.hidden ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show</button>'
+    : a.txnOnly ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show</button>'+
+                  '<button class="btn ghost sm" data-act="acct-hide"'+arg+'>Hide everywhere</button>'
+    : '<button class="btn ghost sm" data-act="acct-hide"'+arg+'>Hide</button>';
+  return '<div class="envrow"'+(a.hidden?' style="opacity:.6"':'')+'><div style="flex:1;min-width:0">'+
+    '<div class="nm">'+esc(a.name)+'</div>'+sub+'</div>'+btn+'</div>';
+}
+function acctSectionHtml_(key, title, rows, blurb){
+  var open = !!(state.acctOpen && state.acctOpen[key]);
+  var h = '<div class="card" style="margin-bottom:14px">'+
+    '<div class="envrow click" data-act="acct-sec" data-arg="'+key+'" role="button" tabindex="0">'+
+    '<div class="nm">'+esc(title)+' ('+rows.length+')</div><span class="chev">'+(open?'▾':'▸')+'</span></div>';
+  if(open){
+    if(blurb) h += '<div class="note" style="padding:10px 16px;border-bottom:1px solid var(--line)">'+blurb+'</div>';
+    h += rows.map(acctRowHtml_).join('');
+  }
+  return h+'</div>';
+}
 function drawAccounts(){
   var rows = (state.accountsFull && state.accountsFull.accounts) || [];
   var dups = (state.accountsFull && state.accountsFull.dups) || [];
-  var hiddenN = rows.filter(function(a){ return a.hidden; }).length;
-  var h = '<div class="viewhead"><h2>Accounts</h2></div>';
+  var pref = (state.accountsFull && state.accountsFull.groupOrder) || [];
+  var h = '<div class="viewhead"><h2>Accounts</h2></div>'+
+    '<div class="note" style="padding:0 4px 14px"><b>Hide</b> takes an account out of every page: Balances, net worth, Budget health, Reports and Transactions. '+
+    'What it already spent stays in your envelopes. It is the same Hide as on your Tiller Accounts tab.</div>';
   if(dups.length){
     h += '<div class="note" style="padding:0 4px 10px;color:var(--amber)">'+
       '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(dups.join(', '))+
       '. Delete the extras in Tiller to avoid surprises.</div>';
   }
-  if(hiddenN){
-    h += '<div class="note" style="padding:0 4px 14px">'+
-      hiddenN+' hidden account'+(hiddenN>1?'s':'')+
-      ' — transactions stay in your envelopes, they’re just filtered off the Transactions page.</div>';
-  }
   if(!rows.length){
-    h += '<div class="empty">No accounts found yet.</div>';
-  } else {
-    h += '<div class="card">';
-    rows.forEach(function(a){
-      var meta = [a.klass, a.group].filter(String).join(' · ');
-      h += '<div class="envrow"'+(a.hidden?' style="opacity:.55"':'')+'><div style="flex:1;min-width:0">'+
-        '<div class="nm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.name)+'</div>'+
-        '<div style="color:var(--ink-3);font-size:12px;margin-top:1px">'+
-        esc(meta || '')+(meta?' · ':'')+a.txnCount+' txns'+(a.lastTxn?' · last '+esc(a.lastTxn):'')+
-        (a.tillerHide?' · hidden in Tiller':'')+'</div></div>'+
-        '<button class="btn ghost sm" data-act="acct-toggle" data-arg="'+esc(a.name)+'">'+
-        (a.hidden?'Show':'Hide')+'</button></div>';
-    });
-    h += '</div>';
+    $('#shell').innerHTML = h+'<div class="empty">No accounts found yet.</div>';
+    return;
   }
+  var hidden = rows.filter(function(a){ return a.hidden; });
+  var loose = rows.filter(function(a){ return !a.hidden && a.inTiller===false; });
+  var live = rows.filter(function(a){ return !a.hidden && a.inTiller!==false; });
+  var groups = {}, order = [];
+  live.forEach(function(a){
+    var g = a.group || 'No group';
+    if(!groups[g]){ groups[g] = []; order.push(g); }
+    groups[g].push(a);
+  });
+  order.sort(function(a, b){   // the Balances page's order: your saved order first, then A-Z
+    var ia = pref.indexOf(a), ib = pref.indexOf(b);
+    if(ia !== -1 && ib !== -1) return ia - ib;
+    if(ia !== -1) return -1; if(ib !== -1) return 1;
+    if(a === 'No group') return 1; if(b === 'No group') return -1;
+    return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
+  });
+  order.forEach(function(g){
+    h += '<div class="card balgrp"><div class="bhead"><span>'+esc(g)+'</span><span class="v">'+groups[g].length+'</span></div>'+
+      groups[g].map(acctRowHtml_).join('')+'</div>';
+  });
+  if(!order.length) h += '<div class="empty" style="margin-bottom:14px">Every account is hidden.</div>';
+  if(loose.length){
+    h += acctSectionHtml_('loose', 'Not on your Tiller Accounts tab', loose,
+      'Names your transactions carry that Tiller’s Accounts tab does not list: usually an old name for an account, or one you have removed. '+
+      'They have no balance, so hiding one only takes it off Transactions and Reports.');
+  }
+  if(hidden.length) h += acctSectionHtml_('hidden', 'Hidden', hidden, '');
   $('#shell').innerHTML = h;
 }
-function acctToggle(name){
+function acctSection(key){
+  state.acctOpen = state.acctOpen || {};
+  state.acctOpen[key] = !state.acctOpen[key];
+  drawAccounts();
+}
+function acctSet(name, hide){
   var rows = (state.accountsFull && state.accountsFull.accounts) || [];
   var a = rows.find(function(x){ return x.name===name; });
   if(!a) return;
-  a.hidden = !a.hidden; // optimistic
-  drawAccounts();
-  run('apiSetAccountHidden', { name:name, hidden:a.hidden })
-  .then(function(){
-    toast(a.hidden ? 'Hidden — won’t show in Transactions' : 'Visible again ✓');
-    state.register.sig = null; // register must refetch with new hidden set
-  }).catch(function(e){
-    a.hidden = !a.hidden;
+  var go = function(){
+    var prev = { hidden:a.hidden, tillerHide:a.tillerHide, txnOnly:a.txnOnly };
+    a.hidden = hide; a.txnOnly = false; if(a.inTiller!==false) a.tillerHide = hide;   // optimistic
     drawAccounts();
-    toast('⚠ '+(e.message||e));
-  });
+    run('apiSetAccountHidden', { name:name, hidden:hide, names:a.names||[] })
+    .then(function(r){
+      toast(hide ? (a.inTiller===false ? 'Hidden from Transactions and Reports' : 'Hidden everywhere') : 'Showing again ✓');
+      var after = function(){
+        // every page that honours Hide must re-read: Balances, Home (Budget health), Reports, Transactions
+        state.balances = null; state.accounts = null; state.register.sig = null;
+        state._fetchedAt = {}; invalidateData();
+      };
+      // Tiller's Accounts tab changed; carry the one flag into the mirror now rather than at the hourly sync.
+      if(r && r.inTiller && supaOn_()){
+        return supaCall_('apiMirrorAccountHide', [{ name:r.tillerName, hidden:hide }])
+          .catch(function(e){ try{ console.info('SBC account hide → mirror: '+(e && e.message || e)); }catch(x){} })
+          .then(after);
+      }
+      after();
+    }).catch(function(e){
+      a.hidden = prev.hidden; a.tillerHide = prev.tillerHide; a.txnOnly = prev.txnOnly;
+      drawAccounts();
+      toast('⚠ '+(e.message||e));
+    });
+  };
+  if(hide && a.inTiller!==false && a.hasBalance){
+    confirmUi('“'+name+'” still shows a balance. Hiding it takes that money out of Balances, net worth and Budget health. Hide it anyway?', 'Hide it')
+      .then(function(ok){ if(ok) go(); });
+  } else go();
 }
 
 /* ============================ balances (v3.2) ============================ */
@@ -8479,6 +8553,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.107.0', d:'Nov 10, 2026', items:[
+    '<b>Hide</b> on the Accounts page now hides an account everywhere — Balances, net worth, Budget health, Reports and Transactions — not just on Transactions. It asks first if the account still shows a balance.',
+    'The Accounts page lists each account once, grouped the way Balances is, with its old names folded in. Hidden accounts and names Tiller no longer lists are tucked into their own sections.' ]},
   { v:'v3.106.2', d:'Nov 9, 2026', items:[
     'The “looks like a replacement” note in the Inbox no longer mistakes a transaction you typed into Tiller by hand for a replaced card, and it only says an old account is “still counted” when Budget health really counts it.',
     '<b>Remove a transaction</b> also finds transactions that were typed into Tiller by hand (they have no transaction ID).' ]},
@@ -10671,7 +10748,7 @@ function renderHowTo(){
     B('<b>Fund</b> — moves pool money into envelopes. Type the amount (or take the whole pool), apply a plan or split by hand, and the footer says <b>Fully assigned ✓</b> when every dollar has a job. Plans live at the bottom of this page.')+
     B('<b>Envelopes</b> — balances by group; tap a group header to fold it, <b>+ New envelope</b> to add one, and the search box to find one. Envelopes and Tiller categories are one list: creating, renaming, regrouping or archiving an envelope here does the same thing to its category in your Tiller sheet (archive = <b>Hide From Reports</b>), and the confirmation says <b>Tiller ✓</b> when it landed. Hide is the exception — it only quiets the envelope in SBC.')+
     B('<b>Inbox</b> — bank transactions waiting for an envelope; the badge on the tab is the count, and <b>↻ Check for new</b> pulls from Tiller this second instead of waiting for the hour.')+
-    B('<b>Accounts</b> — what Tiller knows about each bank account, and where you hide the ones you\u2019re done with.')+
+    B('<b>Accounts</b> — one row per bank account. <b>Hide</b> one you\u2019re done with and it leaves every page at once: Balances, net worth, Budget health, Reports and Transactions. What it already spent stays in your envelopes.')+
     B('<b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the ones below.')+
     B('<b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined — ✎ Add puts them on the Categories tab in one tap.')+
     B('<b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.')+
@@ -11204,7 +11281,9 @@ document.addEventListener('click', function(ev){
     case 'wb-discard': wbDiscard(arg); break;     // v3.60
     case 'recon-dormant-toggle': state.showDormant = !state.showDormant; drawReconcile(); break;
     case 'env-filter': if(state.envDetail){ state.envDetail.filter=arg; renderEnvDetail(); } break;
-    case 'acct-toggle': acctToggle(arg); break;
+    case 'acct-hide': acctSet(arg, true); break;     // v3.107.0
+    case 'acct-show': acctSet(arg, false); break;
+    case 'acct-sec': acctSection(arg); break;
     case 'import-now': importNowUi(); break;
     case 'bal-refresh': balRefreshFromTiller(); break;
     case 'bal-reorder':
