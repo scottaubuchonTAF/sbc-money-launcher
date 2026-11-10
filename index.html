@@ -1485,11 +1485,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.107.0';
+var FE_VERSION = 'v3.107.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.107.0+20261110.1408';
+var BUILD_ID = 'v3.107.1+20261110.1420';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -6097,13 +6097,21 @@ function acctRowHtml_(a){
   if(a.names && a.names.length){
     sub += '<div style="color:var(--ink-3);font-size:12px;margin-top:1px;white-space:normal">Also seen as '+esc(a.names.join(', '))+'</div>';
   }
+  /* v3.107.1 (Scott: "confusing when it has 2 accounts bundled together"): an OLD name that was hidden
+     before v3.107.0 is not the account being half hidden - say exactly which transactions are off
+     Transactions, and offer the one thing that fixes it. */
+  var old = (!a.hidden && !a.txnOnly && a.oldHidden && a.oldHidden.length) ? a.oldHidden : null;
   if(a.txnOnly){
-    sub += '<div style="color:var(--amber);font-size:12px;margin-top:1px;white-space:normal">Hidden on Transactions only — from before Hide covered every page.</div>';
+    sub += '<div style="color:var(--amber);font-size:12px;margin-top:1px;white-space:normal">This account is on every page except Transactions — it was hidden there before Hide covered every page.</div>';
+  } else if(old){
+    sub += '<div style="color:var(--amber);font-size:12px;margin-top:1px;white-space:normal">Its older transactions, filed under “'+esc(old.join('”, “'))+'”, are hidden on Transactions.</div>';
   }
   var arg = ' data-arg="'+esc(a.name)+'"';
   var btn = a.hidden ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show</button>'
-    : a.txnOnly ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show</button>'+
+    : a.txnOnly ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show on Transactions</button>'+
                   '<button class="btn ghost sm" data-act="acct-hide"'+arg+'>Hide everywhere</button>'
+    : old ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show them</button>'+
+            '<button class="btn ghost sm" data-act="acct-hide"'+arg+'>Hide</button>'
     : '<button class="btn ghost sm" data-act="acct-hide"'+arg+'>Hide</button>';
   return '<div class="envrow"'+(a.hidden?' style="opacity:.6"':'')+'><div style="flex:1;min-width:0">'+
     '<div class="nm">'+esc(a.name)+'</div>'+sub+'</div>'+btn+'</div>';
@@ -6174,8 +6182,8 @@ function acctSet(name, hide){
   var a = rows.find(function(x){ return x.name===name; });
   if(!a) return;
   var go = function(){
-    var prev = { hidden:a.hidden, tillerHide:a.tillerHide, txnOnly:a.txnOnly };
-    a.hidden = hide; a.txnOnly = false; if(a.inTiller!==false) a.tillerHide = hide;   // optimistic
+    var prev = { hidden:a.hidden, tillerHide:a.tillerHide, txnOnly:a.txnOnly, oldHidden:a.oldHidden };
+    a.hidden = hide; a.txnOnly = false; a.oldHidden = []; if(a.inTiller!==false) a.tillerHide = hide;   // optimistic
     drawAccounts();
     run('apiSetAccountHidden', { name:name, hidden:hide, names:a.names||[] })
     .then(function(r){
@@ -6193,7 +6201,7 @@ function acctSet(name, hide){
       }
       after();
     }).catch(function(e){
-      a.hidden = prev.hidden; a.tillerHide = prev.tillerHide; a.txnOnly = prev.txnOnly;
+      a.hidden = prev.hidden; a.tillerHide = prev.tillerHide; a.txnOnly = prev.txnOnly; a.oldHidden = prev.oldHidden;
       drawAccounts();
       toast('⚠ '+(e.message||e));
     });
