@@ -1485,11 +1485,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.107.1';
+var FE_VERSION = 'v3.107.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.107.1+20261110.1420';
+var BUILD_ID = 'v3.107.2+20261110.1516';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -5926,13 +5926,7 @@ function drawTxns(){
        the current filter if it is missing, or the select silently reads "All
        accounts" while the rows are filtered, which is worse than a stray row. */
     '<select id="regAcct" data-act="reg-acct"><option value="">All accounts</option>'+
-    (function(){
-      var list = (state.accounts||[]).slice();
-      if(r.account && list.indexOf(r.account)===-1) list.unshift(r.account);
-      return list.map(function(a){
-        return '<option value="'+esc(a)+'"'+(r.account===a?' selected':'')+'>'+esc(a)+'</option>';
-      }).join('');
-    })()+'</select>'+
+    regAcctOptions_(r)+'</select>'+
     (r.envelope
       ? '<button class="pill sel" data-act="reg-env-clear">'+esc(envName(r.envelope))+' ✕</button>'
       : '<button class="pill" data-act="open-picker" data-arg="regenv|x|0">Filter by envelope…</button>')+
@@ -6071,6 +6065,23 @@ function unapprove(txnId){
   });
 }
 
+/* v3.107.2 (Scott: "add a line in the drop down and put hidden accounts below active accounts").
+   The Transactions account picker lists every account with transactions, hidden ones included, so an
+   old card's history can still be looked up. Hidden ones now sit under a divider. The hidden set is
+   the Accounts page's hiddenNames (exactly what the register filter drops); until that has loaded the
+   list is flat, as before. */
+function regAcctOptions_(r){
+  var list = (state.accounts||[]).slice();
+  if(r.account && list.indexOf(r.account)===-1) list.unshift(r.account);
+  var hid = {};
+  ((state.accountsFull && state.accountsFull.hiddenNames) || []).forEach(function(n){ hid[n] = 1; });
+  var opt = function(a){ return '<option value="'+esc(a)+'"'+(r.account===a?' selected':'')+'>'+esc(a)+'</option>'; };
+  var isHid = function(a){ return !!hid[String(a).trim().toLowerCase()]; };
+  var live = list.filter(function(a){ return !isHid(a); }), gone = list.filter(isHid);
+  return live.map(opt).join('')+
+    (gone.length ? '<option disabled>────── Hidden ──────</option>'+gone.map(opt).join('') : '');
+}
+
 /* ============================ accounts (v3.2) ============================ */
 function renderAccounts(){
   if(state.accountsFull){ drawAccounts(); if(freshEnough('accountsFull')) return; } // v3.27
@@ -6192,6 +6203,12 @@ function acctSet(name, hide){
         // every page that honours Hide must re-read: Balances, Home (Budget health), Reports, Transactions
         state.balances = null; state.accounts = null; state.register.sig = null;
         state._fetchedAt = {}; invalidateData();
+        // keep the Transactions picker's hidden group in step without waiting for the page to be re-read
+        var hn = (state.accountsFull.hiddenNames || []).slice(), ks = [name].concat(a.names||[]);
+        if(r && r.tillerName) ks.push(r.tillerName);
+        ks.forEach(function(n){ var k = String(n).trim().toLowerCase(), i = hn.indexOf(k);
+          if(hide && i === -1) hn.push(k); if(!hide && i !== -1) hn.splice(i, 1); });
+        state.accountsFull.hiddenNames = hn;
       };
       // Tiller's Accounts tab changed; carry the one flag into the mirror now rather than at the hourly sync.
       if(r && r.inTiller && supaOn_()){
@@ -8561,6 +8578,10 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.107.2', d:'Nov 10, 2026', items:[
+    'The account picker on Transactions lists hidden accounts below a line, under the ones you still use.' ]},
+  { v:'v3.107.1', d:'Nov 10, 2026', items:[
+    'On the Accounts page, an old account name you hid in the past now says exactly which transactions are hidden, with a button to show them.' ]},
   { v:'v3.107.0', d:'Nov 10, 2026', items:[
     '<b>Hide</b> on the Accounts page now hides an account everywhere — Balances, net worth, Budget health, Reports and Transactions — not just on Transactions. It asks first if the account still shows a balance.',
     'The Accounts page lists each account once, grouped the way Balances is, with its old names folded in. Hidden accounts and names Tiller no longer lists are tucked into their own sections.' ]},
