@@ -1541,11 +1541,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.109.0';
+var FE_VERSION = 'v3.109.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.109.0+20261111.0849';
+var BUILD_ID = 'v3.109.1+20261111.1040';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -3834,9 +3834,9 @@ var DASH_WIDGETS = {
     } else if(!unOk && Math.abs(applied)>=0.005){
       note=sub(money(applied)+' of the gap is in flight'+
         (lagAccts?' ('+esc(lagAccts)+')':'')+'; '+money(un)+
-        ' is not explained yet — worth a look on the Reconcile page.'+impLine);
+        ' is not explained yet — worth a look on the '+hlReconLink_()+'.'+impLine);
     } else if(!unOk){
-      note=sub(money(un)+' is not explained by feed timing — worth a look on the Reconcile page.');
+      note=sub(money(un)+' is not explained by feed timing — worth a look on the '+hlReconLink_()+'.');
     }
     // v3.55: if a balance has stopped MOVING, say THAT instead of "unexplained".
     // On 8/26 this card showed "−$1,061.54 unexplained · Oldest balance update
@@ -7466,6 +7466,8 @@ function hlKind_(k){
        : k==='txns_ahead'    ? 'transactions in, balance not updated'
        :                       'balance and transactions out of step';
 }
+/* v3.109.1: "the Reconcile page" in Budget health is a link to it (it has Reconcile to bank) */
+function hlReconLink_(){ return '<button class="lnk" data-act="goview" data-arg="reconcile">Reconcile accounts page</button>'; }
 function healthLedgerCard_(H, sz, head, d){
   var L=H.ledger, c=function(k){ return (Number(L[k])||0)/100; };
   var zero=function(x){ return Math.abs(x)<0.005; };
@@ -7485,7 +7487,8 @@ function healthLedgerCard_(H, sz, head, d){
   if(!zero(untr)){
     note=sub(money(untr)+' does not match any account or transaction'+
       (L.untracedSince?' since '+esc(hlMD_(L.untracedSince)):'')+
-      '. Look at what changed that day: a deleted or edited transaction, an envelope adjustment, or an account moved in or out of the budget.');
+      '. Look at what changed that day: a deleted or edited transaction, an envelope adjustment, or an account moved in or out of the budget. '+
+      'If it is a change you meant (say, money moved out of an archived envelope), Reconcile to bank on the '+hlReconLink_()+' closes it.');   // v3.109.1
   } else if(stuck.length){
     var s0=stuck[0];
     note=sub(s0.kind==='txns_ahead'
@@ -9205,6 +9208,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.109.1', d:'Nov 11, 2026', items:[
+    '<b>Reconcile to bank</b> is now in Settings \u2192 Maintenance and on the Reconcile accounts page. It shows your bank, your envelopes and the change first, and says plainly whether it adds money to the envelope or takes it out.' ]},
   { v:'v3.109.0', d:'Nov 11, 2026', items:[
     '<b>Your start date is respected.</b> Purchases from before your start date are kept for your history but no longer take money out of your envelopes. If one hadn\u2019t reached your bank yet, you can tell SBC to take it from the envelope.',
     '<b>Tidy up.</b> If an earlier version took money out of your envelopes for purchases from before your start date, one tap puts it right without leaving your envelopes above your bank. When SBC can\u2019t tell what happened to one, it asks you instead of guessing.',
@@ -10382,6 +10387,9 @@ function renderMaintenance(){
     ['reconcile','Reconcile accounts'],
     ['removetxn','Remove a transaction']]);   // v3.102.7: Access moved to Settings -> Account & privacy
   h += '<div class="card" style="margin-top:14px;padding:12px">'+
+    /* v3.109.1 */
+    '<div class="actions"><button class="btn ghost" data-act="recon-bank">'+RB_LBL_+'</button></div>'+
+    '<div class="note" style="padding:6px 2px 16px">Makes your envelopes add up to the money in your bank accounts (Budget health\u2019s difference), by adding to or taking from one envelope - the Income Cash Pool unless you pick another. It shows you every number first; nothing changes until you confirm, and you can undo it from History.</div>'+
     '<div class="actions"><button class="btn ghost" data-act="snapshot-tiller">\u2b07 Back up envelopes to Tiller</button></div>'+
     '<div class="note" style="padding:6px 2px 0">Writes a read-only "SBC Envelopes" tab into your Tiller sheet so Tiller always has an accurate copy. Also refreshes automatically each hour.</div>'+
     /* v3.109.0 (1A.4) */
@@ -11004,6 +11012,9 @@ function drawReconcile(){
     '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
     'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
     'No feed for over 6 months → Closed / Dormant.</div>';
+  // v3.109.1: the reconcile itself, on the page the help and Budget health send people to
+  h += '<div class="card" style="padding:12px;margin-bottom:12px"><div class="actions" style="justify-content:flex-start"><button class="btn" data-act="recon-bank">'+RB_LBL_+'</button></div>'+
+    '<div class="note" style="padding:6px 2px 0">When your accounts look right but Budget health still shows a difference, this makes your envelopes match your bank. You see the numbers first.</div></div>';
   h += feedLagPanel();
   h += settingsSectionLabel('✋ MANUAL — UPDATE BY HAND')+'<div class="card">';
   if(manual.length) manual.forEach(function(a){ h += reconRow(a, rev); });
@@ -11191,23 +11202,114 @@ function booksReconcile_(){
   var id = b.pool.envelopeId;
   run('apiReconcileToBank', { envelopeId:id, dryRun:true }).then(function(r){
     actBusy('books-reconcile', false, 'Put it on the books');
-    if(r && r.blocked){ toast('⚠ '+(r.message||'Not now: a bank feed is behind. Try again later.')); return; }
-    if(r && r.already){ toast('Your envelopes already match your bank ✓'); return booksCheck_(true); }
-    var msg = 'Your bank accounts hold '+money(r.bank)+'. Your envelopes hold '+money(r.envelopes)+
-      (Number(r.pendingInbox) ? ', and '+money(r.pendingInbox)+' is still waiting in your Inbox' : '')+'. '+
-      'SBC will add '+money(r.willAdjust)+' to '+r.envelope+' ('+money(r.envelopeBalanceBefore)+' → '+money(r.envelopeBalanceAfter)+') so your envelopes match your bank. You can undo it from History.';
-    return confirmUi(msg, 'Put it on the books').then(function(ok){
+    if(r && r.blocked){ toast('⚠ '+reconBlockedText_(r)); return; }
+    if(r && r.already){ toast(reconAlreadyText_(r)); return booksCheck_(true); }
+    // v3.109.1: the sign said in words - this said "SBC will add -$490.23" for a take-out
+    return confirmUi(reconBankMsg_(r), 'Put it on the books').then(function(ok){
       if(!ok) return;
       actBusy('books-reconcile', true, 'Saving…');
-      return run('apiReconcileToBank', { envelopeId:id }).then(function(res){
+      return run('apiReconcileToBank', { envelopeId:id, expect:r.willAdjust }).then(function(res){
         actBusy('books-reconcile', false, 'Put it on the books');
-        if(res && res.blocked){ toast('⚠ '+(res.message||'Not now: a bank feed is behind.')); return; }
+        if(res && res.blocked){ toast('⚠ '+reconBlockedText_(res)); return; }
+        if(res && res.changed){ toast(reconChangedText_(res)); return; }
+        if(res && res.already){ toast(reconAlreadyText_(res)); return booksCheck_(true); }
         toast('Your money is on the books ✓ Next: Fund', res && res.opId ? { label:'Undo', fn:function(){ undoNow_(res.opId, 'the reconcile'); } } : null);
         invalidateData(); envBalancesRefresh_();
         return booksCheck_(true);
       });
     });
   }).catch(function(e){ actBusy('books-reconcile', false, 'Put it on the books'); toast('⚠ '+(e.message||e)); });
+}
+/* v3.109.1 - Reconcile to bank for everyone (Settings → Maintenance, and the Reconcile accounts page). It only ever
+   existed on the new-person Home card and after the tidy-up. Same server call as booksReconcile_: pick the envelope
+   (Income Cash Pool by default; only active, on-budget envelopes - apiReconcileChoices), a dry run, a confirm that
+   says the sign in words, then the reconcile, Undo, and the mirror + Home refreshed so Budget health is right now. */
+var RB_LBL_ = '\u2696 Reconcile to bank';
+function reconAdjSentence_(r){
+  var a = Number(r.willAdjust)||0, amt = money(Math.abs(a));
+  return (a < 0 ? 'SBC will take '+amt+' out of '+r.envelope : 'SBC will add '+amt+' to '+r.envelope)+
+    (r.envelopeBalanceBefore!=null ? ' ('+money(r.envelopeBalanceBefore)+' \u2192 '+money(r.envelopeBalanceAfter)+')' : '');
+}
+function reconBankMsg_(r){
+  var a = Number(r.willAdjust)||0, amt = money(Math.abs(a)), fl = Math.abs(Number(r.excludedFloat)||0);
+  return 'Your bank accounts hold '+money(r.bank)+'. Your envelopes hold '+money(r.envelopes)+
+    (Number(r.pendingInbox) ? ', and '+money(r.pendingInbox)+' is waiting in your Inbox to be approved' : '')+'. '+
+    (a < 0 ? 'So your envelopes hold '+amt+' more than your bank' : 'So your bank holds '+amt+' more than your envelopes')+
+    (fl >= 0.005 ? ' (not counting '+money(fl)+' still on its way through a bank feed, which settles by itself)' : '')+'. '+
+    reconAdjSentence_(r)+' so your envelopes match your bank. You can undo it from History.';
+}
+function reconBtnText_(r){ var a = Number(r.willAdjust)||0; return (a < 0 ? 'Take ' : 'Add ')+money(Math.abs(a))+(a < 0 ? ' out' : ''); }
+function reconBlockedText_(r){
+  var st = (r && r.staleAccounts) || [];
+  return st.length
+    ? 'Not now: '+st.join(', ')+(st.length===1?' has':' have')+' not sent SBC a new balance for several days, so SBC can\u2019t trust your bank total. Refresh '+(st.length===1?'it':'them')+' at my.tiller.com (or set the balance by hand on the Reconcile accounts page), then try again. Nothing was changed.'
+    : 'Not now: a bank feed is behind, so SBC can\u2019t trust your bank total. Try again once it catches up. Nothing was changed.';
+}
+function reconAlreadyText_(r){
+  var fl = Math.abs(Number(r && r.excludedFloat)||0);
+  return 'Nothing to do: your envelopes already match your bank \u2713'+
+    (fl >= 0.005 ? ' The '+money(fl)+' difference is money still on its way through a bank feed; it settles by itself.' : '');
+}
+function reconChangedText_(r){
+  return 'Nothing was changed: your numbers moved while you were looking (it would now be '+money(Math.abs(Number(r.willAdjust)||0))+'). Open Reconcile to bank again to see them.';
+}
+function reconBankHtml_(r, list, id){
+  var row = function(k, v){ return '<tr><td style="padding:3px 6px">'+k+'</td><td style="padding:3px 6px;text-align:right">'+v+'</td></tr>'; };
+  var fl = Math.abs(Number(r.excludedFloat)||0);
+  return '<div style="font-weight:700;font-size:16px;margin-bottom:6px">Reconcile to bank</div>'+
+    '<label class="note" for="rbEnv" style="display:block;margin-bottom:4px">Put the difference in</label>'+
+    '<select id="rbEnv" class="amt" style="width:100%;margin-bottom:10px">'+list.map(function(e){
+      return '<option value="'+esc(e.id)+'"'+(e.id===id?' selected':'')+'>'+esc(e.name)+' ('+money(e.balance)+')</option>'; }).join('')+'</select>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 8px">'+
+      row('Bank accounts', money(r.bank))+row('Envelopes', money(r.envelopes))+
+      (Number(r.pendingInbox) ? row('Waiting in your Inbox', money(r.pendingInbox)) : '')+
+      (fl >= 0.005 ? row('On its way through a bank feed (left alone)', money(fl)) : '')+
+      row('<b>'+((Number(r.willAdjust)||0) < 0 ? 'Take out of ' : 'Add to ')+esc(r.envelope)+'</b>', '<b>'+money(Math.abs(Number(r.willAdjust)||0))+'</b>')+'</table>'+
+    '<div class="note">'+esc(reconBankMsg_(r))+'</div>';
+}
+function reconBankOpen_(envId){
+  if(state.rbBusy) return;
+  state.rbBusy = true; actBusy('recon-bank', true, 'Looking at your bank\u2026');
+  var done = function(){ state.rbBusy = false; actBusy('recon-bank', false, RB_LBL_); };
+  run('apiReconcileChoices').then(function(c){
+    var list = (c && c.envelopes) || [];
+    if(!list.length) throw new Error('There is no on-budget envelope to put the difference in. Check Settings \u2192 Accounts in Budget health.');
+    var has = function(x){ return x && list.some(function(e){ return e.id===x; }); };
+    var id = has(envId) ? envId : has(c.poolId) ? c.poolId : list[0].id;
+    return run('apiReconcileToBank', { envelopeId:id, dryRun:true }).then(function(r){
+      done();
+      if(r && r.blocked){ toast('\u26a0 '+reconBlockedText_(r)); return; }
+      if(r && r.already){ toast(reconAlreadyText_(r)); return; }
+      state.rb = { id:id, r:r };
+      $('#ovl').innerHTML = '<div class="ovl" data-act="rb-close"><div class="panel confirm" style="max-width:520px;max-height:85vh;overflow:auto">'+reconBankHtml_(r, list, id)+
+        '<div class="actions" style="justify-content:flex-end;margin-top:12px">'+
+        '<button class="btn ghost" data-act="rb-cancel">Cancel</button>'+
+        '<button class="btn" data-act="rb-go">'+esc(reconBtnText_(r))+'</button></div></div></div>';
+      var sel = $('#rbEnv');
+      if(sel) sel.addEventListener('change', function(){ var v = this.value; $('#ovl').innerHTML = ''; state.rb = null; reconBankOpen_(v); });
+    });
+  }).catch(function(e){ done(); toast('\u26a0 '+(e.message||e)); });
+}
+function reconBankGo_(){
+  var s = state.rb; if(!s) return;
+  state.rb = null; $('#ovl').innerHTML = '';
+  toast('Reconciling\u2026');
+  return run('apiReconcileToBank', { envelopeId:s.id, expect:s.r.willAdjust }).then(function(res){
+    if(res && res.blocked){ toast('\u26a0 '+reconBlockedText_(res)); return; }
+    if(res && res.changed){ toast(reconChangedText_(res)); return; }
+    if(res && res.already){ toast(reconAlreadyText_(res)); return; }
+    var a = Number(res && res.adjusted)||0;
+    toast((a < 0 ? 'Took '+money(Math.abs(a))+' out of ' : 'Added '+money(Math.abs(a))+' to ')+(res.envelope||'the envelope')+' \u2713 Your envelopes match your bank.',
+      res && res.opId ? { label:'Undo', fn:function(){ var u = undoNow_(res.opId, 'the reconcile'); if(u && u.then) u.then(reconBankRefresh_).catch(function(){}); } } : null);
+    return reconBankRefresh_();
+  }).catch(function(e){ toast('\u26a0 '+(e.message||e)); });
+}
+/* Home and Budget health read the mirror: re-read the sheet into it now, then repaint what is on screen. */
+function reconBankRefresh_(){
+  return run('apiRefreshMirror').catch(function(){}).then(function(){
+    invalidateData(); envBalancesRefresh_();
+    if(state.view==='reconcile'){ state.reconcile = null; go('reconcile'); }
+  });
 }
 /* 1A.4 - the tidy-up: preview with the sums, asked once, one History entry, undoable. */
 function cleanupOpen_(){
@@ -11591,7 +11693,7 @@ function renderHowTo(){
   S('🚀','Your first day',
     P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you set SBC Money up with (the one that owns your SBC sheet) — any Google account works once it is registered. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
     P('<b>What you will see.</b> Your envelopes already exist — one per category in your Tiller sheet — and every one of them is <b>$0</b>. That is on purpose: your history is kept, but budgeting starts today. The <b>Inbox</b> only shows transactions from today onward.')+
-    P('<b>Put your real money on the books (5 minutes, once).</b> Open <b>Balances</b> and check that the bank balances look right. Then <b>Settings → Maintenance → Reconcile accounts → Reconcile to bank</b>: SBC puts the cash you actually have into the <b>Income Cash Pool</b>. Now open <b>Fund</b> and deal that money out — this month\u2019s rent, groceries until payday, a little in each envelope you will touch before the next paycheck. Leave what is left in the pool or park it in savings.')+
+    P('<b>Put your real money on the books (5 minutes, once).</b> Open <b>Balances</b> and check that the bank balances look right. Then <b>Settings → Maintenance → Reconcile to bank</b>: SBC puts the cash you actually have into the <b>Income Cash Pool</b>. Now open <b>Fund</b> and deal that money out — this month\u2019s rent, groceries until payday, a little in each envelope you will touch before the next paycheck. Leave what is left in the pool or park it in savings.')+
     P('<b>Leave 💳 CC Payment at $0.</b> It is plumbing, not a spending envelope — the credit-card section below explains why.')+
     PL('From here on it is the routine in the next section. Give it two paydays before judging it; the first one is always the slowest.'), {g:'start'}),
 
@@ -11613,7 +11715,7 @@ function renderHowTo(){
   S('🏦','Put your real money on the books (Reconcile to bank)',
     P('<b>Reconcile to bank</b> makes your envelopes add up to the money you really have. It works out the difference between your bank accounts and your envelopes (leaving out money still in flight, and Inbox items waiting for approval) and puts that difference into one envelope — normally the <b>Income Cash Pool</b> — as one adjustment.')+
     B('<b>New here?</b> Home shows the steps in order: bring in your history, clear the Inbox items from before your start date, then <b>Put it on the books</b>, then <b>Fund</b>. Step 3 waits for step 2 so nothing is counted twice.')+
-    B('Later, it lives at <b>Settings → Maintenance → Reconcile accounts → Reconcile to bank</b>. It always shows what it would change first; tap again and it is done.')+
+    B('Later, it lives at <b>Settings → Maintenance → Reconcile to bank</b>, and at the top of <b>Settings → Maintenance → Reconcile accounts</b> (Budget health links there when it sees a difference). It shows the numbers first and says in words whether it will add to the envelope or take money out of it; you confirm, and you can undo it from History.')+
     B('If a bank feed has stopped reporting, it refuses and says which account — truing to a wrong balance would bake the error into an envelope.')+
     PL('It is one History entry with Undo. Run it once when you start; after that, Budget health tells you if it is ever needed again.'), {g:'start'}),
 
@@ -11631,7 +11733,7 @@ function renderHowTo(){
     B('<b>Obligation</b> — a payment that leaves on its own: a card autopay, a mortgage, a car loan. Envelopes say the money is spoken for; an obligation says <i>which account</i> it leaves from, and when.')+
     B('<b>Tag</b> — a label that cuts across envelopes (“Myrtle Beach 2027”) so you can see what an event cost.')+
     B('<b>Moved to / Moved from / Funded from</b> — in an envelope\u2019s Activity, each money movement names the other envelope involved; tap the name to jump there.')+
-    B('<b>Maintenance</b> — a page under Settings holding the tools for when something looks wrong: Tiller sync, Reconcile accounts, Remove a transaction, Access, the sheet links.')+
+    B('<b>Maintenance</b> — a page under Settings holding the tools for when something looks wrong: Reconcile to bank, Tiller sync, Reconcile accounts, Remove a transaction, Access, the sheet links.')+
     B('<b>Tiller</b> — the service that pulls your bank data into your own Google Sheet. SBC reads from that sheet and writes your decisions back to it. The sheet is the record; the app is the fast view.')+
     PL('<b>Write-back</b> — every save you make here is also written to your sheet in the background (the “syncing” toast). You never need to open the sheet, but you always can.'), {g:'start'}),
 
@@ -11772,7 +11874,7 @@ function renderHowTo(){
     B('<b>Accounts</b> — one row per bank account. <b>Hide</b> one you\u2019re done with and it leaves every page at once: Balances, net worth, Budget health, Reports and Transactions. What it already spent stays in your envelopes.')+
     B('<b>Settings → Maintenance</b> — the once-in-a-while tools live behind one row so the everyday list stays short. Open it for the ones below.')+
     B('<b>Tiller sync</b> — where SBC and your Tiller sheet disagree (bank edits, deletions, drift, missing categories) over the last few weeks. Nothing changes until you tap a ✎ Write, ✎ Add or ✓ Accept button. <b>Envelopes missing from Tiller Categories</b> lists envelopes made before the two lists were joined — ✎ Add puts them on the Categories tab in one tap.')+
-    B('<b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.')+
+    B('<b>Reconcile accounts</b> — bank balance vs. what SBC thinks, per account, with <b>Reconcile to bank</b> at the top, the <b>Feed check</b> and the manual-balance ✎. New accounts are added in Tiller, never here — see “An account with no feed”.')+
     B('<b>Remove a transaction</b> — for a duplicate or an orphan Tiller no longer has; anything Tiller still has is protected. Logged and undoable from History.')+
     B('<b>Access</b> — who can sign in to <i>your</i> budget; add a partner\u2019s email here.')+
     B('<b>More</b> (phone) — the pages the five tabs have no room for: Transactions, Fund, Goals, Obligations, Accounts, Reports, and Settings. On a computer these all live in the left sidebar instead.')+
@@ -12304,6 +12406,10 @@ document.addEventListener('click', function(ev){
     case 'cleanup-close': if(ev.target===el) $('#ovl').innerHTML=''; break;
     case 'books-later': booksDismiss_(arg); if(state.view==='dash') renderDash(); break;
     case 'books-reconcile': booksReconcile_(); break;
+    case 'recon-bank': reconBankOpen_(); break;               // v3.109.1
+    case 'rb-go': reconBankGo_(); break;
+    case 'rb-cancel': $('#ovl').innerHTML=''; state.rb=null; break;
+    case 'rb-close': if(ev.target===el){ $('#ovl').innerHTML=''; state.rb=null; } break;
     case 'prestart-resolve': prestartResolve_(p[0], p[1]==='1'); break;   // v3.109.0 (Task 9)
     case 'prestart-spend': state.spendPre = state.spendPre||{}; state.spendPre[arg] = !preStartOn_(inboxFind_(arg)||{}); drawInbox(); break;   // v3.109.0 (Task 8: flips what the card shows)
     case 'txn-spent': txnSpentToggle(arg); break;   // v3.109.0
