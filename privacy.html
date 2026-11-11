@@ -58,7 +58,7 @@ ul{padding-left:22px}
     <h2>Who can see your money</h2>
     <p><b>You.</b> Your data is visible only to the Google account you set the app up with; nobody else is on your access list and the app has no screen that shows one person another person's numbers.</p>
     <p><b>Two service identities</b>, so the app can work: an app account (editor on your two sheets — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. They are not people.</p>
-    <p><b>The operator</b> — the person who runs the server. Like any app's operator he could technically query the database. He does not, the app has no screen that would, and the app keeps a visible record of every such read: <i>Settings → Account &amp; privacy → Who has read the database</i>, inside your own account, so you would see it.</p>
+    <p><b>The operator</b> — the person who runs the server. Like any app's operator he could technically query the database. He does not, and the app has no screen that would. Reading the database leaves a mark: every statement anyone other than the app itself runs against it is recorded and shown inside your own account at <i>Settings → Account &amp; privacy → Who has read the database</i>, together with whether that recording is switched on. It records statements, not whose rows came back. He also holds the app account's password, and opening your sheets in Google Drive as that account is <b>not</b> in that record — your sheet's own Activity panel in Google Sheets is the record there.</p>
   </section>
   <section class="sec">
     <h2>What it does not do</h2>
