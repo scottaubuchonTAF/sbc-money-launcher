@@ -1296,6 +1296,34 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
 .searchbar .btn{flex:none;min-height:44px}
 .filterbar select,.filterbar .pill,.regmore .btn,.bulkbar input,.bulkbar .btn{min-height:44px}   /* L-T1 */
 .filterbar select{max-width:100%;min-width:0}   /* 900-1099 px: phone cards, but not a 1,100 px wide button */
+/* v3.111.0 (task U1): Connect Tiller - the card, each bank's status line, Refresh my banks. Colours through tokens only;
+   the four tones reuse existing pairs (green / amber / red on their tints, ink-2 on the chip) - tests/v31110_UI_tiller_test.js checks them. */
+.tlcard{padding:14px}
+.tlcard .tlhead{font-weight:700;color:var(--ink);margin:0 0 6px;font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+.tlcard .tlmsg{color:var(--ink-2);font-size:13.5px;margin:6px 0 0;line-height:1.45;overflow-wrap:anywhere}
+.tlcard .tlmsg:empty{display:none}
+.tlcard .tlbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;justify-content:flex-start}
+.tlcard .btn,.tlrfbtn{min-height:44px}
+.tlcard .tlhead:focus-visible,.tlcard button:focus-visible,.tlrfbtn:focus-visible,.tlrfnote:focus-visible,.tlabout>summary:focus-visible,.tllink:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+.tlabout{margin-top:10px}
+.tlabout>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--teal-700);font-weight:600}
+.tlallow p,.tlallow li{color:var(--ink-2);font-size:13.5px;margin:0 0 8px;line-height:1.5}
+.tlallow ol{padding-left:20px;margin:0 0 8px}
+.tllink{color:var(--teal-700);overflow-wrap:anywhere;min-height:44px;display:inline-flex;align-items:center}
+.tlrow{flex-basis:100%;min-width:0}
+.tlchip{display:flex;gap:6px;align-items:flex-start;border-radius:8px;padding:4px 8px;font-size:12px;line-height:1.4;margin-top:4px;white-space:normal;overflow-wrap:anywhere;max-width:100%;box-sizing:border-box}
+.tlchip.tl-ok{background:var(--green-bg);color:var(--green)}
+.tlchip.tl-warn{background:var(--amber-soft);color:var(--amber)}
+.tlchip.tl-bad{background:var(--red-bg);color:var(--red)}
+.tlchip.tl-info{background:var(--chip);color:var(--ink-2)}
+.tlsum{color:var(--ink-2);font-size:13px;padding:0 4px 12px;line-height:1.45;overflow-wrap:anywhere}
+.tlsum:empty{display:none}
+.vhbtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.tlrfnote{padding:0 4px 10px;overflow-wrap:anywhere}
+/* Task 2 (11/12): a stored problem is a warning box with words and a symbol, never colour alone; ghost buttons get an outline */
+.tlprob{background:var(--amber-soft);color:var(--amber-ink);border:1px solid var(--amber);border-radius:8px;padding:8px 10px;margin:0 0 8px;overflow-wrap:anywhere}
+.tlcard .tlhead.tlprob{font-size:15px}
+.tlcard .btn.ghost,.tlrfbtn{border:1px solid var(--teal-700)}
 </style>
 </head>
 <body data-d="mid">
@@ -1559,6 +1587,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiMirrorAccountHide:1, // v3.107.0: the Accounts page's Hide wrote Tiller's Accounts tab; carry that flag into the mirror now
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
+  apiTillerStart:1, apiTillerConfirm:1, apiTillerStatus:1, apiTillerRefresh:1, apiTillerDisconnect:1, // v3.111.0: Connect Tiller (also MIRROR_ONLY: no Apps Script fallback, no strike; never MUTATING)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1593,7 +1622,8 @@ var MIRROR_ONLY = { apiRetryWriteBack:1, apiDiscardWriteBack:1, apiWriteBackStat
   apiWealth:1, apiWealthSave:1, // v3.85.0: Wealth's tables exist only in the mirror (no Apps Script fallback)
   apiRefreshSettings:1, // v3.93.4
   apiMirrorAccountHide:1, // v3.107.0
-  apiOperatorAccess:1 }; // v3.99.0: no Apps Script fallback - the operator access log lives only in the mirror
+  apiOperatorAccess:1, // v3.99.0: no Apps Script fallback - the operator access log lives only in the mirror
+  apiTillerStart:1, apiTillerConfirm:1, apiTillerStatus:1, apiTillerRefresh:1, apiTillerDisconnect:1 }; // v3.111.0: Connect Tiller lives only in the api function (README-tiller.md)
 /* v3.69.0 (review F4): three strikes used to be a LATCH — the rest of the session
    went to Apps Script at 5-20 s a call, silently, after one bad second. And the
    8 s read timeout counted as a strike, so prewarm()'s six parallel reads could
@@ -1624,6 +1654,7 @@ function supaCall_(fn, args){
   // explicit refresh button, which gets a full minute.
   var refreshing = !!(args && args[0] && args[0].refreshMirror);
   var ms = fn === 'apiRefreshMirror' ? 60000 : (big || refreshing) ? 30000 : 8000;
+  if(fn.indexOf('apiTiller')===0) ms = 60000;   // v3.111.0: every apiTiller* gets a minute (the server answers within 50 s; design 5.2)
   var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, ms);
   return fetch(SUPA_API, { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
@@ -1754,11 +1785,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.110.1';
+var FE_VERSION = 'v3.111.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.110.1+20261111.2048';
+var BUILD_ID = 'v3.111.0+20261112.1226';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2349,6 +2380,7 @@ function go(view){
   if(view==='about' && state.verProbe) state.verProbe.failed = false;
   if(view==='inbox' && state.view!=='inbox') state.inboxStay = {};   // v3.108.0: coming BACK to the Inbox sorts it afresh
   if(view==='dash' && state.view!=='dash') state.dashError = null;   // v3.109.0 (Task 7): coming back to Home asks once more
+  if(view!==state.view) tillerRecheckClear_();   // v3.111.0: the +5 / +15 minute re-reads after a Refresh are one-shot, cleared on a view change (design 6.4)
   state.view = view;
   formDirty_.view = '';   // v3.109.0: a new page starts clean
   goPushHistory_(view);
@@ -2412,6 +2444,10 @@ function bootApply_(res){
     // v3.74.0: same reasoning, one line up — capture the edge build before the
     // Apps Script reconcile replaces state.boot.
     if(res.boot && res.boot.mirrorVersion) state.mirrorVersion = res.boot.mirrorVersion;
+    // v3.111.0 (U1): the Connect Tiller card's state rides the MIRROR boot only (null / missing = no card, no Tiller call)
+    var tb = res && res.boot && res.boot.tiller;
+    state.tiller = (tb && typeof tb==='object' && typeof tb.state==='string') ? { state:tb.state, canManage:!!tb.canManage, problem:(tb.problem && typeof tb.problem==='object') ? tb.problem : null } : null;
+    if(!state.tiller){ state.tillerSt = null; tillerRecheckClear_(); }
     state._booted = true;                  // v3.28: real (server) data is now loaded
     setGreeting_();
     applySeason();                         // v3.57: dress for the season/birthday
@@ -2552,8 +2588,8 @@ function prewarm(){
   if(!state.accounts) run('apiAccounts').then(function(a){ state.accounts=a; }).catch(warn('apiAccounts'));
   if(!state.register.items && !state.registerLoading){ // v3.22: shared flag with dashFetchRecent
     state.registerLoading = true;
-    run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:50})
-      .then(function(it){ state.register.items=it; state.register.sig='|||0|50'; state.registerLoading=false;
+    run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,includeHiddenEnvelopes:false,limit:50})   // v3.111.0
+      .then(function(it){ state.register.items=it; state.register.sig='|||0|0|50'; state.registerLoading=false;
         markFetched('register'); // v3.27 (same limit/filters as the Transactions view); v3.28.1 sig incl. limit
         // v3.77.1: this read is unfiltered, so it answers Home's question too -
         // seed state.recent from it and the cold load still costs ONE call.
@@ -4661,7 +4697,7 @@ function dashFetchRecent(){
   if(state.recent.loading) return;
   if(state.recent.items && freshEnough('recent')) return;
   state.recent.loading = true;
-  run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,limit:20}).then(function(it){
+  run('apiRegister',{q:'',account:'',envelope:'',includeHidden:false,includeHiddenEnvelopes:false,limit:20}).then(function(it){   // v3.111.0: hidden envelopes stay out
     state.recent.items=it; state.recent.loading=false; markFetched('recent');
     if(state.view==='dash') renderDash();
   }).catch(function(e){ state.recent.loading=false; console.warn('dash recent:', e&&e.message||e); });
@@ -4999,6 +5035,16 @@ function hiddenEnvs_(){
   });
   return out;
 }
+/* v3.111.0 (Scott 11/12/26): a hidden envelope is left out of the default views unless you name it or turn on Show
+   hidden. The picker list (state.picker) does not carry the flag on either path, so the page reads it from boot. */
+function hiddenEnvIds_(){ var o = {}; hiddenEnvs_().forEach(function(e){ o[e.id] = true; }); return o; }
+function envHidTag_(id){ return (id && hiddenEnvIds_()[id]) ? ' · hidden' : ''; }
+/* After a hide / unhide, Home, Reports and Transactions answer differently: drop what they had cached. */
+function hiddenChangedDrop_(){
+  state.dash = null; state.dashSeries = null; state.reportData = null;
+  if(state.register){ state.register.items = null; state.register.sig = null; }
+  if(state.recent) state.recent.items = null;
+}
 function hiddenSectionHtml(){
   var list = hiddenEnvs_();
   if(!list.length) return '';
@@ -5256,14 +5302,14 @@ function envHide(id){
   .then(function(ok){
     if(!ok) return;
     run('apiSetEnvelopeHidden', { envelopeId:id, hidden:true })
-    .then(function(){ toast('Hidden \u2713'); state.showHidden=true; invalidateData(); return refreshBootSafe_(); })
+    .then(function(){ toast('Hidden \u2713'); state.showHidden=true; invalidateData(); hiddenChangedDrop_(); return refreshBootSafe_(); })   // v3.111.0: + reports/register/recent
     .then(function(){ go('envelopes'); })
     .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
   });
 }
 function envUnhide(id){
   run('apiSetEnvelopeHidden', { envelopeId:id, hidden:false })
-  .then(function(){ toast('Unhidden \u2713'); invalidateData(); return refreshBootSafe_(); })
+  .then(function(){ toast('Unhidden \u2713'); invalidateData(); hiddenChangedDrop_(); return refreshBootSafe_(); })   // v3.111.0
   .then(function(){ if(state.view==='envdetail') renderEnvDetail(); else if(state.view==='envelopes') renderEnvelopes(); })
   .catch(function(e){ toast('\u26a0 '+(e.message||e)); });
 }
@@ -5374,9 +5420,10 @@ function renderInbox(){
 }
 function drawInbox(){
   try{ prestartDefaultsAsk_(); }catch(e){}   // v3.109.0 (Task 9, L2)
-  var h = '<div class="viewhead"><h2>Inbox</h2>'+
+  var rfb = tillerRefreshBtn_();   // v3.111.0 (U1): ↻ Refresh my banks beside Check for new (owner / admin, connected only)
+  var h = '<div class="viewhead"><h2>Inbox</h2>'+(rfb ? '<span class="vhbtns">' : '')+
     '<button class="btn ghost sm" data-act="import-now"'+(state.importing?' disabled':'')+
-    '>↻ Check for new</button></div>';
+    '>↻ Check for new</button>'+(rfb ? rfb+'</span>' : '')+'</div>'+tillerRefreshSlot_();
   h += inboxStrayHtml_();   // v3.97.2
   if(!state.inbox.length){
     h += replNoticesHtml_();   // v3.105.0: approved copies / the old account can still need a step
@@ -5540,17 +5587,17 @@ function inboxEnvName_(t){
 /* The approve tap. data-act="approve" is the same action the old Approve button had: approve(cid) sends apiApprove with
    the card's raw ID, its key, the envelope, tags, note, the start-date choice and the rule - unchanged. */
 function inboxGoHtml_(t, hint){
-  var cid = inboxId_(t), nm = inboxEnvName_(t);
+  var cid = inboxId_(t), nm = inboxEnvName_(t), hTag = nm ? envHidTag_(inboxEnvOf_(t)) : '';   // v3.111.0: "· hidden"
   /* v3.110.0 (Task 3, L5): while an approve is in flight every envelope button stays off, and the tapped one keeps
      saying "Approving…", even if the Inbox is drawn again meanwhile (a background refresh). */
   var mine = !!(state.ibxBusy && state.ibxBusy[cid]);
   if(nm) return '<button class="go'+(replCopyOf_(t.txnId)?' ghost':'')+'"'+(ibxCardBusy_(cid)?' disabled':'')+' data-act="approve" data-arg="'+esc(cid)+'" '+
-    'aria-label="Approve into '+esc(nm)+'"><span class="gn">'+(mine ? 'Approving…' : '✓ '+esc(nm))+'</span>'+(hint && !mine?'<small>tap to approve</small>':'')+'</button>';
+    'aria-label="Approve into '+esc(nm)+(hTag?', a hidden envelope':'')+'"><span class="gn">'+(mine ? 'Approving…' : '✓ '+esc(nm)+hTag)+'</span>'+(hint && !mine?'<small>tap to approve</small>':'')+'</button>';
   /* v3.108.0 - a suggestion LEARNED from your own approvals of this store. Weaker than a rule, so one tap PICKS it
      (then the button approves) - it is never approved in bulk and never in one tap. */
   if(t.learnedId)
     return '<button class="pill sugg learned" data-act="pick-sel" data-arg="'+esc(cid)+'|'+esc(t.learnedId)+'"'+
-      ' title="Based on your past approvals of this store">✨ '+esc(t.learnedName||envName(t.learnedId))+
+      ' title="Based on your past approvals of this store">✨ '+esc(t.learnedName||envName(t.learnedId))+envHidTag_(t.learnedId)+
       '<span class="lrn">'+Number(t.learnedSeen||0)+' of your last '+Number(t.learnedOf||0)+'</span></button>';
   return '<button class="choose" data-act="open-picker" data-arg="sel|'+esc(cid)+'">Choose envelope…</button>';
 }
@@ -5580,7 +5627,7 @@ function inboxSheetHtml_(t){
   if(!splitting){
     h += opt('open-picker', 'sel|'+cid, '✉', nm ? 'Another envelope…' : 'Choose an envelope…');
     if(!t.suggestedId && t.learnedId && state.sel[cid]!==t.learnedId)
-      h += opt('pick-sel', cid+'|'+t.learnedId, '✨', esc(t.learnedName||envName(t.learnedId)),
+      h += opt('pick-sel', cid+'|'+t.learnedId, '✨', esc(t.learnedName||envName(t.learnedId))+envHidTag_(t.learnedId),
         'you chose it '+Number(t.learnedSeen||0)+' of your last '+Number(t.learnedOf||0)+' times', 'learned');
     h += opt('split-on', cid, '✂', 'Split across envelopes…');
   } else h += opt('split-off', cid, '✂', 'Stop splitting');
@@ -5698,7 +5745,7 @@ function focusBack_(id){
    list, Fund, and a confirm's main button (except a neutral confirm - OK, Build plan...). Returns false when refused,
    so the caller can choose a safe place instead. {person:true} is the person's own Tab inside a dialog (sheetKeys_):
    they moved there themselves. */
-var FOCUS_NEVER_ACTS_ = /^(approve|approve-split|txn-spent|prestart-resolve|unapprove|resplit-go|fund-go|picker-pick|env-move-go|goal-move-over|accept-tiller|recon-bank|books-reconcile)$/;
+var FOCUS_NEVER_ACTS_ = /^(approve|approve-split|txn-spent|prestart-resolve|unapprove|resplit-go|fund-go|picker-pick|env-move-go|goal-move-over|accept-tiller|recon-bank|books-reconcile|tiller-connect|tiller-confirm|tiller-check|tiller-disconnect|tiller-refresh)$/;   // v3.111.0: + the Tiller card's and Refresh my banks' buttons
 function focusSafe_(el, opt){
   if(!el || typeof el.focus!=='function') return false;
   if(!(opt && opt.person)){
@@ -5766,7 +5813,7 @@ function inboxDetailHtml_(t){
     h += '<div class="pills">'+(nm ? inboxGoHtml_(t, false) : '')+
       (!t.suggestedId && t.learnedId && state.sel[cid]!==t.learnedId ?
         '<button class="pill sugg learned" data-act="pick-sel" data-arg="'+esc(cid)+'|'+esc(t.learnedId)+'" title="Based on your past approvals of this store">✨ '+
-        esc(t.learnedName||envName(t.learnedId))+'<span class="lrn">'+Number(t.learnedSeen||0)+' of your last '+Number(t.learnedOf||0)+'</span></button>' : '')+
+        esc(t.learnedName||envName(t.learnedId))+envHidTag_(t.learnedId)+'<span class="lrn">'+Number(t.learnedSeen||0)+' of your last '+Number(t.learnedOf||0)+'</span></button>' : '')+
       '<button class="pill" data-act="open-picker" data-arg="sel|'+esc(cid)+'">'+(nm ? 'Another envelope…' : 'Choose envelope…')+'</button>'+
       '<button class="pill" data-act="split-on" data-arg="'+esc(cid)+'">✂ Split…</button></div>';
   }
@@ -6431,7 +6478,7 @@ function busyHold_(owner, scope){
   state.busyHolds = state.busyHolds || {};
   var tok = String(owner)+'#'+(++busySeq_), done = false;
   state.busyHolds[tok] = scope || 'page';
-  busyButtons(true); busyGrey_();
+  if(scope!=='tiller'){ busyButtons(true); busyGrey_(); }   // v3.111.0: a Tiller action greys only its own buttons (tillerPaint_), never the Inbox's cards
   return function(){ if(done) return false; done = true; if(state.busyHolds) delete state.busyHolds[tok]; return true; };
 }
 function busyHeld_(scope){
@@ -6897,20 +6944,22 @@ function renderTxns(keepList){
   var r = state.register;
   if(!r.limit) r.limit = 50;
   // v3.28.1: limit is part of the sig so "Show more" (a bigger page) is a cache miss.
-  var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+r.limit;
+  // v3.111.0: the ONE Show hidden pill reveals hidden accounts AND hidden envelopes; both are in the sig.
+  var hidEnv = !!r.includeHidden;
+  var sig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+(hidEnv?'1':'0')+'|'+r.limit;
   var cached = r.items && r.sig===sig;
   if(cached){ drawTxns(); if(freshEnough('register')) return; } // v3.27: warm+fresh → no network
   else if(keepList && r.items){ drawTxns(); } // v3.28.1: keep current rows visible while a bigger page loads
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Transactions</h2><div class="spin"></div>'; }
   Promise.all([
     run('apiRegister', { q:r.q, account:r.account, envelope:r.envelope,
-      includeHidden:r.includeHidden, limit:r.limit }),
+      includeHidden:r.includeHidden, includeHiddenEnvelopes:hidEnv, limit:r.limit }),
     state.accounts ? Promise.resolve(state.accounts) : run('apiAccounts')
   ]).then(function(res){
     // v3.22: discard OUT-OF-ORDER responses — two quick filter changes could
     // resolve in reverse order, and the older result then overwrote the newer
     // one while its sig marked it "current" for the wrong filters.
-    var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+r.limit;
+    var curSig = r.q+'|'+r.account+'|'+r.envelope+'|'+(r.includeHidden?'1':'0')+'|'+(r.includeHidden?'1':'0')+'|'+r.limit;
     if(curSig !== sig){ state.accounts = res[1]; return; }
     markFetched('register');
     var changed = JSON.stringify(res[0]) !== JSON.stringify(r.items);
@@ -7268,8 +7317,9 @@ function txnFlag_(t){
 }
 function txnEnvLine_(t){
   var legs = t.legs || [];
+  var hid = legs.length>1 ? hiddenEnvIds_() : {};   // v3.111.0: a split's hidden line says so
   if(legs.length>1) return '<span class="splmark" aria-hidden="true">✂</span>Split · '+legs.map(   // v3.110.1: the split mark sits here, not in a circle
-    function(l){ return esc(l.envelopeName); }).join(', ');
+    function(l){ return esc(l.envelopeName)+(hid[l.envelopeId]?' (hidden)':''); }).join(', ');
   return esc((legs[0]||{}).envelopeName || '');
 }
 function txnRowHtml_(t){
@@ -7333,7 +7383,8 @@ function sheetOptHtml_(act, arg, icon, label, right, cls){
 function txnSheetHtml_(t){
   var rid = regRowId_(t); t._rid = rid;
   var legs = t.legs || [], split = legs.length>1, tags = t.tags || [], st = txnStartText_(t);
-  var envs = legs.map(function(l){ return esc(l.envelopeName)+(split?' '+money(l.amount):''); }).join(', ');
+  var hid = split ? hiddenEnvIds_() : {};   // v3.111.0
+  var envs = legs.map(function(l){ return esc(l.envelopeName)+(hid[l.envelopeId]?' (hidden)':'')+(split?' '+money(l.amount):''); }).join(', ');
   var h = '<div class="sheethead"><h3>'+esc(t.description)+' · '+money(t.amount)+'</h3>'+
     '<div class="m">'+esc(t.date)+' · '+esc(t.account)+(envs ? ' · '+envs : '')+'</div>'+
     (st ? '<div class="prestart">'+st+'</div>' : '')+'</div>';
@@ -7358,10 +7409,11 @@ function txnDetailHtml_(t){
     (st ? '<div class="prestart">'+st+(q ? '<div class="reglinks">'+q+'</div>' : '')+'</div>' : '')+
     '<div class="blk"><div class="lbl">Envelope</div>';
   if(state.resplit[rid]) h += txnSplitEdHtml_(t);
-  else h += '<div class="pills">'+legs.map(function(l){
-      return '<span class="pill sel">'+esc(l.envelopeName)+(split?' '+money(l.amount):'')+'</span>'; }).join('')+
+  else { var hid = split ? hiddenEnvIds_() : {};   // v3.111.0: a split's hidden line says so
+    h += '<div class="pills">'+legs.map(function(l){
+      return '<span class="pill sel">'+esc(l.envelopeName)+(hid[l.envelopeId]?' (hidden)':'')+(split?' '+money(l.amount):'')+'</span>'; }).join('')+
     (legs.length===1 && !state.resplit[rid] ? '<button class="pill" data-act="txn-move" data-arg="'+esc(rid)+'">Move…</button>' : '')+
-    '<button class="pill" data-act="resplit-on" data-arg="'+esc(rid)+'">✂ '+(split?'Edit split…':'Split…')+'</button></div>';
+    '<button class="pill" data-act="resplit-on" data-arg="'+esc(rid)+'">✂ '+(split?'Edit split…':'Split…')+'</button></div>'; }
   h += '</div><div class="blk"><div class="lbl">Tags and note</div>'+
     '<div class="tagchips">'+tagChipsHtml(t, state.tagEdit[rid]?'edit':'add')+(t.note || state.noteEdit[rid] ? '' : noteAddBtnHtml(rid))+'</div>'+
     (state.tagEdit[rid] ? tagEditorHtml(t) : '')+noteLineHtml(rid, t.note||'')+'</div>'+
@@ -7463,7 +7515,7 @@ function drawTxns(){
     (r.envelope
       ? '<button class="pill sel" data-act="reg-env-clear">'+esc(envName(r.envelope))+' ✕</button>'
       : '<button class="pill" data-act="open-picker" data-arg="regenv|x|0">Filter by envelope…</button>')+
-    '<button class="pill'+(r.includeHidden?' sel':'')+'" data-act="reg-hidden">'+
+    '<button class="pill'+(r.includeHidden?' sel':'')+'" data-act="reg-hidden" title="Shows accounts and envelopes you\'ve hidden">'+
       (r.includeHidden?'Hidden shown ✕':'Show hidden')+'</button>'+
     '<button class="pill'+(state.tagSel?' sel':'')+'" data-act="tag-sel-toggle">'+
       (state.tagSel?'Selecting ✕':'🏷 Tag many')+'</button>'+
@@ -7642,6 +7694,7 @@ function regAcctOptions_(r){
 
 /* ============================ accounts (v3.2) ============================ */
 function renderAccounts(){
+  tillerChipsLoad_();   // v3.111.0 (U1): each bank's Tiller status - only while connected (no Tiller request otherwise)
   if(state.accountsFull){ drawAccounts(); if(freshEnough('accountsFull')) return; } // v3.27
   else { $('#shell').innerHTML = '<h2 class="viewtitle">Accounts</h2><div class="spin"></div>'; }
   run('apiAccountsFull').then(function(res){
@@ -7675,6 +7728,7 @@ function acctRowHtml_(a){
   } else if(old){
     sub += '<div style="color:var(--amber);font-size:12px;margin-top:1px;white-space:normal">Its older transactions, filed under “'+esc(old.join('”, “'))+'”, are hidden on Transactions.</div>';
   }
+  sub += tillerChipSlot_(a);   // v3.111.0 (U1; Task 2: matched by Account ID)
   var arg = ' data-arg="'+esc(a.name)+'"';
   var btn = a.hidden ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show</button>'
     : a.txnOnly ? '<button class="btn ghost sm" data-act="acct-show"'+arg+'>Show on Transactions</button>'+
@@ -7702,7 +7756,7 @@ function drawAccounts(){
   var pref = (state.accountsFull && state.accountsFull.groupOrder) || [];
   var h = '<div class="viewhead"><h2>Accounts</h2></div>'+
     '<div class="note" style="padding:0 4px 14px"><b>Hide</b> takes an account out of every page: Balances, net worth, Budget health, Reports and Transactions. '+
-    'What it already spent stays in your envelopes. It is the same Hide as on your Tiller Accounts tab.</div>';
+    'What it already spent stays in your envelopes. It is the same Hide as on your Tiller Accounts tab.</div>'+tillerSumSlot_();   // v3.111.0 (U1)
   if(dups.length){
     h += '<div class="note" style="padding:0 4px 10px;color:var(--amber)">'+
       '⚠ Duplicate rows in your Tiller Accounts tab (first row wins): '+esc(dups.join(', '))+
@@ -8575,7 +8629,7 @@ function drawBalances(){
     '<span style="display:flex;gap:10px;align-items:center">'+
     '<span style="color:var(--ink-3);font-size:12.5px">'+esc(b.asOf||'')+'</span>'+
     '<button class="btn ghost sm" data-act="bal-refresh" title="Push any queued balance saves to Tiller, then re-read Tiller live">'+
-    (state.balRefreshing?'Refreshing…':'↻ Refresh from Tiller')+'</button>'+
+    (state.balRefreshing?'Refreshing…':'↻ Save & re-read Tiller sheet')+'</button>'+   // v3.111.0: renamed so it is never taken for ↻ Refresh my banks (it does not ask the banks)
     '<button class="btn ghost sm" data-act="bal-reorder">'+
     (state.balReorder?'Done':'Reorder')+'</button></span></div>';
   if(b.dups && b.dups.length && !state.balReorder){
@@ -9432,7 +9486,7 @@ function rptFilterBarHtml(){
   if(f==='groups') h+='<div class="rptfpanel"><div class="fttl">Filter by group</div><div class="rptchips">'+
     (meta.groups||[]).map(function(g){ return '<button class="rptchip'+(r.groups.indexOf(g)!==-1?' on':'')+'" data-act="rpt-fgroup" data-arg="'+esc(g)+'">'+esc(g)+'</button>'; }).join('')+'</div></div>';
   if(f==='envs') h+='<div class="rptfpanel"><div class="fttl">Filter by envelope</div><div class="rptchips">'+
-    (meta.envelopes||[]).map(function(e0){ return '<button class="rptchip'+(r.envelopeIds.indexOf(e0.id)!==-1?' on':'')+'" data-act="rpt-fenv" data-arg="'+esc(e0.id)+'">'+esc(e0.name)+'</button>'; }).join('')+'</div></div>';
+    (meta.envelopes||[]).map(function(e0){ return '<button class="rptchip'+(r.envelopeIds.indexOf(e0.id)!==-1?' on':'')+'" data-act="rpt-fenv" data-arg="'+esc(e0.id)+'">'+esc(e0.name)+envHidTag_(e0.id)+'</button>'; }).join('')+'</div></div>';
   if(f==='tags'){
     var opts={}; (state.tagsList||[]).forEach(function(x){ opts[x.tag]=1; }); r.tags.forEach(function(x){ opts[x]=1; });
     var names=Object.keys(opts).sort();
@@ -10194,6 +10248,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.111.0', d:'Nov 12, 2026', items:[
+    'Envelopes you’ve hidden now stay out of Transactions, Reports and Home. Tap <b>Show hidden</b>, or pick the envelope, to see them.',
+    'On Balances, <b>↻ Refresh from Tiller</b> is now called <b>↻ Save &amp; re-read Tiller sheet</b>. It does what it always did: it re-reads your Tiller sheet. It never asked the banks.' ]},
   { v:'v3.110.1', d:'Nov 11, 2026', items:[
     'Transactions rows no longer start with a letter in a circle, so the store name has more room. A split row shows \u2702 before the word Split.' ]},
   { v:'v3.110.0', d:'Nov 11, 2026', items:[
@@ -11088,7 +11145,7 @@ function rulePreviewFetch_(){
     if(state.rulePrev && state.rulePrev.sig===sig && (state.rulePrev.items || state.rulePrev.loading)){ ruleDrawPreview_(); return; }
     state.rulePrev = { sig:sig, items:null, loading:true };
     ruleDrawPreview_();
-    run('apiRegister', qa).then(function(items){
+    run('apiRegister', Object.assign({}, qa, { includeHiddenEnvelopes:true })).then(function(items){   // v3.111.0: a rule matches stock buys too
       if(!state.rulePrev || state.rulePrev.sig!==sig) return;
       state.rulePrev = { sig:sig, items:items||[] };
       ruleDrawPreview_();
@@ -11407,6 +11464,568 @@ function renderMaintenance(){
 }
 
 /* ============================ access / admin (v3.8) ============================ */
+/* ================= v3.111.0 (task U1) - CONNECT TILLER (Connect-Tiller-Design-2026-11-11.md rev 2, section 6;
+   supabase/functions/api/README-tiller.md for every answer) =================
+   One card on Settings \u2192 Account & privacy, a status line per bank on Reconcile accounts and Accounts, and
+   "\u21bb Refresh my banks" in the Inbox (owner / admin only). The words a person reads come from the api (`words`);
+   code words are for logic only. The rules of this app hold here too:
+   \u00b7 boot.tiller null (switched off, nothing stored) = no card and NO apiTiller* call from any screen; the chips and
+     their status read happen only while connected (the release-day rule, T1);
+   \u00b7 one send at a time per Tiller action (busyHold_ scope 'tiller'); Refresh is never retried automatically;
+   \u00b7 confirms through confirmUi (Refresh and Disconnect open on Cancel);
+   \u00b7 the page puts focus only through focusSafe_, on the card's heading - never on a button that acts;
+   \u00b7 a status answer repaints only the card, the chips and the Refresh line - never a form someone is typing in;
+   \u00b7 the +5 / +15 minute re-reads after a refresh are one-shot timers in the homeReval_ style (fn._t), cleared on a
+     view change; tests fire them by hand. So are the end of a Refresh pause and of an unanswered confirm (tillerLater_);
+   \u00b7 Task 2 (11/12, review + browser test): a stored problem on a connected row is never shown as healthy; bank lines
+     match by Account ID only; an answer never takes focus from what the person moved on to. */
+var TILLER_FNS_ = ['apiTillerStart','apiTillerConfirm','apiTillerStatus','apiTillerRefresh','apiTillerDisconnect'];
+var TILLER_RECHECK_MS = [5*60*1000, 15*60*1000];   // design 6.4 step 5: re-read the banks +5 and +15 minutes after a refresh
+var TILLER_AWAY_MS = 15*60*1000;                   // a sign-in started this long ago still counts as "coming back from Tiller"
+var TILLER_TONES_ = { ok:1, warn:1, bad:1, info:1 };
+var TILLER_ICON_ = { ok:'\u2713', warn:'\u26a0', bad:'\u2715', info:'\u2139' };
+var TILLER_NET_WORDS_ = 'Couldn\u2019t reach SBC Money\u2019s server just now. Try again in a few minutes.';
+var TILLER_NONE_WORDS_ = 'Connect your Tiller account to see each bank\u2019s connection here and ask Tiller to refresh your banks.';
+var TILLER_CONNECT_HELP_ = 'This leaves SBC Money for Tiller\u2019s sign-in page. Sign in there, then come back here \u2014 this card checks again when you return.';
+var TILLER_REFRESH_ASK_ = 'This asks Tiller to check all your banks now. It uses one of your Tiller refreshes for today \u2014 the same ones as the Refresh button on the Tiller website. Tiller doesn\u2019t tell us how many you have left. Banks usually answer in about 5 minutes.';
+var TILLER_FORGET_ASK_ = 'SBC Money will forget this Tiller sign-in now and delete the key Tiller gave it. Nothing was connected to your budget. Tiller doesn\u2019t publish a way for us to cancel it on Tiller\u2019s side; if your Tiller account lists connected apps, remove SBC Money there too.';
+var TILLER_DISCONNECT_ASK_ = 'SBC Money will delete your Tiller key now. Tiller doesn\u2019t publish a way for us to cancel it on Tiller\u2019s side; if your Tiller account lists connected apps, remove SBC Money there too.';
+/* Design 4.3 - the exact paragraph (the same words are on privacy.html; tests/v31110_UI_tiller_test.js keeps them equal). */
+var TILLER_ALLOW_HTML_ =
+  '<p>If you tap <b>Connect Tiller</b>, you sign in at Tiller and Tiller hands SBC Money\u2019s server a key to your Tiller account. '+
+  'Tiller offers only one kind of key, and there is no read-only option. The key opens your whole Tiller account: every '+
+  'Tiller sheet you have, every bank account linked to Tiller (even ones that are not in your budget), and Tiller\u2019s '+
+  'tools for reading, changing and deleting transactions and categories.</p>'+
+  '<p>SBC Money\u2019s program uses the key for three things, and only these:</p>'+
+  '<ol><li>to list your Tiller sheets, so it can check that the one your budget uses is really yours;</li>'+
+  '<li>to read each bank connection\u2019s status \u2014 working, needs you to sign in again at Tiller, or when Tiller last '+
+  'reached the bank;</li>'+
+  '<li>when you or an admin of your budget presses <b>Refresh my banks</b>, to ask Tiller to check your banks now. That uses '+
+  'one of your daily Tiller refreshes, the same ones as the Refresh button on the Tiller website.</li></ol>'+
+  '<p>The key is kept on SBC Money\u2019s server (hosted by Supabase), locked with a second key that exists only in the '+
+  'server\u2019s settings. The server is run by one person, the operator of SBC Money. Like the operator of any app, he could '+
+  'change the program to use the key for more than these three things. Reading the stored key from the database by hand '+
+  'is recorded on your Access page; a change to the program is not.</p>'+
+  '<p>To stop: Settings \u2192 Account &amp; privacy \u2192 Tiller connection \u2192 <b>Disconnect</b>. SBC Money deletes the key at once. '+
+  '<b>Delete my account</b> deletes it too. Tiller does not publish a way for an app to cancel its key on Tiller\u2019s side, so '+
+  'a copy someone had already taken could keep working until Tiller expires it. If your Tiller account settings list '+
+  'connected apps, remove SBC Money there as well.</p>';
+/* boot.tiller: null, or { state, canManage, problem }. Kept OUTSIDE state.boot - refreshBoot() replaces state.boot with
+   the Apps Script bootstrap, which has no tiller field (the state.writeBack rule). */
+function tillerBoot_(){ var t = state.tiller; return (t && typeof t==='object' && typeof t.state==='string') ? t : null; }
+function tillerManage_(){ var t = tillerBoot_(); return !!(t && t.canManage); }
+function tillerConnected_(){ var t = tillerBoot_(); return !!(t && t.state==='connected'); }
+/* Task 2 (reviewer 1): what is wrong RIGHT NOW, even while connected - { code, words, at } or null. The newest answer
+   wins: a status read, else the boot. */
+function tillerProblem_(){
+  var t = tillerBoot_(); if(!t || t.state!=='connected') return null;
+  var p = state.tillerSt ? state.tillerSt.problem : t.problem;
+  return (p && typeof p==='object' && tillerSafeWords_(p.words)) ? p : null;
+}
+/* A time the api sent: an ISO string, or null. Never 0 / 1970 and nothing absurdly far off (Task 2: "never show 1970"). */
+function tillerMs_(iso){
+  if(iso===null || iso===undefined || iso==='' || typeof iso==='number') return 0;
+  var ms = Date.parse(String(iso)); if(isNaN(ms) || ms < Date.UTC(2020,0,1)) return 0;
+  if(ms > Date.now() + 8*24*3600*1000) return 0;
+  return ms;
+}
+function tillerWhen_(iso, withDate){
+  var ms = tillerMs_(iso); if(!ms) return '';
+  var d = new Date(ms);
+  var t = ''; try{ t = d.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }); }catch(e){ t = d.toTimeString().slice(0,5); }
+  var today = new Date(); var same = d.toDateString()===today.toDateString();
+  if(!withDate && same) return t;
+  return (d.getMonth()+1)+'/'+d.getDate()+(withDate==='date' ? '' : ' '+t);
+}
+function tillerSafeWords_(s){ return String(s==null?'':s).replace(/\s+/g,' ').trim(); }
+/* An api answer of available:false: the card says so (off with Disconnect only, or not set up) and nothing else asks Tiller. */
+function tillerUnavailable_(r){
+  var t = tillerBoot_(); if(!t) return;
+  t.state = (r && r.code==='off') ? 'off' : 'not_set_up';
+  state.tillerSt = null;
+}
+function tillerAdopt_(r){
+  var t = tillerBoot_(); if(!t || !r) return;
+  if(r.available===false){ tillerUnavailable_(r); return; }
+  if(typeof r.state==='string' && /^(none|confirm|connected|lost)$/.test(r.state)){
+    if(r.state!==t.state){ state.tillerLink = ''; state.tillerMsg = ''; if(state.tillerRf && state.tillerRf.code==='msg') state.tillerRf = null; }   // Task 3 (N5): "Sign in at Tiller, then come back here." does not outlive the step it was for   // Task 2 (L8): a sign-in link (and its words) go once the state moves on
+    t.state = r.state;
+  }
+  if(typeof r.canManage==='boolean') t.canManage = r.canManage;
+  if(r.problem!==undefined) t.problem = r.problem || null;
+}
+/* The status read (database only unless fresh). One in flight at a time; never called without a connection card. */
+function tillerStatusLoad_(fresh){
+  var t = tillerBoot_();
+  if(!t || !/^(none|confirm|connected|lost)$/.test(t.state)) return Promise.resolve(null);
+  if(state.tillerStP) return state.tillerStP;
+  var p = run('apiTillerStatus', fresh ? { fresh:true } : {}).then(function(r){
+    state.tillerStP = null; state.tillerStErr = false;
+    if(r && r.available===false){ tillerUnavailable_(r); tillerPaint_(); return r; }
+    state.tillerSt = r || null;
+    tillerAdopt_(r);
+    if(r && r.refresh) state.tillerAgainAt = r.refresh.againAt || '';
+    // Task 3 (N1): a refresh answer that came without a usable time stays paused until a status read gives one
+    if(r && r.refresh && tillerMs_(r.refresh.againAt) && state.tillerRf && state.tillerRf.noTime){ state.tillerRf.againAt = r.refresh.againAt; state.tillerRf.noTime = false; }
+    // Final review F3-M1: the server holds nothing (no refresh answer kept, or one with no time) - the button is live again;
+    // the server's own claim still refuses a real double press. v3.111.0 confirm review N1: no time means nothing is held
+    // whatever the outcome - 'pending' with no time is a dead job over 15 minutes old, and the server takes a new press then
+    if(r && state.tillerRf && state.tillerRf.noTime && (!r.refresh || !tillerMs_(r.refresh.againAt))) state.tillerRf.noTime = false;
+    if(r && (r.state==='connected' || r.state==='confirm')) state.tillerAway = 0;
+    tillerPaint_(); tillerRfPaintBtn_();
+    return r;
+  }, function(e){
+    state.tillerStP = null; state.tillerStErr = true;
+    state.tillerMsg = 'Couldn\u2019t read the Tiller connection just now. Try again in a few minutes.';
+    tillerPaint_();
+    return null;
+  });
+  state.tillerStP = p;
+  return p;
+}
+/* One-shot wake-ups in the homeReval_ style (fn._t): the end of a Refresh pause, the end of an unanswered "Use this
+   Tiller login?". They only repaint what is on screen - no Tiller request. Tests fire them by hand. */
+function tillerLater_(name, atMs, fn){
+  var t = tillerLater_._t; if(t[name]){ clearTimeout(t[name].h); delete t[name]; }
+  if(!atMs) return;
+  var wait = Math.max(0, atMs - Date.now()) + 250;
+  t[name] = { at:atMs, h:setTimeout(function(){ delete t[name]; fn(); }, wait) };
+}
+tillerLater_._t = {};
+/* ---------------- the card (Settings - Account & privacy) ---------------- */
+function tillerLinkHtml_(){
+  var t = tillerBoot_();
+  if(!state.tillerLink || !/^https:\/\//.test(state.tillerLink) || !t || !(t.state==='none' || t.state==='lost')) return '';
+  if(Date.now() - (state.tillerLinkAt||0) > 10*60*1000){ state.tillerLink = ''; return ''; }   // Task 2 (L8): Tiller's link works for 10 minutes
+  return '<div class="tlmsg">Your browser didn\u2019t open Tiller\u2019s sign-in. Use this link instead (it works once, for 10 minutes): '+
+    '<a class="tllink" id="tllink" data-act="tiller-link" href="'+esc(state.tillerLink)+'" target="_blank" rel="noopener noreferrer">Open Tiller\u2019s sign-in</a></div>';
+}
+function tillerCardHtml_(){
+  var t = tillerBoot_(); if(!t) return '';
+  var st = state.tillerSt || {}, can = !!t.canManage, line = '', btns = '', about = false, help = '', prob = '';
+  var B = function(act, label, arg, cls){ return '<button class="btn sm'+(cls?' '+cls:'')+'" data-act="'+act+'"'+(arg?' data-arg="'+esc(arg)+'"':'')+(busyHeld_('tiller')?' disabled':'')+'>'+label+'</button>'; };
+  if(t.state==='none'){
+    line = TILLER_NONE_WORDS_; about = true;
+    if(can){ btns = B('tiller-connect', 'Connect Tiller'); help = TILLER_CONNECT_HELP_; }
+    else help = 'Only the budget\u2019s owner or an admin can connect Tiller.';
+  } else if(t.state==='confirm'){
+    var until = tillerWhen_(st.confirmExpiresAt);
+    line = st.confirmQuestion ? tillerSafeWords_(st.confirmQuestion) : (can ? 'Use this Tiller login for this budget?' : 'A Tiller login is waiting to be confirmed by the budget\u2019s owner or an admin.');
+    help = (can ? 'Confirm only if this is the Tiller login that holds your budget\u2019s Tiller sheet. Not mine, or Remove this sign-in, makes SBC Money forget it and delete its key. ' : '')+
+      (until ? 'If nobody answers by '+until+', SBC Money forgets this sign-in by itself.' : 'If nobody answers within 30 minutes, SBC Money forgets this sign-in by itself.');
+    if(can) btns = B('tiller-confirm', 'Confirm', '1') + B('tiller-confirm', 'Not mine', '0', 'ghost') + B('tiller-disconnect', 'Remove this sign-in', '', 'ghost');
+    about = true;
+    tillerLater_('confirm', tillerMs_(st.confirmExpiresAt), tillerConfirmExpired_);
+  } else if(t.state==='connected'){
+    var since = st.connectedAt ? tillerWhen_(st.connectedAt, 'date') : '';
+    var p = tillerProblem_();
+    if(p){
+      line = '\u26a0 '+tillerSafeWords_(p.words);
+      prob = 'Connected'+(since ? ' since '+since : '')+', but the last try went wrong, so the bank lines on Reconcile accounts and Accounts may be out of date'+
+        (st.statusReadAt ? ' (last read '+tillerWhen_(st.statusReadAt)+')' : '')+'. Tap Check now to ask Tiller again. If Tiller says to connect again, this card will offer Connect again'+(can ? '' : ' to the budget\u2019s owner or an admin')+'.';
+    } else line = 'Connected'+(since ? ' '+since : '')+'. '+(st.statusReadAt ? 'Bank status last read '+tillerWhen_(st.statusReadAt)+'.' : 'Bank status not read yet \u2014 tap Check now.');
+    btns = B('tiller-check', 'Check now', '', 'ghost') + (can ? B('tiller-disconnect', 'Disconnect', '', 'ghost') : '');
+    var n = (st.accounts||[]).length;
+    if(n && !p) help = n+' bank account'+(n===1?'':'s')+' from your budget\u2019s Tiller sheet. Each one\u2019s status is on Reconcile accounts and Accounts.';
+  } else if(t.state==='lost'){
+    var lostOn = st.lastError && st.lastError.at ? tillerWhen_(st.lastError.at, 'date') : '';
+    line = 'Tiller needs you to connect again'+(lostOn ? ' (its sign-in stopped working on '+lostOn+')' : '')+'.';
+    about = true;
+    if(can){ btns = B('tiller-connect', 'Connect again', 'again'); help = TILLER_CONNECT_HELP_; }
+    else help = 'Ask the budget\u2019s owner or an admin to connect again.';
+  } else if(t.state==='not_set_up'){
+    line = 'Tiller connection isn\u2019t set up yet.';
+  } else if(t.state==='off'){
+    line = 'Tiller connection is turned off.';
+    if(can){ btns = B('tiller-disconnect', 'Disconnect', '', 'ghost'); help = 'SBC Money still holds a Tiller key for this budget. Disconnect deletes it.'; }
+  } else if(t.state==='removed'){
+    line = 'Tiller connection is turned off.';
+  } else return '';
+  var link = tillerLinkHtml_();
+  var msg = state.tillerMsg && !link ? tillerSafeWords_(state.tillerMsg) : '';
+  return '<div class="card tlcard'+(prob ? ' tlhasprob' : '')+'"><h4 class="tlhead'+(prob ? ' tlprob' : '')+'" id="tlhead" tabindex="-1">'+esc(line)+'</h4>'+
+    (prob ? '<div class="tlmsg tlprobwhat">'+esc(prob)+'</div>' : '')+
+    (help ? '<div class="tlmsg">'+esc(help)+'</div>' : '')+
+    '<div class="tlmsg" role="status" aria-live="polite">'+esc(msg)+'</div>'+link+
+    (btns ? '<div class="actions tlbtns">'+btns+'</div>' : '')+
+    (about ? '<details class="tlabout"><summary>What does connecting allow?</summary><div class="tlallow">'+TILLER_ALLOW_HTML_+'</div></details>' : '')+
+    '</div>';
+}
+function tillerConfirmExpired_(){
+  var t = tillerBoot_(); if(!t || t.state!=='confirm') return;
+  t.state = 'none'; state.tillerSt = null;
+  state.tillerMsg = 'Nobody answered "Use this Tiller login?" in time, so SBC Money forgot that sign-in.';
+  tillerPaint_();
+}
+/* Focus belongs to the person (Task 2, browser M2): an answer moves focus only if it is still where the action left it -
+   on the page itself (body), inside the part that was repainted, or on the button that started it. */
+function tillerFocusFree_(){
+  var ae = document.activeElement;
+  if(!ae || ae===document.body || ae.isConnected===false) return true;
+  var c = $('#tlcard'), r = $('#tlrf'), b = $('#tlrfb');
+  return !!((c && c.contains(ae)) || (r && r.contains(ae)) || (b && b.contains(ae)));
+}
+/* Repaint what shows Tiller - the card, the bank lines, the summary, the Inbox's Refresh button and line - and nothing
+   else. Focus that was inside a repainted part goes to that part's own words (never a button that acts). */
+function tillerPaint_(){
+  try{
+    var ae = document.activeElement, card = $('#tlcard');
+    if(card){
+      var had = !!(ae && card.contains && card.contains(ae));
+      card.innerHTML = tillerCardHtml_();
+      if(had) focusSafe_($('#tllink') || $('#tlhead'));
+    }
+    var ids = tillerNameIds_();
+    $all('[data-tlname]').forEach(function(el){ el.innerHTML = tillerChipHtml_(tillerSlotId_(el, ids)); });
+    var sum = $('#tlsum'); if(sum) sum.innerHTML = tillerSumHtml_();
+    tillerRfPaintBtn_();
+    var rf = $('#tlrf');
+    if(rf){
+      var rfHad = !!(ae && rf.contains && rf.contains(ae));
+      rf.innerHTML = tillerRefreshHtml_();
+      if(rfHad) focusSafe_($('#tllink') || $('#tlrfnote'));
+    }
+  }catch(e){}
+}
+/* ---------------- per-bank status (Reconcile accounts, Accounts) ---------------- */
+/* Task 2 (reviewer 5 / browser M4): a bank line is matched by ACCOUNT ID only. The api returns ids; the page's rows are
+   names. A row carries its own id when its answer has one (accountId, or key 'id:<Account ID>'); otherwise the id comes
+   from Balances (key 'id:<Account ID>', v3.90.0) - but only when exactly ONE account has that name. Two accounts that
+   share a name get no line (SBC Money can't tell which row is which) and the summary says so. */
+function tillerNameIds_(){
+  var m = {};
+  ((state.balances && state.balances.groups) || []).forEach(function(g){
+    (g.rows||[]).forEach(function(r){
+      var k = String(r.key||''); if(k.indexOf('id:')!==0 || k.length<=3) return;
+      var nm = String(r.name||'').trim().toLowerCase(), id = k.slice(3).trim();
+      var a = m[nm] = m[nm] || []; if(a.indexOf(id)<0) a.push(id);
+    });
+  });
+  return m;
+}
+/* Task 3 (review Low): a name finds an id only when it is unique among ALL accounts - the Balances rows (with ids) and the
+   Accounts list, hidden accounts and their other names included. Without the Accounts list, no name-based line at all. */
+function tillerAllAccounts_(){ var a = state.accountsFull || state.tillerAll; return (a && a.accounts) || null; }
+function tillerRowId_(row, ids){
+  if(!row) return '';
+  var own = String(row.accountId || (String(row.key||'').indexOf('id:')===0 ? String(row.key).slice(3) : '')).trim();
+  if(own) return own;
+  var nm = String(row.name||'').trim().toLowerCase();
+  var list = (ids || tillerNameIds_())[nm] || [];
+  var all = tillerAllAccounts_(); if(list.length!==1 || !all) return '';
+  var holders = all.filter(function(a){
+    return [a.name].concat(a.names||[]).some(function(n){ return String(n||'').trim().toLowerCase()===nm; });
+  }).length;
+  return holders <= 1 ? list[0] : '';
+}
+function tillerStatusOf_(id){
+  if(!id) return null;
+  return ((state.tillerSt && state.tillerSt.accounts) || []).filter(function(a){ return String(a && a.accountId || '').trim()===id; })[0] || null;
+}
+function tillerChipHtml_(id){
+  if(!tillerConnected_() || !state.tillerSt) return '';
+  var a = tillerStatusOf_(String(id||''));
+  if(!a) return '';
+  var tone = TILLER_TONES_[a.tone] ? a.tone : 'info';
+  var w = tillerSafeWords_(a.words) || (a.statusCode ? 'Tiller sent a status SBC Money doesn\u2019t recognise yet.' : 'Tiller hasn\u2019t reported on this bank yet.');
+  return '<div class="tlchip tl-'+tone+'"><span aria-hidden="true">'+TILLER_ICON_[tone]+'</span><span>'+esc(w)+'</span></div>';
+}
+/* A slot per row: its own id when the row has one, and its name; the id is worked out again at every paint, because
+   the Balances rows that give it may arrive after the page was drawn. */
+function tillerChipSlot_(row){
+  if(!tillerConnected_()) return '';
+  row = typeof row==='string' ? { name:row } : (row || {});
+  var own = String(row.accountId || (String(row.key||'').indexOf('id:')===0 ? String(row.key).slice(3) : '')).trim();
+  return '<div data-tlchip="'+esc(own)+'" data-tlname="'+esc(String(row.name||'').trim().toLowerCase())+'">'+tillerChipHtml_(tillerRowId_(row))+'</div>';
+}
+function tillerSlotId_(el, ids){ return el.getAttribute('data-tlchip') || tillerRowId_({ name: el.getAttribute('data-tlname') }, ids); }
+/* The rows the page on screen lists, to count what got a line. */
+function tillerViewRows_(){
+  if(state.view==='reconcile') return (state.reconcile && state.reconcile.accounts) || [];
+  if(state.view==='accounts') return (state.accountsFull && state.accountsFull.accounts) || [];
+  return [];
+}
+function tillerSumHtml_(){
+  if(!tillerConnected_()) return '';
+  var st = state.tillerSt, p = tillerProblem_(), out = '';
+  if(p) out += '<div class="tlprob"><span aria-hidden="true">\u26a0 </span>'+esc(tillerSafeWords_(p.words))+' These bank lines may be out of date'+
+    (st && st.statusReadAt ? ' (last read '+esc(tillerWhen_(st.statusReadAt))+')' : '')+
+    '. Open Settings \u2192 Account &amp; privacy \u2192 Tiller connection and tap Check now.</div>';
+  if(!st) return out + esc(state.tillerStErr ? 'Couldn\u2019t read each bank\u2019s connection just now. Try again in a few minutes.' : 'Reading each bank\u2019s connection from Tiller\u2026');
+  var bits = [];
+  if(st.words && !p) bits.push(tillerSafeWords_(st.words));
+  if(!p) bits.push(st.statusReadAt ? 'Bank status from Tiller, last read '+tillerWhen_(st.statusReadAt)+'.' : 'Tiller hasn\u2019t been asked about your banks yet \u2014 Settings \u2192 Account & privacy \u2192 Check now.');
+  var ids = tillerNameIds_(), lined = {}, shared = {};
+  tillerViewRows_().forEach(function(r){
+    var id = tillerRowId_(r, ids); if(id){ lined[id] = 1; return; }
+    var list = ids[String(r.name||'').trim().toLowerCase()] || [];
+    if(list.length >= 1 && tillerAllAccounts_()) list.forEach(function(x){ shared[x] = 1; });   // Task 3: a same name among ALL accounts (hidden too)
+  });
+  var nShared = 0, nOther = 0;
+  ((st.accounts) || []).forEach(function(a){ var id = String(a && a.accountId || '').trim(); if(lined[id]) return; if(shared[id]) nShared++; else nOther++; });
+  if(nShared) bits.push(nShared+' bank account'+(nShared===1?' shares its':'s share their')+' name with another account, so SBC Money can\u2019t tell which line is '+(nShared===1?'its':'theirs')+' and shows none (renaming one on your Tiller Accounts tab fixes it).');
+  if(nOther) bits.push('Tiller lists '+nOther+' bank account'+(nOther===1?'':'s')+' that '+(nOther===1?'has':'have')+' no line on this page (a hidden account, one without an Account ID, or one not on your Tiller Accounts tab).');
+  return out + esc(bits.join(' '));
+}
+function tillerSumSlot_(){ return tillerConnected_() ? '<div class="tlsum" id="tlsum" role="status" aria-live="polite">'+tillerSumHtml_()+'</div>' : ''; }
+/* A visit to Reconcile accounts or Accounts. NO Tiller request at all without a connection (T1). The ids for the rows
+   need the Balances rows (an existing, non-Tiller read), loaded only when they are missing. */
+function tillerChipsLoad_(){
+  if(!tillerConnected_()) return Promise.resolve(null);
+  var bal = state.balances ? Promise.resolve(state.balances)
+    : run('apiBalances').then(function(b){ if(!state.balances && b) state.balances = b; return b; }, function(){ return null; });
+  // Task 3: the Accounts list (an existing, non-Tiller read) says whether a name is unique among ALL accounts, hidden too
+  // (kept apart from state.accountsFull: the Accounts page draws when ITS read changes that)
+  var all = (state.accountsFull || state.tillerAll || state.view==='accounts') ? Promise.resolve(null)
+    : run('apiAccountsFull').then(function(a){ if(a) state.tillerAll = a; return a; }, function(){ return null; });
+  return Promise.all([bal, all, tillerStatusLoad_(false)]).then(function(){ tillerPaint_(); });
+}
+function tillerBusy_(){ if(busyHeld_('tiller')){ toast('One moment \u2013 SBC Money is still waiting for Tiller.'); return true; } return false; }
+function tillerHold_(){ var rel = busyHold_('tiller', 'tiller'); tillerPaint_(); return function(){ var r = rel(); tillerPaint_(); return r; }; }
+/* After an answer: the card's heading, the Inbox's Refresh words or the sign-in link - only if focus is still free. */
+function tillerFocusCard_(){ try{ if(!tillerFocusFree_()) return; var h = $('#tllink') || $('#tlhead') || $('#tlrfnote'); if(h) focusSafe_(h); }catch(e){} }
+function tillerSay_(words){
+  // The words go where the person is: the card on Account & privacy, the Refresh line in the Inbox.
+  state.tillerMsg = words;
+  if(state.view==='inbox') state.tillerRf = { code:'msg', words:words };
+}
+function tillerConnect_(again){
+  if(!tillerManage_() || tillerBusy_()) return;
+  var release = tillerHold_();
+  state.tillerMsg = ''; state.tillerLink = '';
+  return run('apiTillerStart', again ? { again:true } : {}).then(function(r){
+    release();
+    if(r && r.available===false){ tillerUnavailable_(r); tillerSay_(tillerSafeWords_(r.words)); }
+    else if(r && r.code==='go' && r.url && /^https:\/\//.test(String(r.url))){
+      tillerSay_(tillerSafeWords_(r.words) || 'Sign in at Tiller, then come back here.');
+      state.tillerAway = Date.now();
+      var w = null; try{ w = window.open(String(r.url), '_blank'); if(w) try{ w.opener = null; }catch(e1){} }catch(e){ w = null; }
+      if(!w){ state.tillerLink = String(r.url); state.tillerLinkAt = Date.now(); }
+    } else tillerSay_(tillerSafeWords_(r && r.words) || 'Tiller didn\u2019t start the sign-in. Try again in a few minutes.');
+    tillerPaint_(); tillerFocusCard_();
+  }, function(e){
+    release();
+    tillerSay_(TILLER_NET_WORDS_);
+    tillerPaint_(); tillerFocusCard_();
+  }).then(release, release);
+}
+/* The sign-in link works once: after it is used it goes (on the next turn, so the browser still follows it). */
+function tillerLinkUsed_(){ setTimeout(function(){ state.tillerLink = ''; tillerPaint_(); }, 0); }
+function tillerConfirm_(yes){
+  if(!tillerManage_() || tillerBusy_()) return;
+  var release = tillerHold_();
+  return run('apiTillerConfirm', { yes:!!yes }).then(function(r){
+    release();
+    tillerAdopt_(r);
+    state.tillerMsg = tillerSafeWords_(r && r.words);
+    if(r && r.state==='connected'){ state.tillerSt = null; tillerPaint_(); tillerStatusLoad_(true); }
+    if(r && r.state==='none') state.tillerSt = null;
+    tillerPaint_(); tillerFocusCard_();
+  }, function(e){
+    release();
+    state.tillerMsg = TILLER_NET_WORDS_;
+    tillerPaint_(); tillerFocusCard_();
+  }).then(release, release);
+}
+function tillerCheckNow_(){
+  if(!tillerConnected_() || tillerBusy_()) return;
+  var release = tillerHold_();
+  state.tillerMsg = 'Asking Tiller\u2026';
+  tillerPaint_();
+  return tillerStatusLoad_(true).then(function(r){
+    release();
+    state.tillerMsg = r && r.words ? tillerSafeWords_(r.words) : (r ? 'Checked.' : state.tillerMsg);
+    tillerPaint_(); tillerFocusCard_();
+  }).then(release, release);
+}
+function tillerDisconnect_(){
+  if(!tillerManage_() || tillerBusy_()) return;
+  var pending = (tillerBoot_()||{}).state==='confirm';
+  confirmUi(pending ? TILLER_FORGET_ASK_ : TILLER_DISCONNECT_ASK_, pending ? 'Remove' : 'Disconnect').then(function(ok){
+    if(!ok || tillerBusy_()) return;
+    var was = (tillerBoot_()||{}).state;
+    var release = tillerHold_();
+    return run('apiTillerDisconnect').then(function(r){
+      release();
+      var t = tillerBoot_();
+      if(t && r && (r.code==='disconnected' || r.code==='not_connected')){
+        t.state = was==='off' ? 'removed' : 'none'; t.problem = null; state.tillerSt = null; state.tillerAgainAt = ''; state.tillerRf = null; state.tillerLink = '';
+        tillerRecheckClear_(); tillerLater_('confirm', 0); tillerLater_('again', 0);
+      }
+      state.tillerMsg = tillerSafeWords_(r && r.words);
+      tillerPaint_(); tillerFocusCard_();
+    }, function(e){
+      release();
+      state.tillerMsg = 'That didn\u2019t reach SBC Money\u2019s server, so the key may not be deleted yet. Try again in a few minutes.';
+      tillerPaint_(); tillerFocusCard_();
+    }).then(release, release);
+  });
+}
+/* ---------------- Refresh my banks (Inbox, owner / admin) ---------------- */
+function tillerAgainMs_(){ return tillerMs_((state.tillerRf && state.tillerRf.againAt) || state.tillerAgainAt || ''); }
+/* Task 3 (N1): paused while a send is out, until a usable againAt, or - after a limit / an unknown answer that came with
+   no usable time - until a status read gives one ("ask again later", never "now"). */
+function tillerRfBlocked_(){ var rf = state.tillerRf; return busyHeld_('tiller') || tillerAgainMs_() > Date.now() || !!(rf && rf.noTime); }
+function tillerRfMode_(){
+  var t = tillerBoot_(); if(!t || !t.canManage) return '';
+  if(t.state==='lost') return 'lost';
+  if(t.state!=='connected') return state.tillerRf ? 'words' : '';
+  return tillerProblem_() ? 'problem' : 'refresh';
+}
+function tillerRfBtnInner_(){
+  var m = tillerRfMode_();
+  if(m==='refresh') return '<button class="btn ghost sm tlrfbtn" data-act="tiller-refresh"'+(tillerRfBlocked_()?' disabled':'')+'>'+
+    (busyHeld_('tiller') && state.tillerRfOut ? 'Asking Tiller\u2026' : '\u21bb Refresh my banks')+'</button>';
+  if(m==='problem') return '<button class="btn ghost sm tlrfbtn" data-act="goview" data-arg="admin">Check the Tiller connection</button>';
+  if(m==='lost') return '<button class="btn ghost sm tlrfbtn" data-act="tiller-connect" data-arg="again"'+(busyHeld_('tiller')?' disabled':'')+'>Connect again</button>';
+  return '';
+}
+function tillerRefreshBtn_(){
+  var inner = tillerRfBtnInner_(); if(!inner) return '';
+  tillerAgainWake_();
+  return '<span id="tlrfb">'+inner+'</span>';
+}
+/* The line under the heading: always there with the button, so it explains a paused button in words (4.5:1) and is the
+   safe place focus returns to after the confirm. */
+/* The line under the heading: always there with the button, so it explains a paused button in words (4.5:1) and is the
+   safe place focus returns to after the confirm.
+   Task 3 (N1, N2, N3): the server's words for the latest refresh answer are ALWAYS shown, as given. The app only ADDS a
+   sentence about when to ask again - "paused until <time>" with a usable time it does not already say, "you can ask again
+   now" only once a usable time has really passed, "later" when there is no usable time - and, after lost, the way forward. */
+function tillerTimeOnly_(ms){ try{ return new Date(ms).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }); }catch(e){ return ''; } }
+function tillerRefreshHtml_(){
+  var m = tillerRfMode_(); if(!m) return '';
+  var rf = state.tillerRf, p = tillerProblem_(), w = '';
+  var server = rf ? tillerSafeWords_(rf.words) : '';
+  if(m==='problem') w = '\u26a0 '+tillerSafeWords_(p.words)+' Refresh my banks is off until this is sorted out: open the Tiller connection and tap Check now.';
+  else if(m==='lost') w = (server ? server+' ' : '')+'Press Connect again to sign in at Tiller again; then Refresh my banks comes back.';
+  else if(server){
+    w = server;
+    if(m==='refresh' && /^(requested|recent|unknown|error|limit)$/.test(rf.code||'')){
+      var again = tillerAgainMs_();
+      if(again > Date.now()){
+        if(rf.checkBack) w += ' '+rf.checkBack;
+        var t = tillerTimeOnly_(again), at = tillerWhen_(new Date(again).toISOString());
+        if(t && w.indexOf(t)<0) w += ' Refresh my banks is paused until '+(rf.estimated ? 'about ' : '')+at+(rf.estimated ? ' (an estimate: Tiller didn\u2019t say when)' : '')+'.';
+      } else if(again) w += ' You can ask Tiller to refresh your banks again now.';
+      else if(rf.noTime) w += ' SBC Money doesn\u2019t know yet when you can ask again, so Refresh my banks stays paused for now; try again later.';
+    }
+  } else if(m==='refresh') w = tillerRfBlocked_() && tillerAgainMs_() > Date.now()
+      ? 'Refresh my banks is paused until '+tillerWhen_(new Date(tillerAgainMs_()).toISOString())+'.'
+      : 'Refresh my banks asks Tiller to check your banks now. It uses one of today\u2019s Tiller refreshes.';
+  return '<div class="note tlrfnote" id="tlrfnote" tabindex="-1">'+esc(w)+'</div>'+(m==='lost' || m==='words' ? tillerLinkHtml_() : '');
+}
+function tillerRefreshSlot_(){ return tillerRfMode_() ? '<div id="tlrf" role="status" aria-live="polite">'+tillerRefreshHtml_()+'</div>' : ''; }
+/* Repaint the heading's Tiller button in place (a redraw of the Inbox is not ours to make). */
+function tillerRfPaintBtn_(){
+  try{
+    var w = $('#tlrfb'); if(!w) return;
+    var ae = document.activeElement, had = !!(ae && w.contains(ae));
+    w.innerHTML = tillerRfBtnInner_();
+    tillerAgainWake_();
+    if(had) focusSafe_($('#tlrfnote'));
+  }catch(e){}
+}
+/* Task 2 (browser M1): when the pause ends, the button comes back and the line says so - one wake-up at againAt. */
+function tillerAgainWake_(){
+  var at = tillerAgainMs_();
+  var cur = tillerLater_._t.again;
+  if(at > Date.now()){ if(!cur || cur.at!==at) tillerLater_('again', at, function(){ tillerRfPaintBtn_(); tillerPaint_(); }); }
+  else if(cur) tillerLater_('again', 0);
+}
+function tillerRefresh_(){
+  if(!tillerConnected_() || !tillerManage_() || tillerProblem_() || tillerBusy_()) return;
+  if(tillerAgainMs_() > Date.now()){ toast('Tiller was asked a few minutes ago; you can ask again at '+tillerWhen_(new Date(tillerAgainMs_()).toISOString())+'.'); return; }
+  confirmUi(TILLER_REFRESH_ASK_, 'Refresh').then(function(ok){
+    if(!ok || tillerBusy_() || tillerAgainMs_() > Date.now()) return;
+    var release = tillerHold_();
+    state.tillerRfOut = true;
+    tillerRfPaintBtn_();
+    return run('apiTillerRefresh').then(function(r){
+      release(); state.tillerRfOut = false;
+      tillerRefreshAnswer_(r);
+    }, function(e){
+      release(); state.tillerRfOut = false;
+      // A client timeout or a lost answer: the refresh may have started. Never sent again; one database-only read
+      // says what SBC Money's server recorded (design 5.2).
+      state.tillerRf = { code:'unknown', words:'Tiller didn\u2019t confirm the refresh, so it may have started. Checking what SBC Money recorded\u2026' };
+      tillerPaint_(); tillerFocusCard_();
+      return tillerStatusLoad_(false).then(function(s){
+        var rf = s && s.refresh || {}, again = tillerMs_(rf.againAt) ? rf.againAt : '';
+        state.tillerRf = { code:'unknown', askedAt:rf.askedAt || '', againAt:again, noTime:false,   // F3-M1 + confirm review N1: a time = paused until it; no time = the server holds nothing (even 'pending': a dead job), so live
+          words:'Tiller didn\u2019t confirm the refresh, so it may have started.' };
+        if(rf.askedAt && (rf.outcome==='requested' || rf.outcome==='pending' || rf.outcome==='unknown')) tillerRecheckStart_(rf.askedAt);
+        tillerPaint_(); tillerFocusCard_();
+      });
+    }).then(release, release);
+  });
+}
+var TILLER_RF_DEFAULT_ = { requested:'Tiller was asked to check your banks.', recent:'Tiller was asked a few minutes ago.',
+  limit:'Tiller says today\u2019s bank refreshes are used up.', unknown:'Tiller didn\u2019t confirm the refresh, so it may have started.',
+  error:'Tiller said something went wrong. Try again later.', not_sent:'Tiller wasn\u2019t asked, so no refresh was used.',
+  lost:'Tiller needs you to connect again.', not_connected:'Tiller isn\u2019t connected for this budget.' };
+function tillerRefreshAnswer_(r){
+  r = r || {};
+  var code = String(r.code||'');
+  if(r.available===false){ tillerUnavailable_(r); state.tillerRf = { code:code, words:tillerSafeWords_(r.words) || 'Tiller connection is turned off.' }; }
+  else {
+    // Task 2 (L11): empty words get a safe default; Task 3 (N1): the server's words are kept as given, the app's own
+    // "Check back about" is kept apart (shown only while the pause lasts)
+    var words = tillerSafeWords_(r.words) || TILLER_RF_DEFAULT_[code] || 'Tiller answered, but SBC Money has no words for it. Try Check now on Settings \u2192 Account & privacy.';
+    var chk = tillerWhen_(r.checkAt);
+    var again = tillerMs_(r.againAt) ? r.againAt : '';
+    state.tillerRf = { code:code, words:words, checkBack:(code==='requested' && chk && words.indexOf(chk)<0) ? 'Check back about '+chk+'.' : '',
+      askedAt:r.askedAt||'', againAt:again, resetsAt:tillerMs_(r.resetsAt) ? r.resetsAt : '', estimated:!!r.resetsAtEstimated,
+      noTime:(code==='limit' || code==='unknown') && !again };
+    state.tillerAgainAt = again;
+    var t = tillerBoot_();
+    if(code==='lost' && t){ t.state = 'lost'; t.problem = null; state.tillerSt = null; }
+    if(code==='not_connected' && t){ t.state = 'none'; t.problem = null; state.tillerSt = null; }
+    if((code==='requested' || code==='unknown') && r.askedAt) tillerRecheckStart_(r.askedAt);
+  }
+  tillerPaint_(); tillerFocusCard_();
+}
+function tillerRecheckStart_(askedAt){
+  tillerRecheckClear_();
+  state.tillerRecheck = { askedAt:String(askedAt||''), imported:false };
+  tillerRecheck_._t = TILLER_RECHECK_MS.map(function(ms, i){ return setTimeout(function(){ tillerRecheckRun_(i); }, ms); });
+}
+function tillerRecheckClear_(){
+  (tillerRecheck_._t || []).forEach(function(h){ clearTimeout(h); });
+  tillerRecheck_._t = [];
+  state.tillerRecheck = null;
+}
+function tillerRecheck_(){ return tillerRecheck_._t || []; }
+tillerRecheck_._t = [];
+function tillerAnswered_(st, askedAt){
+  var since = tillerMs_(askedAt); if(!since) return false;
+  return ((st && st.accounts) || []).some(function(a){ var u = Date.parse(a && a.lastAggregatorUpdate || ''); return !isNaN(u) && u > since; });
+}
+function tillerRecheckRun_(i){
+  var rc = state.tillerRecheck;
+  if(!rc || !tillerConnected_()) return Promise.resolve(null);
+  return tillerStatusLoad_(true).then(function(st){
+    var cur = state.tillerRecheck;
+    if(!cur || cur !== rc) return st;
+    if(!cur.imported && tillerAnswered_(st, cur.askedAt)){ cur.imported = true; importNowUi(); }
+    if(i >= TILLER_RECHECK_MS.length - 1) state.tillerRecheck = null;
+    return st;
+  });
+}
+/* Coming back to the app (from Tiller's sign-in in another tab, or the browser on a phone): read the state again.
+   Only with a card, and only when there is something to learn - a sign-in that was started, or the card on screen.
+   Task 2 (L1): the two events of one return (visibility, then focus) make one read, however fast the first answers. */
+var TILLER_RETURN_GAP_MS = 3000;
+function tillerOnReturn_(){
+  try{ if(document.visibilityState && document.visibilityState!=='visible') return; }catch(e){}
+  var t = tillerBoot_(); if(!t || !/^(none|confirm|connected|lost)$/.test(t.state)) return;
+  var away = state.tillerAway && (Date.now() - state.tillerAway) < TILLER_AWAY_MS;
+  if(!away && !(state.view==='admin' && t.state!=='none')) return;
+  if(state.tillerRetAt && Date.now() - state.tillerRetAt < TILLER_RETURN_GAP_MS) return;
+  state.tillerRetAt = Date.now();
+  tillerStatusLoad_(!!away);
+}
+try{ document.addEventListener('visibilitychange', tillerOnReturn_); window.addEventListener('focus', tillerOnReturn_); }catch(e){}
 function renderAdmin(){
   $('#shell').innerHTML = '<h2 class="viewtitle">Account &amp; privacy</h2><div class="spin"></div>';
   run('apiAccess').then(function(a){ state.access = a; if(state.view==='admin') drawAdmin(); })   // v3.109.0: only if still here
@@ -11447,6 +12066,8 @@ function drawAdmin(){
       '<div class="note" style="padding:8px 2px 0">Any Google account works. They open sbc.theaubuchonfamily.com, press Sign in with Google, and they’re in — nothing to install and no setup wizard, because it’s your budget they’re joining. Someone who already runs their own SBC Money budget can’t be added.</div>'+
       '</div></div>';
   }
+  /* v3.111.0 (U1): Connect Tiller - only when boot.tiller is not null (design 6.1 / 6.2) */
+  if(tillerBoot_()) h += '<div class="grp"><h3>Tiller connection</h3><div id="tlcard">'+tillerCardHtml_()+'</div></div>';
   /* v3.99.0: the operator access card - loaded after the list so the page never waits on it */
   h += '<div class="grp"><h3>Who has read the database</h3><div id="opacc">'+
     (state.opAccess ? opAccessHtml_(state.opAccess) : '<div class="card"><div class="spin"></div></div>')+'</div></div>';
@@ -11458,6 +12079,7 @@ function drawAdmin(){
       : '<div class="note" style="padding:0 0 10px">Takes your sign-in off this budget. The budget belongs to the person who added you and is not changed.</div>')+
     '<div class="actions"><button class="btn danger" data-act="account-delete">'+(a.isAdmin?'Delete my account…':'Remove my access…')+'</button></div>'+
     '</div></div>';
+  var tbs = tillerBoot_(); if(tbs && /^(confirm|connected|lost)$/.test(tbs.state)) tillerStatusLoad_(false);   // v3.111.0: database only (no Tiller call); it answers after the page is drawn
   $('#shell').innerHTML = h;
   if(!state.opAccess) opAccessLoad_(0);
 }
@@ -11578,7 +12200,9 @@ var OPACC_TABLE_WORDS = {
   operator_access:'this access log', operator_access_heartbeat:'this access log',
   schema_migrations:'setup records', sync_runs:'sync records', outbox:'pending writes',
   push_subscriptions:'notification devices', push_log:'notification records', push_sent:'notification records',
-  push_state:'notification records' };
+  push_state:'notification records',
+  tiller_connection:'the Tiller connection and its locked sign-in key', tiller_oauth_pending:'Tiller sign-ins in progress',
+  tiller_account_status:'bank connection status', tiller_events:'the Tiller connection history' };   // v3.111.0 (U1; 11/12 review 6): the same four as _shared/audit.js - none is plumbing
 var OPACC_PLUMBING = ['operator_access','operator_access_heartbeat','schema_migrations','sync_runs',
   'outbox','push_subscriptions','push_log','push_sent','push_state'];
 function opAccessTableWord_(rel){
@@ -11689,7 +12313,7 @@ function opAccessHtml_(r){
   h += '<div style="margin:16px 0 4px"><div style="font-size:34px;font-weight:800;line-height:1;color:'+(m30.money?'var(--red)':'var(--green)')+'">'+esc(m30.money)+'</div>'+
     '<div style="font-weight:600;margin-top:4px">times the operator read or changed money data by hand, last 30 days'+(mAll.money!==m30.money?' <span class="note" style="padding:0;display:inline">(· '+esc(mAll.money)+' ever)</span>':'')+'</div>'+
     (m30.money && r.notedMoney30 ? '<div class="note" style="padding:2px 0 0">'+(r.notedMoney30===m30.money ? 'All '+esc(m30.money) : esc(r.notedMoney30)+' of them')+' carry a note from the operator \u2014 see the sessions below. A note explains a row; it cannot change or remove one.</div>' : '')+
-    '<div class="note" style="padding:2px 0 0">“Money data” is transactions, balances, envelopes, goals, plans, settings, the user list — anything that is somebody’s finances. '+
+    '<div class="note" style="padding:2px 0 0">“Money data” is transactions, balances, envelopes, goals, plans, settings, the user list and — for a budget that connected Tiller — the Tiller connection and its locked sign-in key, Tiller sign-ins in progress, bank connection status and the Tiller connection history: anything that is somebody’s finances or their link to their bank. '+
     (m30.money===0 ? 'Zero is what this should say almost all of the time.' : 'The sessions below say exactly what was looked at.')+'</div></div>';
   h += '<div style="display:flex;gap:22px;flex-wrap:wrap;margin:12px 0 6px">'+
     '<div><div style="font-size:20px;font-weight:800;line-height:1">'+esc(m30.setup+m30.plumbing)+'</div><div class="note" style="padding:2px 0 0">setup &amp; app plumbing, by hand</div></div>'+
@@ -11817,6 +12441,8 @@ function signOutClear_(){
     state.accountsFull = null; state.balances = null; state.sync = null;
     state.reconcile = null; state.access = null; state.archived = null;
     state.opAccess = null;   // v3.99.0
+    state.tillerAll = null;   // v3.111.0 (Task 3)
+    state.tiller = null; state.tillerSt = null; state.tillerMsg = ''; state.tillerRf = null; state.tillerAgainAt = ''; state.tillerAway = 0; state.tillerLink = ''; tillerRecheckClear_();   // v3.111.0
     state.reportData = null; state.removeResults = null;
     state.register = { items:null, sig:null, q:'', account:'', envelope:'', includeHidden:false, limit:50 };
     state.recent = { items:null, loading:false };   // v3.77.1
@@ -11865,7 +12491,7 @@ function removeTxnSearch(){
   var q = String(($('#rmQ')||{}).value||'').trim();
   state.removeq = q;
   if(!q){ state.removeResults=[]; renderRemoveTxn(); return; }
-  run('apiRegister',{q:q, includeHidden:true, includeNoId:true, limit:50}).then(function(items){   // v3.106.2: + rows with no transaction ID
+  run('apiRegister',{q:q, includeHidden:true, includeHiddenEnvelopes:true, includeNoId:true, limit:50}).then(function(items){   // v3.106.2: + rows with no transaction ID
     state.removeResults = items||[];
     if(state.view==='removetxn') renderRemoveTxn();
   }).catch(function(e){ toast('⚠ '+(e.message||e)); });
@@ -11898,6 +12524,7 @@ function removeTxnGo(txnId){
 /* ============================ reconcile accounts (v3.10) ============================ */
 function reconciledMap(){ try{ return JSON.parse(localStorage.getItem('sbcReconciled')||'{}'); }catch(e){ return {}; } }
 function renderReconcile(){
+  tillerChipsLoad_();   // v3.111.0 (U1): each bank's Tiller status - only while connected (no Tiller request otherwise)
   if(!state.reconcile){ $('#shell').innerHTML='<h2 class="viewtitle">Reconcile accounts</h2><div class="spin"></div>'; }
   else { drawReconcile(); }
   run('apiReconcile').then(function(r){
@@ -11977,6 +12604,7 @@ function reconRow(a, rev){
     '<span class="nm">'+esc(a.name)+'</span>'+
     '<span class="upd'+(stale?' stale':'')+'">'+esc(a.updated||'')+(a.pending?' · '+a.pending+' pending':'')+'</span>'+
     '<span class="bal">'+money(a.balance)+'</span>'+
+    (tillerConnected_() ? '<div class="tlrow">'+tillerChipSlot_(a)+'</div>' : '')+   // v3.111.0 (U1; Task 2: matched by Account ID)
     '<span style="flex-basis:100%;display:flex;gap:8px;margin-top:6px;justify-content:flex-end;align-items:center">';
   if(rev[a.name]) h += '<span style="font-size:11px;color:var(--ink-3)">reviewed '+esc(rev[a.name])+'</span>';
   h += '<button class="btn ghost sm" data-act="recon-manual" data-arg="'+esc(a.name)+'">'+(a.manual?'✓ Manual':'Mark manual')+'</button>';
@@ -12007,6 +12635,7 @@ function drawReconcile(){
     '<b>Manual</b> accounts (dead/no feed — e.g. CC Rewards, HSA) you update by hand with <b>Update balance</b>, '+
     'which writes back to Tiller so both stay in sync. <b>Automatic</b> accounts come from the feed — just review. '+
     'No feed for over 6 months → Closed / Dormant.</div>';
+  h += tillerSumSlot_();   // v3.111.0 (U1)
   // v3.109.1: the reconcile itself, on the page the help and Budget health send people to
   h += '<div class="card" style="padding:12px;margin-bottom:12px"><div class="actions" style="justify-content:flex-start"><button class="btn" data-act="recon-bank">'+RB_LBL_+'</button></div>'+
     '<div class="note" style="padding:6px 2px 0">When your accounts look right but Budget health still shows a difference, this makes your envelopes match your bank. You see the numbers first.</div></div>';
@@ -12827,8 +13456,17 @@ function renderHowTo(){
     B('<b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶; every report is scoped to your <b>spending accounts</b> and filters by group, envelope, or tag. Start on <b>Period summary</b>.')+
     B('<b>Tags</b> — label transactions with events that cut across envelopes (“2027 Myrtle Beach Vacation”). Tags also write to the Tags column of your Tiller sheet, so nothing lives only in SBC. Tag totals get their own report under <b>Reports → Tags</b>.')+
     B('<b>Notes</b> — one line of your own words on any transaction: tap the note to change it, or <b>Remove</b> to clear it. Notes also write to the Note column of your Tiller sheet; a note typed at approve time never overwrites one you already wrote in Tiller.')+
-    B('<b>Balances</b> — your real account balances from the bank feeds, assets minus liabilities. <b>↻ Refresh from Tiller</b> re-reads them now; the ✎ on a manual account sets its balance; <b>Reorder</b> arranges groups and accounts.')+
+    B('<b>Balances</b> — your real account balances from the bank feeds, assets minus liabilities. <b>↻ Save & re-read Tiller sheet</b> sends any balance you typed to Tiller, then re-reads the balances in your Tiller sheet (it does not ask the banks \u2014 that is <b>↻ Refresh my banks</b>); the ✎ on a manual account sets its balance; <b>Reorder</b> arranges groups and accounts.')+
     PL('• <b>Wealth</b> — net worth over time, what you added versus what the market did, and whether you are on pace to retire. Its own section above.'), {g:'tools'}),
+
+  S('🔗','Connecting Tiller: bank status and Refresh my banks',
+    P('SBC Money can talk to <b>Tiller</b> directly, so it can show whether Tiller is still reaching each of your banks, and ask Tiller to check them now. It is optional, and only the budget\u2019s owner or an admin can connect it. No Tiller connection card on Settings → Account & privacy means it isn\u2019t switched on for your budget yet.')+
+    B('<b>Connect:</b> Settings → Account & privacy → Tiller connection → <b>Connect Tiller</b>. SBC Money opens Tiller\u2019s sign-in page; sign in with the Tiller login that holds your budget\u2019s Tiller sheet, then come back. On a phone the sign-in opens in your browser \u2014 when it says you are done, switch back to SBC Money. <b>What does connecting allow?</b> on that card says exactly what the key lets SBC Money do.')+
+    B('<b>Bank status:</b> once connected, <b>Reconcile accounts</b> and <b>Accounts</b> show a line under each bank account \u2014 up to date, needs you to sign in again at Tiller, or when Tiller last reached it \u2014 with the time it was read. <b>Check now</b> on the Tiller connection card reads it again; that uses none of your Tiller refreshes.')+
+    B('<b>↻ Refresh my banks</b> (in the Inbox, beside ↻ Check for new; the owner or an admin) asks Tiller to visit every bank now. It uses one of your Tiller refreshes for the day \u2014 the same ones as the Refresh button on the Tiller website \u2014 so it asks first. Banks usually answer in about 5 minutes; while the Inbox stays open, SBC Money looks again after 5 and 15 minutes and runs Check for new once a bank has answered. You can ask again 15 minutes later.')+
+    B('<b>↻ Check for new</b> is different: it brings in what is already in your Tiller sheet. <b>↻ Save & re-read Tiller sheet</b> on Balances re-reads the balances already in your Tiller sheet. Neither one asks the banks.')+
+    B('If something goes wrong with the connection, the Tiller connection card, the bank lines and the Inbox say so in words \u2014 tap <b>Check now</b> on the card to ask Tiller again, or <b>Connect again</b> when it offers that.')+
+    PL('<b>Disconnect</b> on the same card deletes the key and everything SBC Money keeps about your Tiller connection, at once (the privacy page lists it). If your Tiller account lists connected apps, remove SBC Money there too.'), {g:'tools'}),
 
   S('📮','When a save doesn\u2019t reach your sheet',
     P('When you approve, move or tag something, the app updates instantly and then writes the same change to your Google Sheet behind the scenes — usually within seconds. Once in a while Google doesn\u2019t answer, and the write fails.')+
@@ -12839,7 +13477,7 @@ function renderHowTo(){
 
   S('🔄','Making the app re-read your sheet',
     P('Settings → Maintenance → <b>↻ Refresh app data from sheet</b> re-reads envelopes, inbox, transactions and journal straight from your companion sheet, right now, and then tells you exactly what happened: <b>Refreshed … ✓</b>, or <b>Skipped</b> because one of your own saves hasn\u2019t reached the sheet yet (fix the save from the Home banner first), or <b>Google Sheets didn\u2019t answer</b> (try again in a minute). A ✓ means the numbers you see are the sheet\u2019s numbers.')+
-    PL('You rarely need it: the app catches up on its own within the hour. Reach for it after a repair made directly in the sheet. It cannot pull bank balances forward — that\u2019s <b>↻ Refresh from Tiller</b> on Balances.'), {g:'trust'}),
+    PL('You rarely need it: the app catches up on its own within the hour. Reach for it after a repair made directly in the sheet. It cannot pull bank balances forward — that\u2019s <b>↻ Save & re-read Tiller sheet</b> on Balances.'), {g:'trust'}),
 
   S('↩️','Made a mistake? Nothing is permanent',
     P('Every action in SBC Money is recorded and reversible. <b>One tap:</b> when you approve, move, or fund, the green confirmation at the bottom of the screen carries an <b>Undo</b> button for a few seconds — tap it and the action is reversed on the spot. Missed it? Open <b>Settings → History & undo</b> and tap <b>Undo</b> on the operation; nothing expires there.')+
@@ -13041,6 +13679,7 @@ function closeConfirm(v){
     var host = (!back && from && from.isConnected!==false && from.closest) ? (from.closest('.txdet') || from.closest('.icard') || from.closest('.ibxdet')) : null;
     if(back){}
     else if(host) focusSafe_(host.querySelector('.ibxdt') || host.querySelector('.more'));
+    else if(from && from.getAttribute && /^tiller-/.test(from.getAttribute('data-act')||'')) focusSafe_(from.getAttribute('data-act')==='tiller-refresh' ? ($('#tlrfnote') || $('#tlhead')) : ($('#tlhead') || $('#tlrfnote')));   // v3.111.0: a Tiller button opened it - the Refresh words beside it (always there with it, Task 2) / the card's heading, never the button
     else if(state.view==='txns' && state.txnLastRid) focusBack_(state.txnLastRid);   // opened from a row's sheet (now closed)
     else if(state.view==='inbox' && state.ibxLastCid){   // v3.110.0 (Task 6): ...or from a card's ⋯ sheet: back to its ⋯
       var mb = document.querySelector('.icard .more[data-arg="'+state.ibxLastCid+'"]') || document.querySelector('.ibxdet .ibxdt');
@@ -13113,12 +13752,20 @@ function openPicker(ctx){
 }
 function pickListHtml(q){
   q = String(q||'').toLowerCase();
+  /* v3.111.0: a hidden envelope shows only when named - its name typed here, or Filter by envelope (regenv), which
+     lists them last. A group's name alone does not bring one back. Where it shows, it says "· hidden". */
+  var hid = hiddenEnvIds_(), late = [], reg = !!(state.pickCtx && state.pickCtx.kind==='regenv');
   var items = state.picker.filter(function(e){
+    if(hid[e.id]){
+      if(q) return e.name.toLowerCase().indexOf(q)!==-1;
+      if(reg) late.push(e);
+      return false;
+    }
     return !q || e.name.toLowerCase().indexOf(q)!==-1 || e.group.toLowerCase().indexOf(q)!==-1;
-  }).slice(0,80);
+  }).slice(0,80).concat(late);
   return items.map(function(e){
     return '<button data-act="picker-pick" data-arg="'+esc(e.id)+'"><span>'+esc(e.name)+
-      '</span><span class="g">'+esc(e.group)+'</span></button>';
+      '</span><span class="g">'+esc(e.group)+(hid[e.id]?' · hidden':'')+'</span></button>';
   }).join('') || '<button disabled>No matches</button>';
 }
 function closePicker(back){ var c = state.pickCtx; $('#ovl').innerHTML=''; state.pickCtx=null; if(back) pickerFocusBack_(c); }   // v3.110.0 (Task 3, L2)
@@ -13428,6 +14075,12 @@ document.addEventListener('click', function(ev){
     case 'account-delete-cancel': $('#ovl').innerHTML=''; break;
     case 'account-delete-word': deleteAccountWord(); break;
     case 'opacc-more': opAccessLoad_(Number(arg)||0); break;   // v3.99.0
+    case 'tiller-connect': tillerConnect_(arg==='again'); break;   // v3.111.0 (U1): Connect Tiller
+    case 'tiller-confirm': tillerConfirm_(arg==='1'); break;
+    case 'tiller-check': tillerCheckNow_(); break;
+    case 'tiller-disconnect': tillerDisconnect_(); break;
+    case 'tiller-refresh': tillerRefresh_(); break;
+    case 'tiller-link': tillerLinkUsed_(); break;   // Task 2 (L8): the browser follows the link; then it goes (it works once)
     case 'logout': signOut(); break;
     case 'rmtxn-search': removeTxnSearch(); break;
     case 'rmtxn-go': removeTxnGo(arg); break;
