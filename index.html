@@ -1785,11 +1785,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.111.0';
+var FE_VERSION = 'v3.112.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.111.0+20261112.1226';
+var BUILD_ID = 'v3.112.0+20261112.1411';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -10248,6 +10248,11 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.112.0', d:'Nov 12, 2026', items:[
+    '<b>Connect Tiller</b>, if your budget has it: Settings → Account &amp; privacy → <b>Tiller connection</b>. The budget’s owner or an admin taps <b>Connect Tiller</b>, signs in at Tiller and comes back. <b>What does connecting allow?</b> on that card says exactly what it lets SBC Money do, and <b>Disconnect</b> undoes it.',
+    'Once Tiller is connected, <b>Reconcile accounts</b> and <b>Accounts</b> show each bank’s connection: up to date, needs you to sign in again at Tiller, or when Tiller last reached it. <b>Check now</b> on the Tiller connection card reads it again. If something is wrong with the connection, the card, these pages and the Inbox say so in words.',
+    '<b>↻ Refresh my banks</b> in the Inbox (the budget’s owner or an admin) asks Tiller to check your banks now. It asks you first, because it uses one of today’s Tiller refreshes, and banks usually answer in about five minutes.',
+    'The privacy page says what connecting Tiller allows, everything SBC Money keeps once it is connected, and who can see it.' ]},
   { v:'v3.111.0', d:'Nov 12, 2026', items:[
     'Envelopes you’ve hidden now stay out of Transactions, Reports and Home. Tap <b>Show hidden</b>, or pick the envelope, to see them.',
     'On Balances, <b>↻ Refresh from Tiller</b> is now called <b>↻ Save &amp; re-read Tiller sheet</b>. It does what it always did: it re-reads your Tiller sheet. It never asked the banks.' ]},
@@ -11500,7 +11505,7 @@ var TILLER_ALLOW_HTML_ =
   '<ol><li>to list your Tiller sheets, so it can check that the one your budget uses is really yours;</li>'+
   '<li>to read each bank connection\u2019s status \u2014 working, needs you to sign in again at Tiller, or when Tiller last '+
   'reached the bank;</li>'+
-  '<li>when you or an admin of your budget presses <b>Refresh my banks</b>, to ask Tiller to check your banks now. That uses '+
+  '<li>when the budget\u2019s owner or an admin presses <b>Refresh my banks</b>, to ask Tiller to check your banks now. That uses '+
   'one of your daily Tiller refreshes, the same ones as the Refresh button on the Tiller website.</li></ol>'+
   '<p>The key is kept on SBC Money\u2019s server (hosted by Supabase), locked with a second key that exists only in the '+
   'server\u2019s settings. The server is run by one person, the operator of SBC Money. Like the operator of any app, he could '+

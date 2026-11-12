@@ -65,13 +65,12 @@ ul,ol{padding-left:22px}
   </section>
   <section class="sec" id="tiller">
     <h2>Connecting Tiller (optional)</h2>
-    <p class="notyet" id="tiller-notyet">Connecting Tiller isn’t switched on for every budget yet. If you don’t see <i>Tiller connection</i> in Settings, none of this section applies to you.</p>
     <p>If you tap <b>Connect Tiller</b>, you sign in at Tiller and Tiller hands SBC Money’s server a key to your Tiller account. Tiller offers only one kind of key, and there is no read-only option. The key opens your whole Tiller account: every Tiller sheet you have, every bank account linked to Tiller (even ones that are not in your budget), and Tiller’s tools for reading, changing and deleting transactions and categories.</p>
     <p>SBC Money’s program uses the key for three things, and only these:</p>
     <ol>
       <li>to list your Tiller sheets, so it can check that the one your budget uses is really yours;</li>
       <li>to read each bank connection’s status — working, needs you to sign in again at Tiller, or when Tiller last reached the bank;</li>
-      <li>when you or an admin of your budget presses <b>Refresh my banks</b>, to ask Tiller to check your banks now. That uses one of your daily Tiller refreshes, the same ones as the Refresh button on the Tiller website.</li>
+      <li>when the budget’s owner or an admin presses <b>Refresh my banks</b>, to ask Tiller to check your banks now. That uses one of your daily Tiller refreshes, the same ones as the Refresh button on the Tiller website.</li>
     </ol>
     <p>The key is kept on SBC Money’s server (hosted by Supabase), locked with a second key that exists only in the server’s settings. The server is run by one person, the operator of SBC Money. Like the operator of any app, he could change the program to use the key for more than these three things. Reading the stored key from the database by hand is recorded on your Access page; a change to the program is not.</p>
     <p>To stop: Settings → Account &amp; privacy → Tiller connection → <b>Disconnect</b>. SBC Money deletes the key at once. <b>Delete my account</b> deletes it too. Tiller does not publish a way for an app to cancel its key on Tiller’s side, so a copy someone had already taken could keep working until Tiller expires it. If your Tiller account settings list connected apps, remove SBC Money there as well.</p>
@@ -89,7 +88,7 @@ ul,ol{padding-left:22px}
       <li><b>A dated record</b> of connects, confirmations, sign-in key renewals (and a key that stopped working), status reads (how many accounts, how many failed) and refreshes (how many bank connections) — short codes and numbers only, never Tiller’s own words. A sign-in SBC Money refuses (not your budget’s Tiller sheet, or a Tiller login another budget uses) leaves no record on a first connect. When you connect again, a refused or failed sign-in is noted as a short code and a time.</li>
       <li>While a sign-in is in progress: a scrambled form of its one-time code, a locked check value, and the email address of the person who pressed Connect. It is removed when the sign-in is used, or the next time your budget is opened after its 10 minutes.</li>
     </ul>
-    <p><b>Disconnect deletes all of it at once</b>, the dated record included, and so does <b>Delete my account</b>. An unanswered “Use this Tiller login?” is deleted, with its key, the next time your budget is opened after its 30 minutes.</p>
+    <p><b>Disconnect deletes all of it at once</b>, the dated record included, and so does <b>Delete my account</b>. Answering “Not mine”, or leaving “Use this Tiller login?” unanswered past its 30 minutes, deletes that sign-in, its key and its dated record (an unanswered one the next time your budget is opened).</p>
     <p><b>Who can see it.</b> Everyone on your budget’s access list sees the status words in the app; only the owner or an admin sees the Tiller email, in the question above. The operator’s check scripts can read the status codes, the times and the counts, and the Account IDs they are filed under — never the key, the Tiller email, who connected it, your sheet’s ID, or any account or bank name. Each of those reads is listed on your Access page. Like everything else in the database, the locked key and the locked email could also be read by the operator by hand (recorded on your Access page) or from a backup (not recorded); they stay locked without the server’s second key, which the operator controls.</p>
   </section>
   <section class="sec">
