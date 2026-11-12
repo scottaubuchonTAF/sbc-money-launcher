@@ -1251,8 +1251,7 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
 .trow:hover{background:var(--bg)}
 .trow.sel{background:var(--teal-50)}
 .trow[data-kbd]:focus-visible{outline:3px solid var(--focus);outline-offset:-3px;border-radius:0}
-.trow .ic{width:34px;height:34px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;
-  flex:none;font-size:15px;font-weight:800}
+.trow .splmark{margin-right:4px}   /* v3.110.1 (Scott 11/11): the split mark, inline - the letter-in-a-circle column is gone */
 .trow .mid{flex:1 1 auto;min-width:0}
 .trow .d{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trow .e{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1755,11 +1754,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.110.0';
+var FE_VERSION = 'v3.110.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.110.0+20261111.1728';
+var BUILD_ID = 'v3.110.1+20261111.2048';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7269,22 +7268,21 @@ function txnFlag_(t){
 }
 function txnEnvLine_(t){
   var legs = t.legs || [];
-  if(legs.length>1) return 'Split · '+legs.map(function(l){ return esc(l.envelopeName); }).join(', ');
+  if(legs.length>1) return '<span class="splmark" aria-hidden="true">✂</span>Split · '+legs.map(   // v3.110.1: the split mark sits here, not in a circle
+    function(l){ return esc(l.envelopeName); }).join(', ');
   return esc((legs[0]||{}).envelopeName || '');
 }
 function txnRowHtml_(t){
   var rid = regRowId_(t); t._rid = rid;   // v3.109.0: the tag chips / tag editor use it
-  var split = (t.legs||[]).length>1, flag = txnFlag_(t), tags = t.tags || [];
+  var flag = txnFlag_(t), tags = t.tags || [];
   var sub = [txnEnvLine_(t)];
   if(t.preStart && !t.unknown) sub.push(t.spent ? 'from its envelope' : 'recorded only');
   sub.push(esc(t.account));
   if(tags.length) sub.push('🏷 '+esc(tags.join(', ')));
   if(t.note) sub.push('📝 '+esc(t.note));
   var on = txnWide_ && state.txnCur===rid;
-  var init = String(t.description||'?').replace(/[^A-Za-z0-9]/g,'').charAt(0).toUpperCase() || '•';
   return '<div class="trow'+(on?' sel':'')+'" data-act="txn-open" data-arg="'+esc(rid)+'"'+(on?' aria-current="true"':'')+' tabindex="0" role="button" data-kbd="1">'+   // Task 6 (M-R3-1): focusable when drawn
     (state.tagSel ? '<span class="tsel" data-act="txn-sel-wrap">'+selBoxHtml(t)+'</span>' : '')+
-    '<div class="ic" aria-hidden="true">'+(split ? '✂' : esc(init))+'</div>'+
     '<div class="mid"><div class="d" title="'+esc(t.description)+'">'+esc(t.description)+(flag ? '<span class="flag">'+flag+'</span>' : '')+'</div>'+
     '<div class="e">'+sub.filter(Boolean).join(' · ')+'</div></div>'+
     '<div class="amt'+(t.amount>0?' in':'')+'">'+money(t.amount)+'</div></div>';
@@ -10196,6 +10194,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.110.1', d:'Nov 11, 2026', items:[
+    'Transactions rows no longer start with a letter in a circle, so the store name has more room. A split row shows \u2702 before the word Split.' ]},
   { v:'v3.110.0', d:'Nov 11, 2026', items:[
     '<b>A new Inbox.</b> Tap the envelope button on a card to approve it. Split, tags, a note and <b>Always suggest</b> are under <b>\u22ef</b>. On a wide screen the list and the card you picked sit side by side.',
     '<b>A new Transactions page.</b> Transactions are grouped by day. Tap one to see everything you can do with it. <b>Move to another envelope\u2026</b> moves it in one step, with <b>Undo</b> right there.',
