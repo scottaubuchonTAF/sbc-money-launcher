@@ -1785,11 +1785,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.112.0';
+var FE_VERSION = 'v3.113.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.112.0+20261112.1411';
+var BUILD_ID = 'v3.113.0+20261115.1517';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -10248,6 +10248,12 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.113.0', d:'Nov 15, 2026', items:[
+    'On <b>Reconcile accounts</b>, two banks with the same name now each show their own Tiller line. When SBC Money can\u2019t tell which account a bank line belongs to, it shows none instead of guessing.',
+    'If Tiller stops accepting SBC Money\u2019s sign-in, the Tiller connection card now offers the budget\u2019s owner or an admin <b>Disconnect</b> next to <b>Connect again</b>.',
+    '\u201cUse this Tiller login for this budget?\u201d: <b>Confirm</b>, <b>Not mine</b> and <b>Remove this sign-in</b> only ever apply to the question you were looking at. If it was already answered, on another device or by a second tap, the card says what really happened.',
+    'Unfinished Tiller sign-ins and unanswered \u201cUse this Tiller login?\u201d questions are now cleared away within about an hour, even if the budget isn\u2019t opened again.',
+    'Help now says when <b>Refresh my banks</b> can be used again once the day\u2019s refreshes are used up (usually 3 AM Eastern). The privacy page says plainly what the operator\u2019s checks can read, and what is kept for a Tiller connection that stopped working until it is disconnected or connected again.' ]},
   { v:'v3.112.0', d:'Nov 12, 2026', items:[
     '<b>Connect Tiller</b>, if your budget has it: Settings → Account &amp; privacy → <b>Tiller connection</b>. The budget’s owner or an admin taps <b>Connect Tiller</b>, signs in at Tiller and comes back. <b>What does connecting allow?</b> on that card says exactly what it lets SBC Money do, and <b>Disconnect</b> undoes it.',
     'Once Tiller is connected, <b>Reconcile accounts</b> and <b>Accounts</b> show each bank’s connection: up to date, needs you to sign in again at Tiller, or when Tiller last reached it. <b>Check now</b> on the Tiller connection card reads it again. If something is wrong with the connection, the card, these pages and the Inbox say so in words.',
@@ -11607,7 +11613,7 @@ function tillerLinkHtml_(){
 }
 function tillerCardHtml_(){
   var t = tillerBoot_(); if(!t) return '';
-  var st = state.tillerSt || {}, can = !!t.canManage, line = '', btns = '', about = false, help = '', prob = '';
+  var st = state.tillerSt || {}, can = !!t.canManage, line = '', btns = '', about = false, help = '', prob = '', askRef = '';
   var B = function(act, label, arg, cls){ return '<button class="btn sm'+(cls?' '+cls:'')+'" data-act="'+act+'"'+(arg?' data-arg="'+esc(arg)+'"':'')+(busyHeld_('tiller')?' disabled':'')+'>'+label+'</button>'; };
   if(t.state==='none'){
     line = TILLER_NONE_WORDS_; about = true;
@@ -11618,7 +11624,10 @@ function tillerCardHtml_(){
     line = st.confirmQuestion ? tillerSafeWords_(st.confirmQuestion) : (can ? 'Use this Tiller login for this budget?' : 'A Tiller login is waiting to be confirmed by the budget\u2019s owner or an admin.');
     help = (can ? 'Confirm only if this is the Tiller login that holds your budget\u2019s Tiller sheet. Not mine, or Remove this sign-in, makes SBC Money forget it and delete its key. ' : '')+
       (until ? 'If nobody answers by '+until+', SBC Money forgets this sign-in by itself.' : 'If nobody answers within 30 minutes, SBC Money forgets this sign-in by itself.');
-    if(can) btns = B('tiller-confirm', 'Confirm', '1') + B('tiller-confirm', 'Not mine', '0', 'ghost') + B('tiller-disconnect', 'Remove this sign-in', '', 'ghost');
+    if(can){
+      askRef = st.confirmRef ? String(st.confirmRef) : '';   // post-v3.112.0 (F2): which question is on screen; tillerConfirm_ sends it back
+      btns = B('tiller-confirm', 'Confirm', '1') + B('tiller-confirm', 'Not mine', '0', 'ghost') + B('tiller-disconnect', 'Remove this sign-in', '', 'ghost');
+    }
     about = true;
     tillerLater_('confirm', tillerMs_(st.confirmExpiresAt), tillerConfirmExpired_);
   } else if(t.state==='connected'){
@@ -11636,7 +11645,9 @@ function tillerCardHtml_(){
     var lostOn = st.lastError && st.lastError.at ? tillerWhen_(st.lastError.at, 'date') : '';
     line = 'Tiller needs you to connect again'+(lostOn ? ' (its sign-in stopped working on '+lostOn+')' : '')+'.';
     about = true;
-    if(can){ btns = B('tiller-connect', 'Connect again', 'again'); help = TILLER_CONNECT_HELP_; }
+    // post-v3.112.0 (review round 3, T5): a lost connection still holds its locked key and Tiller email - the owner or
+    // an admin can delete them here with the same Disconnect as the connected card (no ref: the server deletes any state)
+    if(can){ btns = B('tiller-connect', 'Connect again', 'again') + B('tiller-disconnect', 'Disconnect', '', 'ghost'); help = TILLER_CONNECT_HELP_+' SBC Money still holds the old Tiller key for this budget. Connecting again replaces it; Disconnect deletes it.'; }
     else help = 'Ask the budget\u2019s owner or an admin to connect again.';
   } else if(t.state==='not_set_up'){
     line = 'Tiller connection isn\u2019t set up yet.';
@@ -11652,7 +11663,7 @@ function tillerCardHtml_(){
     (prob ? '<div class="tlmsg tlprobwhat">'+esc(prob)+'</div>' : '')+
     (help ? '<div class="tlmsg">'+esc(help)+'</div>' : '')+
     '<div class="tlmsg" role="status" aria-live="polite">'+esc(msg)+'</div>'+link+
-    (btns ? '<div class="actions tlbtns">'+btns+'</div>' : '')+
+    (btns ? '<div class="actions tlbtns"'+(askRef ? ' data-ref="'+esc(askRef)+'"' : '')+'>'+btns+'</div>' : '')+
     (about ? '<details class="tlabout"><summary>What does connecting allow?</summary><div class="tlallow">'+TILLER_ALLOW_HTML_+'</div></details>' : '')+
     '</div>';
 }
@@ -11711,13 +11722,25 @@ function tillerNameIds_(){
 /* Task 3 (review Low): a name finds an id only when it is unique among ALL accounts - the Balances rows (with ids) and the
    Accounts list, hidden accounts and their other names included. Without the Accounts list, no name-based line at all. */
 function tillerAllAccounts_(){ var a = state.accountsFull || state.tillerAll; return (a && a.accounts) || null; }
+/* post-v3.112.0 (review round 3, T3): a row shows a bank line only when the page is CERTAIN which account it is.
+   - Its own id (accountId, or key 'id:'): used, but never for two rows of the page on screen.
+   - A row that carries an accountId field with '' (both back ends now send it: no Account ID, or the server could not be
+     certain which same-named account the row is): no line - never re-guessed by name.
+   - Only a row with no accountId field at all (an older back end) falls back to its name, and only when that name is
+     unique: one id and one row on Balances, one row on the page, one holder on the Accounts list (hidden accounts and
+     their other names included). */
 function tillerRowId_(row, ids){
   if(!row) return '';
-  var own = String(row.accountId || (String(row.key||'').indexOf('id:')===0 ? String(row.key).slice(3) : '')).trim();
-  if(own) return own;
-  var nm = String(row.name||'').trim().toLowerCase();
+  var idOf = function(r){ return String((r && r.accountId) || (String((r && r.key)||'').indexOf('id:')===0 ? String(r.key).slice(3) : '')).trim(); };
+  var lc = function(n){ return String(n||'').trim().toLowerCase(); };
+  var rows = tillerViewRows_(), own = idOf(row);
+  if(own) return rows.filter(function(r){ return idOf(r)===own; }).length <= 1 ? own : '';
+  if(row.accountId != null) return '';
+  var nm = lc(row.name);
   var list = (ids || tillerNameIds_())[nm] || [];
   var all = tillerAllAccounts_(); if(list.length!==1 || !all) return '';
+  var nBal = 0; ((state.balances && state.balances.groups) || []).forEach(function(g){ (g.rows||[]).forEach(function(r){ if(lc(r.name)===nm) nBal++; }); });
+  if(nBal!==1 || rows.filter(function(r){ return lc(r.name)===nm; }).length > 1) return '';
   var holders = all.filter(function(a){
     return [a.name].concat(a.names||[]).some(function(n){ return String(n||'').trim().toLowerCase()===nm; });
   }).length;
@@ -11741,7 +11764,11 @@ function tillerChipSlot_(row){
   if(!tillerConnected_()) return '';
   row = typeof row==='string' ? { name:row } : (row || {});
   var own = String(row.accountId || (String(row.key||'').indexOf('id:')===0 ? String(row.key).slice(3) : '')).trim();
-  return '<div data-tlchip="'+esc(own)+'" data-tlname="'+esc(String(row.name||'').trim().toLowerCase())+'">'+tillerChipHtml_(tillerRowId_(row))+'</div>';
+  // post-v3.112.0 (T3): a row the back end answered for (its own id, or an accountId field) is decided NOW - its id, or a
+  // single space when it has none the page is certain of (no Account ID equals ' ': ids are compared trimmed), so a repaint
+  // never re-guesses it by name. Only a row with no accountId field at all is worked out again by name at every paint.
+  var id = tillerRowId_(row), slot = (own || row.accountId != null) ? (id || ' ') : '';
+  return '<div data-tlchip="'+esc(slot)+'" data-tlname="'+esc(String(row.name||'').trim().toLowerCase())+'">'+tillerChipHtml_(id)+'</div>';
 }
 function tillerSlotId_(el, ids){ return el.getAttribute('data-tlchip') || tillerRowId_({ name: el.getAttribute('data-tlname') }, ids); }
 /* The rows the page on screen lists, to count what got a line. */
@@ -11760,16 +11787,33 @@ function tillerSumHtml_(){
   var bits = [];
   if(st.words && !p) bits.push(tillerSafeWords_(st.words));
   if(!p) bits.push(st.statusReadAt ? 'Bank status from Tiller, last read '+tillerWhen_(st.statusReadAt)+'.' : 'Tiller hasn\u2019t been asked about your banks yet \u2014 Settings \u2192 Account & privacy \u2192 Check now.');
-  var ids = tillerNameIds_(), lined = {}, shared = {};
-  tillerViewRows_().forEach(function(r){
-    var id = tillerRowId_(r, ids); if(id){ lined[id] = 1; return; }
-    var list = ids[String(r.name||'').trim().toLowerCase()] || [];
-    if(list.length >= 1 && tillerAllAccounts_()) list.forEach(function(x){ shared[x] = 1; });   // Task 3: a same name among ALL accounts (hidden too)
+  // post-v3.112.0 (T3): an id is "shared" only when its name really is shared by accounts this page knows (two rows on
+  // Balances or on the page, two ids, or - for a row with no line - two holders on the Accounts list, hidden too). When a
+  // row has no line because of a shared name but the page cannot see every account of that name (no Account ID, or
+  // Balances without ids), or an Accounts row from your Tiller Accounts tab came with no Account ID the server was sure
+  // of (e.g. a name that differs between the Accounts tab and Balance History), the other sentence also gives that reason.
+  var ids = tillerNameIds_(), lined = {}, shared = {}, unsure = false, all = tillerAllAccounts_(), rows = tillerViewRows_(), nBal = {}, nRow = {};
+  var lc = function(n){ return String(n||'').trim().toLowerCase(); };
+  ((state.balances && state.balances.groups) || []).forEach(function(g){ (g.rows||[]).forEach(function(r){ var k = lc(r.name); nBal[k] = (nBal[k]||0) + 1; }); });
+  rows.forEach(function(r){ var k = lc(r.name); nRow[k] = (nRow[k]||0) + 1; });
+  rows.forEach(function(r){
+    var id = tillerRowId_(r, ids), k = lc(r.name), list = ids[k] || [];
+    if(id) lined[id] = 1;
+    else if(r.inTiller && r.accountId != null) unsure = true;
+    var n = Math.max(nBal[k]||0, nRow[k]||0, list.length, (!id && all) ? all.filter(function(a){
+      return [a.name].concat(a.names||[]).some(function(x){ return lc(x)===k; });
+    }).length : 0);
+    if(n < 2) return;
+    list.forEach(function(x){ shared[x] = 1; });
+    // post-v3.112.0 (U2): also a row WITH a line whose name has more accounts than this page lists rows of it (Accounts:
+    // one row per name) - with Balances that carry no ids the other one cannot be counted as sharing its name.
+    if(list.length < n && (!id || (nRow[k]||0) < n)) unsure = true;
   });
   var nShared = 0, nOther = 0;
   ((st.accounts) || []).forEach(function(a){ var id = String(a && a.accountId || '').trim(); if(lined[id]) return; if(shared[id]) nShared++; else nOther++; });
   if(nShared) bits.push(nShared+' bank account'+(nShared===1?' shares its':'s share their')+' name with another account, so SBC Money can\u2019t tell which line is '+(nShared===1?'its':'theirs')+' and shows none (renaming one on your Tiller Accounts tab fixes it).');
-  if(nOther) bits.push('Tiller lists '+nOther+' bank account'+(nOther===1?'':'s')+' that '+(nOther===1?'has':'have')+' no line on this page (a hidden account, one without an Account ID, or one not on your Tiller Accounts tab).');
+  if(nOther) bits.push('Tiller lists '+nOther+' bank account'+(nOther===1?'':'s')+' that '+(nOther===1?'has':'have')+' no line on this page (a hidden account, one without an Account ID, '+
+    (unsure ? 'one not on your Tiller Accounts tab, or one SBC Money can\u2019t match to a row for sure, such as two accounts with the same name' : 'or one not on your Tiller Accounts tab')+').');
   return out + esc(bits.join(' '));
 }
 function tillerSumSlot_(){ return tillerConnected_() ? '<div class="tlsum" id="tlsum" role="status" aria-live="polite">'+tillerSumHtml_()+'</div>' : ''; }
@@ -11818,13 +11862,17 @@ function tillerConnect_(again){
 function tillerLinkUsed_(){ setTimeout(function(){ state.tillerLink = ''; tillerPaint_(); }, 0); }
 function tillerConfirm_(yes){
   if(!tillerManage_() || tillerBusy_()) return;
+  // post-v3.112.0 (F2): answer the question that is ON SCREEN - its ref sits on the card's buttons row (tillerCardHtml_).
+  // The server acts only if that is still the question; otherwise it says "That question changed" and changes nothing.
+  var box = $('#tlcard .tlbtns'), ref = box && box.getAttribute ? (box.getAttribute('data-ref') || '') : '';
   var release = tillerHold_();
-  return run('apiTillerConfirm', { yes:!!yes }).then(function(r){
+  return run('apiTillerConfirm', ref ? { yes:!!yes, ref:ref } : { yes:!!yes }).then(function(r){
     release();
     tillerAdopt_(r);
     state.tillerMsg = tillerSafeWords_(r && r.words);
     if(r && r.state==='connected'){ state.tillerSt = null; tillerPaint_(); tillerStatusLoad_(true); }
     if(r && r.state==='none') state.tillerSt = null;
+    if(r && r.code==='confirm_changed') tillerStatusLoad_(false);   // F2: read the question again (the database only, no Tiller call)
     tillerPaint_(); tillerFocusCard_();
   }, function(e){
     release();
@@ -11846,18 +11894,27 @@ function tillerCheckNow_(){
 function tillerDisconnect_(){
   if(!tillerManage_() || tillerBusy_()) return;
   var pending = (tillerBoot_()||{}).state==='confirm';
+  // post-v3.112.0 (review R3): "Remove this sign-in" removes only the question ON SCREEN - its ref sits on the card's
+  // buttons row (as tillerConfirm_ reads it), taken now, when the person taps. The key is always sent ('' if the
+  // question has not been read yet), so the server removes nothing unless it is still that question.
+  var box = pending ? $('#tlcard .tlbtns') : null, ref = box && box.getAttribute ? (box.getAttribute('data-ref') || '') : '';
   confirmUi(pending ? TILLER_FORGET_ASK_ : TILLER_DISCONNECT_ASK_, pending ? 'Remove' : 'Disconnect').then(function(ok){
     if(!ok || tillerBusy_()) return;
     var was = (tillerBoot_()||{}).state;
     var release = tillerHold_();
-    return run('apiTillerDisconnect').then(function(r){
+    return (pending ? run('apiTillerDisconnect', { ref:ref }) : run('apiTillerDisconnect')).then(function(r){
       release();
-      var t = tillerBoot_();
+      var t = tillerBoot_(), reread = false;
       if(t && r && (r.code==='disconnected' || r.code==='not_connected')){
         t.state = was==='off' ? 'removed' : 'none'; t.problem = null; state.tillerSt = null; state.tillerAgainAt = ''; state.tillerRf = null; state.tillerLink = '';
         tillerRecheckClear_(); tillerLater_('confirm', 0); tillerLater_('again', 0);
+      } else if(pending && r){   // R3: nothing was removed - show what is there now (the database only, no Tiller call)
+        tillerAdopt_(r);
+        if(r.state==='connected') state.tillerSt = null;
+        reread = r.available!==false;
       }
       state.tillerMsg = tillerSafeWords_(r && r.words);
+      if(reread) tillerStatusLoad_(false);
       tillerPaint_(); tillerFocusCard_();
     }, function(e){
       release();
@@ -13468,7 +13525,7 @@ function renderHowTo(){
     P('SBC Money can talk to <b>Tiller</b> directly, so it can show whether Tiller is still reaching each of your banks, and ask Tiller to check them now. It is optional, and only the budget\u2019s owner or an admin can connect it. No Tiller connection card on Settings → Account & privacy means it isn\u2019t switched on for your budget yet.')+
     B('<b>Connect:</b> Settings → Account & privacy → Tiller connection → <b>Connect Tiller</b>. SBC Money opens Tiller\u2019s sign-in page; sign in with the Tiller login that holds your budget\u2019s Tiller sheet, then come back. On a phone the sign-in opens in your browser \u2014 when it says you are done, switch back to SBC Money. <b>What does connecting allow?</b> on that card says exactly what the key lets SBC Money do.')+
     B('<b>Bank status:</b> once connected, <b>Reconcile accounts</b> and <b>Accounts</b> show a line under each bank account \u2014 up to date, needs you to sign in again at Tiller, or when Tiller last reached it \u2014 with the time it was read. <b>Check now</b> on the Tiller connection card reads it again; that uses none of your Tiller refreshes.')+
-    B('<b>↻ Refresh my banks</b> (in the Inbox, beside ↻ Check for new; the owner or an admin) asks Tiller to visit every bank now. It uses one of your Tiller refreshes for the day \u2014 the same ones as the Refresh button on the Tiller website \u2014 so it asks first. Banks usually answer in about 5 minutes; while the Inbox stays open, SBC Money looks again after 5 and 15 minutes and runs Check for new once a bank has answered. You can ask again 15 minutes later.')+
+    B('<b>↻ Refresh my banks</b> (in the Inbox, beside ↻ Check for new; the owner or an admin) asks Tiller to visit every bank now. It uses one of your Tiller refreshes for the day \u2014 the same ones as the Refresh button on the Tiller website \u2014 so it asks first. Banks usually answer in about 5 minutes; while the Inbox stays open, SBC Money looks again after 5 and 15 minutes and runs Check for new once a bank has answered. After a refresh, Refresh my banks pauses for 15 minutes. If Tiller says today\u2019s refreshes are used up, it waits until they come back, usually at midnight Pacific time (3 AM Eastern); the Inbox says when you can ask again.')+
     B('<b>↻ Check for new</b> is different: it brings in what is already in your Tiller sheet. <b>↻ Save & re-read Tiller sheet</b> on Balances re-reads the balances already in your Tiller sheet. Neither one asks the banks.')+
     B('If something goes wrong with the connection, the Tiller connection card, the bank lines and the Inbox say so in words \u2014 tap <b>Check now</b> on the card to ask Tiller again, or <b>Connect again</b> when it offers that.')+
     PL('<b>Disconnect</b> on the same card deletes the key and everything SBC Money keeps about your Tiller connection, at once (the privacy page lists it). If your Tiller account lists connected apps, remove SBC Money there too.'), {g:'tools'}),
