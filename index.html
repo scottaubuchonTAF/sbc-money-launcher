@@ -1785,11 +1785,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.113.0';
+var FE_VERSION = 'v3.113.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.113.0+20261115.1517';
+var BUILD_ID = 'v3.113.1+20261116.0959';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -10248,6 +10248,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.113.1', d:'Nov 16, 2026', items:[
+    'Wealth now uses each account\u2019s own type from Tiller, so its starting tier, tax treatment and whether it counts as a card or a loan are right for every account. Anything you set by hand in Wealth stays as you set it.' ]},
   { v:'v3.113.0', d:'Nov 15, 2026', items:[
     'On <b>Reconcile accounts</b>, two banks with the same name now each show their own Tiller line. When SBC Money can\u2019t tell which account a bank line belongs to, it shows none instead of guessing.',
     'If Tiller stops accepting SBC Money\u2019s sign-in, the Tiller connection card now offers the budget\u2019s owner or an admin <b>Disconnect</b> next to <b>Connect again</b>.',
