@@ -1656,19 +1656,26 @@ function supaCall_(fn, args){
   var ms = fn === 'apiRefreshMirror' ? 60000 : (big || refreshing) ? 30000 : 8000;
   if(fn.indexOf('apiTiller')===0) ms = 60000;   // v3.111.0: every apiTiller* gets a minute (the server answers within 50 s; design 5.2)
   var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, ms);
+  // round 3 (lane UI-H, G1): every failure says whether the server ANSWERED (e.answered: a 4xx, an error body, an
+  // unreadable body) or could not be reached (e.transport: fetch threw, the abort timer, a 5xx). Messages unchanged.
   return fetch(SUPA_API, { method:'POST',
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
       signal: ctrl ? ctrl.signal : undefined })
   .then(function(r){ clearTimeout(timer);
-    if(!r.ok) throw new Error('mirror HTTP '+r.status);
-    return r.json();
-  }, function(err){ clearTimeout(timer); throw err; })
+    if(!r.ok){ var he = new Error('mirror HTTP '+r.status); errKind_(he, r.status>=500 ? 'transport' : 'answered'); throw he; }
+    return r.json().catch(function(pe){ throw errKind_(pe, 'answered'); });
+  }, function(err){ clearTimeout(timer); throw errKind_(err, 'transport'); })
   .then(function(res){
     if(res && res.ok){ supaFails_ = 0; return res.result; }
     var e = new Error((res && res.error) || 'mirror error');
     if(res && res.auth) e.auth = true;   // v3.69.0 (F4): the token is the problem, not the mirror
-    throw e;
+    throw errKind_(e, 'answered');
   });
+}
+/* round 3 (lane UI-H, G1): mark how a request failed (first mark wins). Returns the error. */
+function errKind_(e, kind){
+  try{ if(e && typeof e==='object' && !e.answered && !e.transport) e[kind] = true; }catch(x){}
+  return e;
 }
 /* v3.32: mirror WRITE call. Differences from reads: sends exec (write-back
    target), NO abort timer (v3.22 rule — never abort a mutation), and a
@@ -1785,11 +1792,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.113.1';
+var FE_VERSION = 'v3.113.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.113.1+20261116.0959';
+var BUILD_ID = 'v3.113.2+20261116.1433';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2028,10 +2035,13 @@ function onCredential(resp){
   $('#signinErr').textContent = '';
   ensureAuth._prompted = false;   // v3.69.0 (F3): next expiry may prompt again
   authWaiters.splice(0).forEach(function(r){ r(); });
+  state._signedOut = false;                  // round 2 (F5)
+  if(!state._booted) snapSignedInPaint_();   // v3.113.2 (lane UI-H): the same person's saved Home, after the email check
   if(!state._booted) boot(); // v3.28: _booted (not state.boot) — a hydrated cache sets state.boot
 }
 function ensureAuth(){
   if(authValid()) return Promise.resolve();
+  if(state._snap && !state._booted) snapDrop_(!!state._snap.signIn);   // v3.113.2 (lane UI-H): the server said the sign-in is not good - no saved Home behind the sign-in screen; round 3 (G1): after a fresh sign-in that answer also takes the snapshot off the device
   $('#signin').style.display = 'flex';
   if(gsiUp && !ensureAuth._prompted){ ensureAuth._prompted = true; try{ google.accounts.id.prompt(); }catch(e){} }   // v3.69.0 (F3): the button is already on screen; One Tap is a bonus, asked once
   return new Promise(function(res){ authWaiters.push(res); });
@@ -2198,7 +2208,11 @@ function apiCall_(fn, args, retry, mutating){
       // the server is still finishing the re-read. No strike for those.
       if(!asked && !(err && err.auth)) supaStrike_(fn+': '+(err && err.message || err));   // v3.69.0 (F4)
       try{ console.info('SBC mirror fallback for '+fn+': '+(err && err.message || err)); }catch(e){}
-      return legacyCall_(fn, args, retry, mutating);
+      // round 3 (G4): the mirror's own answer rides on whatever the fallback fails with (e.firstLeg)
+      return legacyCall_(fn, args, retry, mutating).catch(function(e2){
+        try{ if(e2 && typeof e2==='object' && !e2.firstLeg) e2.firstLeg = err; }catch(x){}
+        throw e2;
+      });
     });
   }
   // v3.32 Phase 2: approvals go to the mirror first (instant). Fallback is
@@ -2269,8 +2283,8 @@ function legacyCall_(fn, args, retry, mutating){
       body: JSON.stringify({ token:auth.token, fn:fn, args:args }),
       signal: ctrl ? ctrl.signal : undefined })
   .then(function(r){
-    if(!r.ok) throw new Error('Network error ('+r.status+')');
-    return r.json();
+    if(!r.ok){ var he = new Error('Network error ('+r.status+')'); if(r.status===401 || r.status===403) he.refused = true; throw errKind_(he, r.status>=500 ? 'transport' : 'answered'); }   // round 2 (F1, lane UI-H): 401/403 = refused; round 3: answered / transport
+    return r.json().catch(function(pe){ throw errKind_(pe, 'answered'); });
   })
   .then(function(res){
     clearTimeout(timer);
@@ -2279,15 +2293,15 @@ function legacyCall_(fn, args, retry, mutating){
       auth = { token:'', email:'', exp:0 }; persistAuth();
       if(/allowlist/.test(res.error||'')){
         var el = $('#signinErr'); if(el) el.textContent = res.error;
-        throw new Error(res.error);
+        var ae = new Error(res.error); ae.refused = true; throw errKind_(ae, 'answered');   // round 2 (F1): the server refused this person
       }
       if(retry) return ensureAuth().then(function(){ return legacyCall_(fn, args, false, mutating); });
     }
-    throw new Error(res.error || 'Server error');
+    var se = new Error(res.error || 'Server error'); if(res.auth) se.refused = true; throw errKind_(se, 'answered');   // round 2 (F1); round 3
   }, function(err){
     clearTimeout(timer);
-    if(timedOut) throw new Error('That took too long and was stopped — the server may still be finishing. Wait a moment, then reload.');
-    throw err;
+    if(timedOut) throw errKind_(new Error('That took too long and was stopped — the server may still be finishing. Wait a moment, then reload.'), 'transport');
+    throw errKind_(err, 'transport');   // round 3: fetch threw (offline, aborted) - unless already marked above
   });
 }
 /* ============================ icons + nav ============================ */
@@ -2417,17 +2431,39 @@ function boot(){
   // the saved snapshot, ask for both at once. Not when the mirror is dirty: then
   // the Home read carries refreshMirror and one refresh at a time is the rule,
   // so the old order (boot first) stays. prewarm() will not ask a second time.
-  if(state.view==='dash' && state.boot && !mirrorDirty_()) dashFetchDash(true);
-  run('apiBoot').then(function(res){ state._booting=false; bootApply_(res); })
+  // v3.113.2 (lane UI-H): with NOTHING painted too (first open, or the snapshot was not this person's) - when the
+  // mirror answers. The dashboard read takes nothing from the boot answer (same token, the server picks the budget
+  // for both), and renderDash draws nothing until a boot is in (it returns while state.boot is null). On the Apps
+  // Script fallback the two would queue one behind the other for this person, so the old order stays there.
+  // round 2 (F6): the early ask goes to the MIRROR ONLY (dashFetchDash's `early`): if the mirror cannot answer it
+  // (a brand-new person, someone on two lists, the mirror down) it does not fall back alongside apiBoot - Home's
+  // read is asked again after boot, the old order. With the mirror off/struck out there is no early ask at all.
+  if(state.view==='dash' && !mirrorDirty_() && supaOn_()) dashFetchDash(true, true);
+  var sess = state._sess||0;   // round 2 (F5): answers to a session that was logged out are dropped
+  run('apiBoot').then(function(res){ if(sess!==(state._sess||0)) return; state._booting=false; bootApply_(res); })
     .catch(function(e){
+      if(sess!==(state._sess||0)) return;
       state._booting = false; setRefreshing_(false);
+      // round 3 (G1): after a fresh sign-in, fail CLOSED - kept only when the server could not be reached at all;
+      // within the hour, v3.113.1's behaviour (kept) except a recognised refusal (round 2, F1).
+      if(!state._booted && state._snap && (state._snap.signIn ? !bootTransportOnly_(e) : bootRefused_(e))) snapDrop_(true);
       // v3.28: if we already painted a cached view, keep it up and just log; only
       // hard-fail (blank error) when there was nothing on screen to begin with.
-      if(!state._booted && !state.boot){ state._bootFailed = true; fail(e); }   // v3.109.0 (Task 7, B3): Try again / a tab re-runs boot()
+      if(!state._booted && !state.boot){ state._bootFailed = true; if(!userBusy()) fail(e); }   // v3.109.0 (Task 7, B3): Try again / a tab re-runs boot(); round 2 (F4): never over typing
       else console.warn('boot revalidate failed (showing cached):', e && e.message || e);
     });
 }
 function bootApply_(res){
+    if(state._snap && state._snap.signIn && !(res && res.boot && typeof res.boot==='object')) throw new Error('The start-up answer could not be read.');   // round 3 (G1): malformed = answered
+    // v3.113.2 (lane UI-H): the live start-up answer is in. If it is for someone other than the saved Home's owner,
+    // the saved numbers still on screen (the dashboard, if its own answer has not landed) go, and so does the snapshot.
+    var sn = state._snap; state._snap = null;
+    var bu = (res && res.boot && typeof res.boot.user==='string') ? res.boot.user.trim().toLowerCase() : '';
+    if(sn && bu && bu!==sn.email){
+      if(state.dash===sn.dash){ state.dash = null; state._savedDash = null; }
+      if(state.dashSeries===sn.series) state.dashSeries = null;
+      try{ localStorage.removeItem('sbcSnapshot'); }catch(e){}
+    }
     state.boot = res.boot; state.picker = res.picker;
     // v3.30: isDefault means "no saved row" — keep null so the Layout-A default
     // hidden set applies (the server default is the OLD grid's starter set).
@@ -2525,8 +2561,10 @@ function saveSnapshot_(){
   try{
     if(!state.boot) return;
     if(!auth || !auth.email) return;   // v3.109.0 (Task 6, Session 10 #3): a snapshot always names whose it is
+    if(state._signedOut) return;       // round 2 (F5): nothing is written back to the device after Log out
+    var sv = state._savedDash, keepAt = (sv && sv.at && state.dash===sv.dash) ? sv.at : 0;   // round 2 (F3): old numbers keep their old date
     localStorage.setItem('sbcSnapshot', JSON.stringify({
-      v:1, at:Date.now(), email:String(auth.email).toLowerCase(), boot:state.boot, picker:state.picker||null,
+      v:1, at:(keepAt || Date.now()), email:String(auth.email).toLowerCase(), boot:state.boot, picker:state.picker||null,
       dash:state.dash||null, dashSeries:state.dashSeries||null
     }));
   }catch(e){ /* quota or serialize error — non-fatal, just skip caching */ }
@@ -2537,17 +2575,82 @@ function hydrateSnapshot_(){
     // v3.109.0 (Task 6, Session 10 #3): paint it only for the person signed in now (a valid sign-in whose email is
     // the snapshot's). Before anyone signs in - a shared computer the last person closed without logging out - nothing
     // of theirs is painted; an older snapshot without an email is dropped.
-    if(s && (!authValid() || !s.email || String(auth.email||'').toLowerCase()!==s.email)){
-      if(!s.email) localStorage.removeItem('sbcSnapshot');
+    // v3.113.2 (lane UI-H): the owner is compared trimmed and in any letter case (Google sends one spelling; the
+    // snapshot stores it lower-cased). Anything else - no owner, not a string, a different person - is not painted.
+    // A snapshot that is not an object with a boot object (cut short, hand-edited) is dropped: it can never be painted.
+    var owner = (s && typeof s.email==='string') ? s.email.trim().toLowerCase() : '';
+    if(s && (typeof s!=='object' || !s.boot || typeof s.boot!=='object' || Array.isArray(s.boot))){ localStorage.removeItem('sbcSnapshot'); return false; }
+    if(s && (!authValid() || !owner || String(auth.email||'').trim().toLowerCase()!==owner)){
+      if(!owner) localStorage.removeItem('sbcSnapshot');
       return false;
     }
     if(s && s.boot){
-      state.boot = s.boot; state.picker = s.picker || state.picker;
-      state.dash = s.dash || null; state.dashSeries = s.dashSeries || null;
+      var sd = (s.dash && typeof s.dash==='object') ? s.dash : null, ss = Array.isArray(s.dashSeries) ? s.dashSeries : null;
+      state.boot = s.boot; state.picker = Array.isArray(s.picker) ? s.picker : state.picker;
+      state.dash = sd; state.dashSeries = ss;
+      state._snap = { email: owner, boot: s.boot, dash: sd, series: ss, picker: state.picker };   // v3.113.2: what on screen is SAVED, not live (snapDrop_ / bootApply_)
+      state._savedDash = sd ? { dash: sd, at: Number(s.at)||0, signIn: false } : null;   // round 2 (F3): until a live dashboard lands
       return true;
     }
-  }catch(e){}
+  }catch(e){ try{ localStorage.removeItem('sbcSnapshot'); }catch(e2){} }   // v3.113.2: unreadable = dropped, never painted
   return false;
+}
+/* v3.113.2 (lane UI-H) - THE SAVED HOME RIGHT AFTER SIGN-IN. Since v3.109.0 the saved Home is painted only for the person
+   signed in now. An open more than an hour after the last one has an expired Google sign-in, so start() paints nothing
+   and the sign-in screen shows - unchanged. When Google hands back a credential (onCredential) and its email is the
+   snapshot's owner, paint the saved Home now, exactly as an open within the hour does, so boot() asks for Home's
+   numbers alongside apiBoot. Never when anything live is already here or a start-up is already running (a mid-session
+   re-sign-in must not put saved numbers over live ones). hydrateSnapshot_ makes the email check BEFORE it touches
+   state; nothing is drawn unless it says yes. */
+function snapSignedInPaint_(){
+  if(state._booted || state._booting || state.boot) return false;
+  if(!hydrateSnapshot_()) return false;
+  if(state._savedDash) state._savedDash.signIn = true;   // round 2 (F3): if Home's own read fails, say so, as v3.113.1 did
+  if(state._snap) state._snap.signIn = true;              // round 3 (G1): this paint is held to the fail-closed rule
+  try{ setGreeting_(); render(); return true; }
+  catch(e){ console.warn('saved Home after sign-in failed to draw:', e && e.message || e); snapDrop_(); return false; }
+}
+/* v3.113.2 (lane UI-H): take the SAVED Home off the screen when the server contradicts it before any live start-up
+   answer arrived - the start-up failed, the server says the sign-in is not good, or it answers for someone else.
+   Only what came from the snapshot is dropped (a live dashboard answer that already landed stays in memory). */
+function snapDrop_(forget){
+  var sn = state._snap; if(!sn) return;
+  state._snap = null;
+  if(forget){ try{ localStorage.removeItem('sbcSnapshot'); }catch(e){} }   // round 3 (G1): refused / answered after sign-in - not kept on the device
+  var tookBoot = (state.boot===sn.boot), tookDash = (!!sn.dash && state.dash===sn.dash);
+  if(tookBoot) state.boot = null;
+  if(state.picker===sn.picker) state.picker = null;
+  if(tookDash){ state.dash = null; state._savedDash = null; }
+  if(state.dashSeries===sn.series) state.dashSeries = null;
+  if(tookBoot){
+    // round 2 (F4): never over a page the person is typing on - render() starts afresh once they stop (_bootFailed)
+    if(!userBusy()){ try{ var sh=$('#shell'); if(sh) sh.innerHTML = ''; }catch(e){} }
+    try{ var sf=$('#sideFoot'); if(sf) sf.innerHTML = ''; }catch(e){}
+    ['#greet','#dashGreet'].forEach(function(id){ try{ var g=$(id); if(g) g.textContent = ''; }catch(e){} });
+    pushLastCount_ = null;   // round 2 (F7): the saved count leaving the screen is not "the Inbox was emptied" - no notification is cleared
+    try{ updateBadges(inboxCountEff_()); }catch(e){}   // the saved count goes with the saved boot (0 unless a live Inbox is in)
+  } else if(tookDash && state.view==='dash' && !userBusy()) renderDash();   // round 2 (F2): a live boot is on screen - redraw it, never blank it
+}
+/* round 2 (lane UI-H, F1): a failed start-up takes the saved Home down only when the SERVER REFUSED this person.
+   The shapes that reach boot() (apiBoot always falls back from the mirror to Apps Script, so the last word is
+   legacyCall_'s): e.refused - set by legacyCall_ for HTTP 401/403 and for every Apps Script "SBC_AUTH" answer
+   (res.auth: "... is not on the allowlist", "... is not registered with SBC Money yet", "invalid or expired token",
+   "token is for a different app", "email not verified"); e.auth - the mirror's {auth:true}; and the mirror's own
+   refusals by text ("No mirror data for ...", "... on more than one budget's access list ..."). A network failure,
+   a timeout, a 5xx or any other server error keeps the saved Home up exactly as v3.113.1 did. */
+function bootRefused_(e){
+  if(!e) return false;
+  if(e.refused || e.auth) return true;
+  return /No mirror data for |on more than one budget|is not on the allowlist|is not registered with SBC Money|No SBC stack registered for /.test(String(e.message||e));
+}
+/* round 3 (lane UI-H, G1) - FAIL CLOSED after a fresh sign-in. The saved Home painted by snapSignedInPaint_ stays up only
+   when the server positively could not be reached: the Apps Script leg failed by transport (fetch threw, timed out,
+   aborted, 5xx) AND so did the mirror leg, if there was one (e.firstLeg). Any answer at all - a 4xx, any error text
+   known or unknown, an unreadable body, an untagged throw (a malformed start-up answer) - takes it down. */
+function bootTransportOnly_(e){
+  if(!e || typeof e!=='object' || !e.transport || e.answered) return false;
+  var f = e.firstLeg;
+  return !f || (typeof f==='object' && !!f.transport && !f.answered);
 }
 function setGreeting_(){
   if(!state.boot) return;
@@ -4626,7 +4729,7 @@ function dashFetchBalances(){
 }
 /* v3.22: shared apiDashboard loader (used by prewarm AND renderDash) — the two
    previously fired the same call in parallel on every cold load. */
-function dashFetchDash(force){
+function dashFetchDash(force, early){
   if(state.dashLoading) return;
   if(state.dash && !force) return;       // v3.28: force=true revalidates cached (hydrated) data
   // v3.109.0 (Task 7, browser test B2): after a failed load, only Try again (force) asks again. renderDash() ends by
@@ -4635,8 +4738,12 @@ function dashFetchDash(force){
   state.dashLoading = true;
   state._dashAskedAt = Date.now();   // v3.83.0: prewarm skips a second ask right behind the early one
   var gen0 = state.mutGen||0, depth0 = mutationDepth_();   // v3.109.0
-  run('apiDashboard').then(function(d){
+  var sess0 = state._sess||0;   // round 2 (F5)
+  var ask = early ? supaCall_('apiDashboard', []) : run('apiDashboard');   // round 2 (F6): boot() only asks early with a valid sign-in; a refusal lands in the early branch below
+  ask.then(function(d){
+    if(sess0!==(state._sess||0)) return;   // round 2 (F5): logged out since - draw nothing, save nothing
     state.dash=d; state.dashLoading=false; state.dashError=null;
+    state._savedDash = null;   // round 2 (F3): live numbers are in
     // v3.109.0 (plan Session 7): a dashboard read that started before a save landed is the PRE-write
     // picture; it may show, but it must not become the snapshot the next app open trusts.
     if(gen0===(state.mutGen||0) && depth0===0 && mutationDepth_()===0) saveSnapshot_();
@@ -4644,6 +4751,16 @@ function dashFetchDash(force){
     if(state.view==='dash') renderDash();
     dashRevalHealth_(); // v3.31: mirror lacks feed lag — re-check health on a real gap
   }).catch(function(e){
+    if(sess0!==(state._sess||0)) return;   // round 2 (F5)
+    if(early){   // round 2 (F6): the mirror could not answer the early ask - ask the usual way after boot (prewarm), or now if boot is in
+      state.dashLoading=false; state._dashAskedAt=0; console.info('SBC early Home read: '+(e&&e.message||e));
+      if(state._booted) dashFetchDash(true);
+      return;
+    }
+    // round 2 (F3): after a sign-in more than an hour later the saved numbers were painted for speed; if Home's own
+    // read fails they go, and Home says its numbers didn't load - what v3.113.1 showed on that open.
+    var sv = state._savedDash;
+    if(sv && sv.signIn && state.dash===sv.dash){ state.dash = null; state._savedDash = null; }
     state.dashLoading=false; setRefreshing_(false); console.warn('apiDashboard:', e&&e.message||e);
     state.dashError = String(e && e.message || e);   // v3.109.0: Home says so, with Try again
     if(state.view==='dash') renderDash();
@@ -10248,6 +10365,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.113.2', d:'Nov 16, 2026', items:[
+    'Home shows your numbers right away again when you open the app after a while away, instead of a blank screen while it signs you in.',
+    'On a shared computer, a notice about one person\u2019s older transactions no longer shows for the next person who signs in.' ]},
   { v:'v3.113.1', d:'Nov 16, 2026', items:[
     'Wealth now uses each account\u2019s own type from Tiller, so its starting tier, tax treatment and whether it counts as a card or a loan are right for every account. Anything you set by hand in Wealth stays as you set it.' ]},
   { v:'v3.113.0', d:'Nov 15, 2026', items:[
@@ -12466,7 +12586,8 @@ function adminRemove(em){
    the envelope picker, the failed-saves banner, or five remembered keys - and renderWealth paints
    what is in memory before it asks for fresh data. On a shared computer the next person to sign
    in could see the last person's net worth. This is the rest of the list. */
-var PERSON_KEYS_ = ['sbcSnapshot','sbcDashLayout','sbcBday','sbcReport2','sbcReconciled','sbcEnvOpen','sbcBdayNudge','sbcTags'];
+var PERSON_KEYS_ = ['sbcSnapshot','sbcDashLayout','sbcBday','sbcReport2','sbcReconciled','sbcEnvOpen','sbcBdayNudge','sbcTags',
+  'sbcBooksCheck_v31090','sbcBooksDismiss_v31090'];   // post-v3.113.1 (lane UI-H, H1): the books check's cached answer and its "dismissed" mark are this person's
 function forgetPerson_(){
   PERSON_KEYS_.forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
   state.wealth = null; state.history = null; state.rules = null; state.obligations = null;
@@ -12475,6 +12596,7 @@ function forgetPerson_(){
   state.inboxNotes = {}; state.noteEdit = {}; state.tagEdit = {}; state._fetchedAt = {};
   state.prestartDef = null; state.prestartAsking = null;   // v3.109.0 (Task 9)
   state.rulesFromSheetUntil = 0;
+  state.books = null; booksAsked_ = false;   // post-v3.113.1 (lane UI-H, H1): the books check in memory is this person's too; the next person's runs afresh
 }
 var LAST_EMAIL_KEY = 'sbcLastEmail';
 function signOut(){
@@ -12516,6 +12638,14 @@ function signOutClear_(){
     try{ localStorage.removeItem(TAG_CACHE_KEY); }catch(e5){}   // v3.108.0
     state.tagRecent = []; state.tagCache = null; state.tagsList = null; state.inboxTags = {}; state.inboxStay = {};
     forgetPerson_();   // v3.108.0 (11/10 review, finding 7)
+    // round 2 (F5, lane UI-H): this session is over. Answers still out are dropped (boot / dashFetchDash check
+    // _sess), nothing is saved back (saveSnapshot_ checks _signedOut), and what was painted leaves the page.
+    state._sess = (state._sess||0) + 1; state._signedOut = true;
+    state._snap = null; state._savedDash = null; state._booting = false; state.dashLoading = false;
+    try{ var sh0=$('#shell'); if(sh0) sh0.innerHTML = ''; }catch(e6){}
+    try{ var sf0=$('#sideFoot'); if(sf0) sf0.innerHTML = ''; }catch(e7){}
+    ['#greet','#dashGreet'].forEach(function(id){ try{ var g0=$(id); if(g0) g0.textContent = ''; }catch(e8){} });
+    pushLastCount_ = null; try{ updateBadges(inboxCountEff_()); }catch(e9){}
     var si = $('#signin'); if(si) si.style.display = 'flex';
     if(gsiUp) try{ google.accounts.id.prompt(); }catch(e2){}
     toast('Logged out');
