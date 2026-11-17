@@ -1325,14 +1325,14 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
    A chip is also capped at min(65%, 220 px), so one long name always leaves room for the account.
    (The first build used inline-blocks inside a text-overflow:ellipsis line: an inline-block cannot be cut, so the whole
    second chip and the account were swapped for "…" as soon as the line was a little too long.) */
-.trow .e{display:flex;align-items:center;gap:4px;min-width:0;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;position:relative}
-.trow .trest{flex:1 1 0;min-width:3.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .e,.ibxrow .meta{display:flex;align-items:center;gap:4px;min-width:0;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;position:relative}
+.trow .trest,.ibxrow .trest{flex:1 1 0;min-width:3.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* the envelope chip - the Inbox suggestion pill's look (teal tint, teal edge), one colour for every envelope. 18 px tall
    (16 + a 1 px edge) inside the 18 px line, so the row keeps its height. Not a control. */
-.trow .tenv{flex:0 1 auto;min-width:2.75em;max-width:min(65%,220px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.trow .tenv,.ibxrow .tenv{flex:0 1 auto;min-width:2.75em;max-width:min(65%,220px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:12px;font-weight:700;line-height:16px;padding:0 8px;border:1px solid var(--teal-600);border-radius:99px;background:var(--teal-50);color:var(--teal-800)}
 .trow.sel .tenv{background:var(--teal-100)}   /* the selected row is teal-50 itself */
-.trow .tenv.none{border-color:var(--line);background:var(--chip);color:var(--ink-2);font-weight:500}
+.trow .tenv.none,.ibxrow .tenv.none{border-color:var(--line);background:var(--chip);color:var(--ink-2);font-weight:500}
 .trow .tvh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .trow .amt{font-weight:800;font-size:14.5px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
 .trow .amt.in{color:var(--green)}
@@ -1872,11 +1872,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.114.1';
+var FE_VERSION = 'v3.114.2';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.114.1+20261117.1110';
+var BUILD_ID = 'v3.114.2+20261117.1159';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -5998,13 +5998,18 @@ try{
 function inboxRowHtml_(t){
   var cid = inboxId_(t), sp = state.split[cid], nm = inboxEnvName_(t), on = state.ibxCur===cid;
   var bits = [esc(t.date), esc(t.account)];
-  bits.push(sp && sp.on ? '✂ splitting' : nm ? '✓ '+esc(nm) : 'needs an envelope');
   if(t.preStart) bits.push('before your start date');
   if(inboxTagsOf(cid).length || inboxNoteOf(cid)) bits.push('🏷');
+  /* v3.114.2 (Scott 11/17, about the Inbox: "more visible when an item is assigned to an envelope - whether it be auto
+     or selected"): the envelope is the Transactions chip (txnEnvChip_, .tenv) at the start of the line - the same look
+     for a rule's suggestion, a learned one you picked, or your own pick. No envelope: a quiet grey "Needs an envelope"
+     (the section's own words); a split in progress: a grey "✂ Splitting". Plain text - the row is the one control and
+     approving stays in the detail. Then date · account (· before your start date · 🏷) in small grey text. */
+  var chip = (sp && sp.on) ? '<span class="tenv none">✂ Splitting</span>' : nm ? txnEnvChip_(nm) : '<span class="tenv none">Needs an envelope</span>';
   return '<div class="txncard icard ibxrow'+(on?' sel':'')+'" data-act="ibx-cur" data-arg="'+esc(cid)+'"'+(on?' aria-current="true"':'')+' tabindex="0" role="button" data-kbd="1">'+
     '<div class="top"><div class="desc">'+esc(t.description)+'</div>'+
     '<div class="amt '+(t.amount<0?'neg':'pos')+'">'+money(t.amount)+'</div></div>'+
-    '<div class="meta">'+bits.join(' · ')+'</div></div>';
+    '<div class="meta">'+chip+'<span class="trest"> · '+bits.join(' · ')+'</span></div></div>';
 }
 function inboxDetailHtml_(t){
   var cid = inboxId_(t), sp = state.split[cid], nm = inboxEnvName_(t), rule = !!(state.ibxRule && state.ibxRule[cid]);
@@ -10810,6 +10815,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.114.2', d:'Nov 17, 2026', items:[
+    'On a computer, the Inbox list now shows each item\u2019s envelope in a coloured label, so you can see at a glance which ones already have an envelope and which still need one.' ]},
   { v:'v3.114.1', d:'Nov 17, 2026', items:[
     'On Transactions, each row now shows its envelope in a coloured label, so you can see at a glance where it went. A transaction with no envelope says so.' ]},
   { v:'v3.114.0', d:'Nov 17, 2026', items:[
