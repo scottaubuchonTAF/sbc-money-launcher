@@ -1872,11 +1872,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.114.2';
+var FE_VERSION = 'v3.114.3';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.114.2+20261117.1159';
+var BUILD_ID = 'v3.114.3+20261117.1627';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -6230,11 +6230,20 @@ function spentFind_(data, key){
   for(var i=0;i<data.groups.length;i++){ var g = data.groups[i]; if(g.kind+'|'+g.id===key) return g; }
   return null;
 }
-function spentRowName_(g){ return g.kind==='none' ? 'Not in an envelope yet' : (g.name || 'An envelope with no name'); }
+/* v3.114.3 (lane SPENT-FIX, Scott 11/17/26): the server files an APPROVED transaction under the envelope it was approved
+   into at once (not Tiller's category, which catches up later). Kind 'none' holds what is NOT approved and has no category
+   in Tiller: "No envelope yet" (review F3 - an unapproved row Tiller has categorised sits under that envelope). Sub-line
+   (review round 2, R2-1 - short and always true): "N transactions · M waiting in your Inbox · R not in your Inbox", each
+   part only when above zero, M = g.waiting, R = N - M (the server's `held` is kept in the answer, not shown). */
+function spentRowName_(g){ return g.kind==='none' ? 'No envelope yet' : (g.name || 'An envelope with no name'); }
 function spentRowSub_(g){
-  var w = g.kind==='other' ? 'not one of your envelopes' : '';   // review F10: "Not in an envelope yet" says it once (no sub-reason)
+  var w = g.kind==='other' ? 'not one of your envelopes' : '';   // review F10: the no-envelope row says it once (no sub-reason)
   var n = g.count!=null ? (g.count===1 ? '1 transaction' : g.count+' transactions') : '';
-  return [w, n].filter(Boolean).join(' · ');
+  var none = g.kind==='none', m = (none && g.waiting>0) ? g.waiting : 0;
+  var q = m ? m+' waiting in your Inbox' : '';
+  var r = (none && g.count!=null && typeof g.waiting==='number') ? g.count - m : 0;   // an answer without `waiting`: the count only
+  var rq = r>0 ? r+' not in your Inbox' : '';
+  return [w, n, q, rq].filter(Boolean).join(' · ');
 }
 function spentNote_(data){
   return data.source==='tiller'
@@ -10815,6 +10824,10 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.114.3', d:'Nov 17, 2026', items:[
+    'Fixed: Spent this month now puts what you approve under its envelope right away. Before, it could keep showing approved transactions as not in an envelope for an hour or more.',
+    'Because it now follows what you approved, a card payment or transfer you filed that way no longer counts as spending, so the number may be lower than before. Something you filed as spending counts, even if Tiller calls it a transfer.',
+    'When you tap Spent this month, transactions without an envelope are now listed as \u201cNo envelope yet\u201d, with how many are still waiting in your Inbox.' ]},
   { v:'v3.114.2', d:'Nov 17, 2026', items:[
     'On a computer, the Inbox list now shows each item\u2019s envelope in a coloured label, so you can see at a glance which ones already have an envelope and which still need one.' ]},
   { v:'v3.114.1', d:'Nov 17, 2026', items:[
