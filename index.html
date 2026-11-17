@@ -1218,6 +1218,70 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
 .ibxsheet .opt .r{margin-left:auto;font-size:12.5px;color:var(--ink-3);font-weight:600;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ibxsheet .opt.pre{color:var(--amber-600,#b45309)}
 .ibxsheet .opt.close{justify-content:center;color:var(--teal-700);font-weight:700}
+/* v3.114.0 (lane SPENT): "Spent this month", tapped - the same sheet as the ⋯ sheet (bottom sheet on a phone, a centred
+   panel on a wide screen), its own class so the ⋯ sheet's rules (a choice closes it first) never touch it. Tokens only. */
+.spsheet{padding:10px 16px calc(14px + env(safe-area-inset-bottom));overflow:auto}
+.spsheet .grab{width:38px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 10px;flex:none}
+.spsheet .sphead{margin-bottom:10px;flex:none}
+.spsheet h3{font-size:16px;margin-bottom:2px;overflow-wrap:anywhere;color:var(--ink)}
+.spsheet h3:focus{outline:none}
+.spsheet .sptot{font-size:26px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2}
+.spsheet .m{font-size:12.5px;color:var(--ink-3);font-weight:500}
+.spsheet .opt{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;border-top:1px solid var(--line);
+  font-size:15px;font-weight:600;color:var(--ink);text-align:left;padding:6px 2px;background:none;flex:none}
+.spsheet .opt .ol{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.spsheet .opt .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spsheet .opt .v{font-variant-numeric:tabular-nums;white-space:nowrap}
+.spsheet .opt i{font-style:normal;color:var(--ink-3);flex:none;font-size:18px}
+.spsheet .opt.close{justify-content:center;color:var(--teal-700);font-weight:700}
+.spsheet .spback{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 4px;margin-bottom:4px;
+  color:var(--teal-700);font-weight:700;font-size:14px;background:none;align-self:flex-start;flex:none}
+.spsheet .opt:focus-visible,.spsheet .spback:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.spsheet .spmsg{padding:14px 2px;color:var(--ink-3);font-size:14px;flex:none}
+.spsheet .sptx{list-style:none;margin:0;padding:0;flex:none}
+.spsheet .sptx li{display:flex;gap:10px;align-items:baseline;padding:10px 2px;border-top:1px solid var(--line);font-size:14px;color:var(--ink)}
+.spsheet .sptx .d{color:var(--ink-3);font-variant-numeric:tabular-nums;flex:none;min-width:52px}
+.spsheet .sptx .ds{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.spsheet .sptx .ds small{display:block;color:var(--ink-3);font-size:12px}
+.spsheet .sptx .v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.spsheet .spdiff{color:var(--ink-2);margin-top:4px}   /* review F1: what Home showed, when the answer differs */
+/* v3.114.0: Age of money - the (i) on the card (a 44 px target, the mark itself small) and its one sentence on a computer
+   (hover or keyboard focus); the sheet's picture. Tokens only, so light and dark both work. */
+.dtile .binfo{position:absolute;top:4px;right:4px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  background:none;border:0;border-radius:99px;color:var(--ink-3);font-size:17px;line-height:1;cursor:pointer;z-index:1;padding:0}
+.dtile .binfo:hover{color:var(--teal-700)}
+.dtile .binfo:focus-visible{outline:3px solid var(--focus);outline-offset:-4px}
+.dtile .binfo .btip{display:none}
+.dtile[data-id="buffer"]{overflow:visible}   /* round 2 (L4): the tip opens to the left of the (i) and is never cut off, even on a short card */
+@media (hover:hover) and (min-width:900px){
+  .dtile .binfo .btip{position:absolute;top:2px;right:46px;width:240px;padding:8px 10px;border-radius:10px;background:var(--ink);color:var(--card);
+    font-size:12px;font-weight:600;line-height:1.35;text-align:left;box-shadow:var(--shadow);white-space:normal}
+  .dtile .binfo:hover .btip,.dtile .binfo:focus-visible .btip{display:block}
+  .dtile .binfo.tipoff .btip{display:none}   /* Escape hides it until the pointer or focus leaves */
+}
+/* the Age of money pop-up (Scott 11/17): the app's short-message box (.panel.confirm: 400 px, 20 px padding), centred on a
+   phone too; large numbers, few words; fits a 360 x 640 screen without scrolling */
+.ovl.bufovl{align-items:center;padding:16px}
+.panel.bufsheet{max-width:400px;padding:20px 20px calc(16px + env(safe-area-inset-bottom));border-radius:18px;overflow:auto}
+.bufsheet h3{font-size:18px;font-weight:800;color:var(--ink);margin:0 0 10px;flex:none}
+.bufsheet h3:focus{outline:none}
+.bufsheet .buffig{flex:none;display:flex;flex-direction:column}
+.bufsheet .bufex{align-self:flex-start;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-ink);
+  background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:99px;padding:3px 10px;margin:0 0 4px}
+/* one stacked equation, left-aligned - "$X cash on budget", "÷ $Y on an average day", a thin rule, "= N days" large in the accent */
+.bufsheet .bufsum{display:flex;flex-direction:column;margin:4px 0 12px}
+.bufsheet .brow{display:flex;align-items:baseline;gap:10px;padding:2px 0}
+.bufsheet .bop{flex:none;width:20px;text-align:center;font-size:20px;font-weight:700;color:var(--ink-3)}
+.bufsheet .bvk{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;row-gap:0;min-width:0}
+.bufsheet .bvk .bv{font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2;white-space:nowrap}
+.bufsheet .bvk .bk{font-size:13.5px;color:var(--ink-3);font-weight:500;line-height:1.3}
+.bufsheet .brule{height:2px;border-radius:2px;background:var(--line);margin:6px 0 4px 30px}
+.bufsheet .bres .bv{font-size:32px;color:var(--teal-700)}
+.bufsheet .bres .bop{font-size:24px;color:var(--teal-700)}
+.bufsheet .bsr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.bufsheet .bufwhat{font-size:15px;color:var(--ink);line-height:1.45;margin:0 0 8px}
+.bufsheet .bufnote{font-size:13.5px;color:var(--ink-3);line-height:1.4;margin:0 0 10px}
+.bufsheet .bufclose{width:100%;min-height:48px;margin-top:6px;flex:none}
 .ibxsw{width:44px;height:26px;border-radius:99px;background:var(--line);position:relative;flex:none;margin-left:auto}
 .ibxsw::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:99px;background:var(--card);box-shadow:0 1px 2px rgba(15,23,42,.25)}
 .ibxsw.on{background:var(--btn)}
@@ -1588,6 +1652,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
   apiTillerStart:1, apiTillerConfirm:1, apiTillerStatus:1, apiTillerRefresh:1, apiTillerDisconnect:1, // v3.111.0: Connect Tiller (also MIRROR_ONLY: no Apps Script fallback, no strike; never MUTATING)
+  apiSpentMonth:1,      // v3.114.0 (lane SPENT): Home's Spent this month, tapped (read-only; Apps Script answers when the mirror cannot)
   apiRefreshMirror:1 }; // v3.69.0: a mirror-only READ (Settings → Maintenance → Refresh). It was in MIRROR_ONLY but in neither table, so the v3.64 startup assertion logged a routing error on EVERY load. Routing is unchanged — MIRROR_ONLY is checked first in apiCall_.
 /* v3.32 Phase 2 write cutover (approvals first): these mutations are applied
    to the mirror instantly; the edge function forwards the SAME call to this
@@ -1792,11 +1857,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.113.2';
+var FE_VERSION = 'v3.114.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.113.2+20261116.1433';
+var BUILD_ID = 'v3.114.0+20261117.0936';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4091,14 +4156,17 @@ var DASH_WIDGETS = {
       return '<div class="dfrow"><div class="l1"><span class="nm">'+esc(r.name)+'</span><span class="v">'+money(r.funded)+' / '+money(r.target)+'</span></div><div class="dbar"><i style="width:'+q+'%"></i></div></div>';}).join('');
     return head+'<div class="dscroll" style="margin-top:8px">'+rows+'</div>';}},
 
-  spent:{title:'Spent this month',icon:'💳',render:function(sz){
+  // v3.114.0 (lane SPENT): the whole card opens "where it went" (spentOpen_) - sheet:, not nav:, so tile_ makes it one
+  // control with a label; "see where it went →" is the same cue as the Inbox card's "tap to review →".
+  spent:{title:'Spent this month',icon:'💳',sheet:'spent-open',label:function(){ return spentCardLabel_(); },describe:['spCardNote','spCardMore'],render:function(sz){
     var d=state.dash, s=d?(d.spentActual!=null?d.spentActual:d.totals.spent):null;
     var n=(s!=null)?money(s):'<span class="skv">…</span>';
     var note=(d&&d.spentActual!=null)?'all transactions, incl. pending':'from approved transactions';
-    if(sz==='s') return '<div class="dlbl">Spent this month</div><div class="dnum big">'+n+'</div>';
-    if(sz==='m') return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub">'+note+'</div>';
-    return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub">'+note+'</div>'+
-      (d?'<div class="dscroll" style="margin-top:8px">'+
+    var go='<div class="dsub">see where it went →</div>';
+    if(sz==='s') return '<div class="dlbl">Spent this month</div><div class="dnum big">'+n+'</div>'+go;
+    if(sz==='m') return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub" id="spCardNote">'+note+'</div>'+go;
+    return '<div class="dlbl">Spent this month</div><div class="dnum">'+n+'</div><div class="dsub" id="spCardNote">'+note+'</div>'+go+
+      (d?'<div class="dscroll" id="spCardMore" style="margin-top:8px">'+
         '<div class="dkv"><span class="k">Budget target</span><span class="v">'+money(d.totals.target)+'</span></div>'+
         '<div class="dkv"><span class="k">Funded so far</span><span class="v">'+money(d.totals.funded)+'</span></div></div>':'');}},
 
@@ -4489,23 +4557,24 @@ var DASH_WIDGETS = {
       return '<div class="dkv"><span class="k">'+esc(f.desc)+' <span style="color:var(--ink-3)">· '+esc(f.date)+'</span></span><span class="v"'+(f.pos?' style="color:var(--green)"':'')+'>'+money(f.amt)+'</span></div>'; }).join('');
     return '<div class="dhead"><div class="dlbl">Recent activity</div></div><div class="dscroll">'+rowsH+'</div>';}},
 
+  // v3.114.0 (Scott 11/16/26): the (i) on the card opens "Age of money · buffer", a picture of what the number is
+  // (bufOpen_). The card itself is not a button. Its numbers are worked out in ONE place (bufCalc_), which the picture
+  // reads too - so the two can never disagree.
   buffer:{title:'Age of money',icon:'🛡️',render:function(sz){
-    var d=state.dash, ser=state.dashSeries;
-    if(!d || !ser) return '<div class="dlbl">Money buffer</div><div class="dwmiss">Loading…</div>';
-    var cash=(d.health && !d.health.error) ? d.health.bank : null;
-    var complete=ser.slice(0,-1), last6=complete.slice(-6);   // exclude current partial month
-    var avg=last6.length ? last6.reduce(function(a,m){return a+m.spend;},0)/last6.length : 0;
-    if(cash==null || avg<=0) return '<div class="dlbl">Money buffer</div><div class="dwmiss">Not enough data yet.</div>';
-    var months=cash/avg, days=Math.round(months*30), goalPct=Math.min(100, Math.round(months*100));
-    if(sz==='s') return '<div class="dlbl">Money buffer</div><div class="dnum big">'+days+'</div><div class="dsub">days of spending</div>';
-    if(sz==='m') return '<div class="dlbl">Age of money · buffer</div><div class="dnum">'+days+' days</div>'+
-      '<div class="dbar"><i style="width:'+goalPct+'%"></i></div><div class="dsub">'+(months>=1?'Past the one-month goal ✓':'Goal: one month (30 days)')+'</div>';
-    return '<div class="dhead"><div class="dlbl">Age of money · buffer</div></div>'+
+    var b=bufCalc_(state.dash, state.dashSeries), ib=bufInfoBtn_();
+    if(!b) return ib+'<div class="dlbl">Money buffer</div><div class="dwmiss">Loading…</div>';
+    if(!b.enough) return ib+'<div class="dlbl">Money buffer</div><div class="dwmiss">Not enough data yet.</div>';
+    var cash=b.cash, avg=b.avg, months=b.months, days=b.days, goalPct=b.goalPct;
+    if(b.neg){ days=0; months=0; goalPct=0; }   // round 2 (L2): cards owe more than checking + savings hold - no buffer, never "-13 days"
+    if(sz==='s') return ib+'<div class="dlbl">Money buffer</div><div class="dnum big">'+days+'</div><div class="dsub">days of spending</div>';
+    if(sz==='m') return ib+'<div class="dlbl">Age of money · buffer</div><div class="dnum">'+days+' days</div>'+
+      '<div class="dbar"><i style="width:'+goalPct+'%"></i></div><div class="dsub">'+(b.neg?'No buffer yet: cards owe more than the bank holds':bufPastGoal_(days)?'Past the one-month goal ✓':'Goal: one month (30 days)')+'</div>';
+    return ib+'<div class="dhead"><div class="dlbl">Age of money · buffer</div></div>'+
       '<div class="dnum">'+days+' days</div><div class="dbar"><i style="width:'+goalPct+'%"></i></div>'+
       '<div class="dmini"><div><div class="k">On-budget cash</div><div class="v">'+money(cash)+'</div></div>'+
       '<div><div class="k">Avg spend/mo</div><div class="v">'+money(avg)+'</div></div>'+
       '<div><div class="k">Covers</div><div class="v">'+(Math.round(months*10)/10)+' mo</div></div></div>'+
-      '<div class="dsub" style="margin-top:8px">Your on-budget cash covers ~'+days+' days of average spending. One month of buffer means you\'re living on last month\'s income.</div>';}},
+      '<div class="dsub" style="margin-top:8px">'+(b.neg ? 'Right now your cards owe more than your checking and savings hold, so there’s no buffer yet.' : 'Your on-budget cash covers ~'+days+' days of average spending.')+'</div>';}},   // round 2 (M2): the number says how long cash lasts, not where it came from
 
   /* v3.30: Needs attention — negative envelopes straight from boot data (no
      extra fetch; paints instantly from the cached/booted envelope list). */
@@ -4896,7 +4965,14 @@ function tile_(id){
   var w=DASH_WIDGETS[id], c=CARD_BY_ID[id], tapAttr='', clickable=false;
   if(w.report){ tapAttr=' data-act="goreport" data-arg="'+w.report+'"'; clickable=true; }
   else if(w.nav){ tapAttr=' data-act="goview" data-arg="'+w.nav+'"'; clickable=true; }
+  // v3.114.0 (lane SPENT): a card that opens a sheet is ONE control - a button role, a label, focusable; its keys are
+  // its own (spentKey_: act on key-up), so kbdReach_ leaves it alone (it has a tabindex). In Customize it is not a
+  // control at all: a tap there is for moving cards.
+  else if(w.sheet && !state.homeCustomize){ tapAttr=' data-act="'+w.sheet+'" role="button" tabindex="0" aria-haspopup="dialog" aria-label="'+esc(w.label ? w.label() : w.title)+'"'; clickable=true; }
   var body = w.render(c.size||'m');
+  // review F8: the label names the card and what it does; what the card says besides (incl. pending, the target and
+  // funded lines) is still read - aria-describedby, only the parts drawn at this size
+  if(w.sheet && !state.homeCustomize && w.describe){ var dby = w.describe.filter(function(i){ return !!body && body.indexOf('id="'+i+'"')!==-1; }); if(dby.length) tapAttr += ' aria-describedby="'+dby.join(' ')+'"'; }
   // v3.56.4: a card may render NOTHING and mean it — 'coming' stays invisible
   // until obligations exist, rather than sitting on Home as an empty advert for
   // itself. Without this the wrapper would still paint a blank tile. In
@@ -4941,6 +5017,7 @@ function renderDashNow_(){
   fitDnums_();                   // v3.97.1 — $10,000+ no longer clips in a half-width phone tile
   setGreeting_();                // v3.57 — fills #dashGreet (phone Home greeting)
   freezeReval_();                // v3.55 — after paint, never blocking
+  homeTick_('Spent this month', spentHomeTick_); homeTick_('Age of money', bufHomeTick_);   // review round 2 (L5) / 3 (R3-5): a sheet can never stop Home's draw; a failure is logged once. v3.114.0: an open sheet follows Home's new numbers in place (review F3; Age of money) - nothing fetched
   // Chart cards: instantiate now that their canvases are in the DOM.
   if(typeof Chart!=='undefined'){
     body.concat(stats).forEach(function(id){
@@ -5986,12 +6063,14 @@ document.addEventListener('keydown', function(ev){ ibxKey_(ev); });
    go round the sheet's own controls, never behind it; Escape closes it and puts focus back on what opened it (the
    ⋯ button, or the row) - the same as Close. */
 function sheetKeys_(ev){
-  var panel = document.querySelector('#ovl .ibxsheet'), isConfirm = false;
+  var panel = document.querySelector('#ovl .ibxsheet'), isConfirm = false, isSpent = false;
+  if(!panel){ panel = document.querySelector('#ovl .spsheet') || document.querySelector('#ovl .bufsheet'); isSpent = !!panel; }   // v3.114.0 (lane SPENT): "Spent this month" and the Age of money pop-up hold the keyboard too
   if(!panel){ panel = document.querySelector('#ovl .panel.confirm'); isConfirm = !!panel; }   // v3.110.0 (Task 5, M-T3): confirms hold Tab too
   if(!panel) return false;
   if(ev.key==='Escape' && isConfirm) return false;   // the page-wide Escape answers "no" and gives focus back (closeConfirm)
   if(ev.key==='Escape'){
     ev.preventDefault();
+    if(isSpent){ if(panel.classList && panel.classList.contains('bufsheet')) bufClose_(); else spentClose_(); } else   // v3.114.0: + Age of money
     if(state.view==='txns') txnSheetClose_(); else ibxSheetClose_();
     return true;
   }
@@ -6005,6 +6084,346 @@ function sheetKeys_(ev){
   return true;
 }
 document.addEventListener('keydown', sheetKeys_);
+/* ============ v3.114.0 (lane SPENT, Scott 11/16/26): "Spent this month", tapped ============
+   Scott's son wanted to "see where the transactions are coming from". Tapping the card opens a sheet: this month's
+   spending by envelope, largest first, adding up to the card's number to the cent; tapping an envelope lists its
+   transactions, newest first (the order Transactions and a bank statement use - "where is this coming from" is
+   answered by scanning recent days), and they add up to that envelope's row. Transactions are not tappable: a Tiller
+   row is not an approved register row, so the Transactions detail cannot open it safely.
+   THE SPEED RULE - Home never scans and never fetches for this. Nothing is asked until a person taps; then ONE request
+   (apiSpentMonth: the mirror, Apps Script behind it), shared by every tap until it answers (spentFlight_ + busyHold_
+   'spent'), with a loading line, a failure line with Try again, and the answer kept in memory for THIS Home answer
+   only (a new dashboard answer = a fresh ask on the next tap). Nothing is written to storage; Log out forgets it.
+   Where the card shows the register's number (no Tiller rows: "from approved transactions") the dashboard already
+   carries each envelope's part (rows[].spent): the first level is drawn from it at once, with no request, but only
+   when the rows add up to the card exactly - and only an envelope's transactions are then asked for.
+   Review round 1 (F1): Home's card NEVER takes the answer's number - it changes only when Home's own data changes, and
+   nothing from a tap reaches the saved snapshot. If the answer's total differs from the card (new transactions since
+   Home loaded, another month, the other back end's rules) the sheet shows the answer's own total and rows (they add up
+   to themselves), titled with the ANSWER's month, plus ONE plain line under the total (spentDiffLine_). F3: Home's data
+   changing while the sheet is open redraws it in place (spentHomeTick_: same level, scroll and focus) and the line says
+   what Home shows now - no second request (one in flight; the next tap asks afresh for the new Home answer).
+   UI rules (v3.110): the whole card is one control (role button, a label; Enter / Space act on KEY-UP, and only after
+   a fresh key-down on the card - a held key never acts); focus goes to the sheet's heading (never a control); Tab
+   stays in the sheet; Escape, Close and a tap outside close it and focus goes back to the card; Customize never opens it. */
+var spentFlight_ = null;   // the one request on its way
+var spentCache_ = null;    // { who, sess, dash, data } - the last answer, for the Home answer it was asked under
+var spentArm_ = null;      // the card a fresh Enter / Space went down on (it acts when that key comes up)
+var spentRelease_ = null;  // review F2: the hold of the request on its way - Log out lets it go, so the next tap asks afresh
+var SPENT_MON_ = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function spentCardNum_(d){ return (d && d.totals) ? (d.spentActual!=null ? d.spentActual : d.totals.spent) : null; }
+function spentCardLabel_(){ var s = spentCardNum_(state.dash); return 'Spent this month'+(s!=null ? ', '+money(s) : '')+'. See where it went'; }
+function spentCmp_(a, b){ return a<b ? -1 : a>b ? 1 : 0; }
+function spentSortG_(a, b){ return (cents(b.total)-cents(a.total)) || spentCmp_(a.name, b.name) || spentCmp_(a.id, b.id); }
+/* The first level from the dashboard's own rows - only where the card shows the register's number and the rows add up
+   to it to the cent. Otherwise null: ask the server. */
+function spentFromRows_(d){
+  if(!d || !d.totals || d.spentActual!=null || !Array.isArray(d.rows)) return null;
+  var tot = 0, groups = [];
+  d.rows.forEach(function(r){
+    var c = cents(r.spent);
+    if(c>0){ tot += c; groups.push({ id:String(r.id), name:String(r.name||''), kind:'envelope', total:r.spent, count:null, txns:null }); }
+  });
+  if(tot!==cents(d.totals.spent)) return null;
+  groups.sort(spentSortG_);
+  return { monthKey:d.monthKey, monthLabel:d.monthLabel, source:'register', total:d.totals.spent, groups:groups, fromRows:true };
+}
+function spentHave_(){ var c = spentCache_; return (c && c.who===auth.email && c.sess===(state._sess||0) && c.dash===state.dash) ? c.data : null; }
+function spentData_(){ var s = state.spentSheet; return s ? (s.data || s.rows || null) : null; }
+function spentOn_(){ try{ return !!document.querySelector('#ovl .spentsh'); }catch(e){ return false; } }   // review round 2 (L6): never the Age of money sheet
+function spentOpen_(){
+  if(state.homeCustomize || state.view!=='dash') return;   // Customize: a tap is for moving cards, never this
+  if(state.spentSheet && spentOn_()) return;
+  if(state.bufSheet) bufClose_(true);   // review round 2 (L6): one sheet at a time
+  var have = spentHave_();
+  state.spentSheet = { level:'list', key:'', data:have, rows:have ? null : spentFromRows_(state.dash), loading:false, failed:false,
+    who:auth.email, sess:state._sess||0, asked:state.dash };   // asked: the Home answer the sheet's numbers belong to
+  if(!have && !state.spentSheet.rows) spentFetch_();
+  spentDraw_();
+  spentFocus_('#spTitle');
+}
+function spentFetch_(){
+  var s = state.spentSheet;
+  if(s){ s.loading = true; s.failed = false; }
+  if(spentFlight_ || busyHeld_('spent')) return spentFlight_;   // one request in flight: another tap waits for the same answer
+  var who = auth.email, sess = state._sess||0, dash = state.dash, release = busyHold_('spent-sheet', 'spent');
+  spentRelease_ = release;
+  var mine = function(x){ return x && x.who===who && x.sess===sess; };
+  var p = run('apiSpentMonth').then(function(r){
+    if(!r || !Array.isArray(r.groups) || r.groups.some(function(g){ return !g || typeof g!=='object' || !Array.isArray(g.txns); })) throw new Error('no answer');   // round 2 (L5): a bad row is a failed answer
+    if(auth.email!==who || (state._sess||0)!==sess) return;   // signed out / someone else since: nobody sees this
+    spentCache_ = { who:who, sess:sess, dash:dash, data:r };   // review F1: Home's own numbers (state.dash) are never touched
+    var x = state.spentSheet;
+    if(mine(x)){
+      x.data = r; x.rows = null; x.loading = false; x.failed = false; x.asked = dash;
+      if(x.level==='env' && !spentFind_(r, x.key)) x.level = 'list';
+      spentRedraw_();
+    }
+  }).catch(function(e){
+    var x = state.spentSheet;
+    if(mine(x)){ x.loading = false; x.failed = true; spentRedraw_(); }
+    try{ console.info('Spent this month: '+(e && e.message || e)); }catch(z){}
+  }).then(function(){ if(spentFlight_===p) spentFlight_ = null; }, function(){ if(spentFlight_===p) spentFlight_ = null; }).then(release, release);   // released on an answer, a failure and a thrown error alike
+  spentFlight_ = p;
+  return p;
+}
+/* Review F3 / F9 (a): draw the sheet again keeping the person's place - the control they are on stays focused (they
+   put it there: an answer landing never pulls focus away), otherwise the heading takes focus (never a control); the
+   scroll stays where it was. */
+function spentRedraw_(){
+  var p = document.querySelector('#ovl .spsheet'), a = document.activeElement, key = null, top = 0;
+  var keyOf = function(x){ return x.getAttribute('data-act')+'|'+(x.getAttribute('data-arg')||'')+'|'+(x.getAttribute('data-key')||''); };
+  if(p){
+    top = p.scrollTop || 0;
+    if(a && a!==p && p.contains && p.contains(a) && a.getAttribute && a.getAttribute('data-act')) key = keyOf(a);
+  }
+  spentDraw_();
+  var q = document.querySelector('#ovl .spsheet'), el = null;
+  if(q && top){ try{ q.scrollTop = top; }catch(e){} }
+  if(key){ try{ [].forEach.call(document.querySelectorAll('#ovl .spsheet [data-act]'), function(x){ if(!el && keyOf(x)===key) el = x; }); }catch(e){} }
+  if(!(el && focusSafe_(el, { person:true }))) spentFocus_('#spTitle');
+}
+/* Review F1: the one plain line under the total when the sheet's total is not the card's. Home's card is never changed
+   to match: either the answer is newer than Home (pull down / reload Home), or Home changed after the answer was asked
+   (F3: close and tap again - the next tap asks afresh). Equal totals: nothing extra. */
+function spentDiffLine_(){
+  var s = state.spentSheet, data = spentData_(), d = state.dash, card = spentCardNum_(d);
+  if(!s || !data || !d || card==null || money(card)===money(data.total)) return '';   // round 2 (L7): the two print the same - nothing to say
+  if(s.asked!==d) return 'Home now shows '+money(card)+'. Close this and tap the card again to see the latest.';
+  var mon = function(x){ return String((x && x.monthLabel) || '').split(' ')[0]; }, hm = mon(d), am = mon(data);
+  var otherMonth = (d.monthKey && data.monthKey) ? d.monthKey!==data.monthKey : !!(hm && am && hm!==am);
+  if(otherMonth) return 'Home is showing '+(hm || 'another month')+': '+money(card)+'.';
+  if((data.source==='tiller') !== (d.spentActual!=null)) return d.spentActual!=null
+    ? 'Home shows '+money(card)+', counting pending transactions too; this list counts approved ones only.'
+    : 'Home shows '+money(card)+' from approved transactions; this list counts pending ones too.';
+  return 'Home showed '+money(card)+' when it loaded. '+(isPhone() ? 'Close this and pull down on Home to refresh.' : 'Reload the page to refresh Home.');
+}
+/* Review F3: Home's data changed (a refresh landed) while the sheet is open - draw it again in place, so it never shows
+   an older total as if it were Home's. No request is sent (one in flight; the next tap asks for the new Home answer). */
+function spentHomeTick_(){
+  var s = state.spentSheet;
+  if(!s || !spentOn_() || s.drawnFor===state.dash) return;
+  spentRedraw_();
+}
+function spentFind_(data, key){
+  if(!data || !data.groups) return null;
+  for(var i=0;i<data.groups.length;i++){ var g = data.groups[i]; if(g.kind+'|'+g.id===key) return g; }
+  return null;
+}
+function spentRowName_(g){ return g.kind==='none' ? 'Not in an envelope yet' : (g.name || 'An envelope with no name'); }
+function spentRowSub_(g){
+  var w = g.kind==='other' ? 'not one of your envelopes' : '';   // review F10: "Not in an envelope yet" says it once (no sub-reason)
+  var n = g.count!=null ? (g.count===1 ? '1 transaction' : g.count+' transactions') : '';
+  return [w, n].filter(Boolean).join(' · ');
+}
+function spentNote_(data){
+  return data.source==='tiller'
+    ? 'Everything that went out of your accounts this month, including pending. Refunds, transfers between your accounts and hidden envelopes aren’t counted.'
+    : 'Approved spending this month. Refunds and hidden envelopes aren’t counted.';
+}
+function spentDay_(iso){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||'')); return m ? SPENT_MON_[Number(m[2])-1]+' '+Number(m[3]) : String(iso||''); }
+function spentDraw_(){
+  var s = state.spentSheet, o = $('#ovl'); if(!s || !o) return;
+  var data = spentData_(), d = state.dash;
+  s.drawnFor = d;   // review F3: the Home answer this drawing was made against (spentHomeTick_)
+  var diff = spentDiffLine_(), diffH = diff ? '<div class="m spdiff">'+esc(diff)+'</div>' : '';
+  var mon = String((data && data.monthLabel) || (d && d.monthLabel) || '').split(' ')[0];
+  var title = 'Spent this month'+(mon ? ' · '+mon : '');
+  var g = s.level==='env' ? spentFind_(data, s.key) : null;
+  var msg = s.failed ? '<div class="spmsg" role="alert">That didn’t load just now.</div><button class="opt" data-act="spent-retry"><span class="ol">Try again</span></button>'
+    : '<div class="spmsg" role="status">Loading…</div>';
+  var h = '';
+  if(g){
+    h += '<button class="spback" data-act="spent-back">‹ All envelopes</button>'+
+      '<div class="sphead"><h3 id="spTitle" tabindex="-1">'+esc(spentRowName_(g))+'</h3><div class="sptot">'+money(g.total)+'</div>'+
+      '<div class="m">'+esc(title)+(g.txns ? ' · newest first' : '')+'</div></div>';   // round 2 (L7): the whole-month line only at level one
+    if(g.txns) h += '<ul class="sptx">'+g.txns.map(function(t){
+      return '<li><span class="d">'+esc(spentDay_(t.date))+'</span><span class="ds">'+esc(t.description||'—')+(t.account ? '<small>'+esc(t.account)+'</small>' : '')+'</span>'+
+        '<span class="v">'+money(t.amount)+'</span></li>'; }).join('')+'</ul>';
+    else h += msg;
+  } else {
+    var tot = data ? data.total : spentCardNum_(d);
+    h += '<div class="sphead"><h3 id="spTitle" tabindex="-1">'+esc(title)+'</h3><div class="sptot">'+(tot!=null ? money(tot) : '…')+'</div>'+diffH+
+      (data ? '<div class="m">'+esc(spentNote_(data))+'</div>' : '')+'</div>';
+    if(data && !data.groups.length) h += '<div class="spmsg">Nothing spent yet this month.</div>';
+    else if(data) h += data.groups.map(function(x, i){
+      var sub = spentRowSub_(x);
+      return '<button class="opt sprow" data-act="spent-env" data-arg="'+i+'" data-key="'+esc(x.kind+'|'+x.id)+'">'+
+        '<span class="ol"><span class="nm">'+esc(spentRowName_(x))+'</span>'+(sub ? '<span class="m">'+esc(sub)+'</span>' : '')+'</span>'+
+        '<span class="v">'+money(x.total)+'</span><i aria-hidden="true">›</i></button>'; }).join('');
+    else h += msg;
+  }
+  o.innerHTML = '<div class="ovl" data-act="spent-close"><div class="panel spsheet spentsh" role="dialog" aria-modal="true" aria-labelledby="spTitle">'+
+    '<div class="grab" aria-hidden="true"></div>'+h+'<button class="opt close" data-act="spent-close" data-arg="x">Close</button></div></div>';
+}
+function spentFocus_(sel){ try{ var el = document.querySelector('#ovl '+sel); if(el) focusSafe_(el); }catch(e){} }
+function spentEnv_(i){
+  var s = state.spentSheet, data = spentData_(); if(!s || !data) return;
+  var g = data.groups[Number(i)]; if(!g) return;
+  s.level = 'env'; s.key = g.kind+'|'+g.id;
+  if(!g.txns && !s.data) spentFetch_();   // drawn from the dashboard's rows: this envelope's transactions are the one ask
+  spentDraw_(); spentFocus_('#spTitle');
+}
+function spentBack_(){
+  var s = state.spentSheet; if(!s) return;
+  s.level = 'list'; s.key = '';
+  spentDraw_();
+  spentFocus_('#spTitle');   // review F9 (b): the heading - never a control that acts
+}
+function spentRetry_(){ if(!state.spentSheet) return; spentFetch_(); spentDraw_(); spentFocus_('#spTitle'); }
+function spentClose_(quiet){
+  if(!state.spentSheet) return;
+  state.spentSheet = null; spentArm_ = null;
+  try{ var o = $('#ovl'); if(o && spentOn_()) o.innerHTML = ''; }catch(e){}
+  if(!quiet){ try{ var c = document.querySelector('.dtile[data-id="spent"]'); if(c) focusSafe_(c); }catch(e){} }
+}
+function spentForget_(){   // Log out / another person
+  spentCache_ = null; spentArm_ = null;
+  spentFlight_ = null; if(spentRelease_){ spentRelease_(); spentRelease_ = null; }   // review F2: the request still out is let go - signing in again and tapping asks afresh
+  if(state.spentSheet) spentClose_(true);
+  bufClose_(true);   // Age of money: its picture shows this person's numbers
+}
+/* Enter / Space on the card: down arms (a fresh press only - keyRepeatGuard_ drops repeats before this), UP acts, on
+   the same card. A key already held when focus arrived, or let go somewhere else, does nothing. */
+var KEYUP_ACTS_ = { 'spent-open':function(){ spentOpen_(); }, 'buf-info':function(){ bufOpen_(); } };   // v3.114.0: + Age of money's (i)
+function spentKey_(ev){
+  if(!ev || (ev.key!=='Enter' && ev.key!==' ' && ev.key!=='Spacebar')) return false;
+  var t = ev.target, act = (t && t.getAttribute) ? t.getAttribute('data-act') : null;
+  if(!act || !Object.prototype.hasOwnProperty.call(KEYUP_ACTS_, act)){ spentArm_ = null; return false; }   // pressed or let go anywhere else: disarmed
+  if(ev.type==='keydown'){ ev.preventDefault(); spentArm_ = ev.repeat ? null : t; return true; }   // (a button's own Enter-down click never fires)
+  if(ev.type!=='keyup') return false;
+  ev.preventDefault();
+  var armed = spentArm_===t; spentArm_ = null;
+  if(armed) KEYUP_ACTS_[act]();
+  return armed;
+}
+document.addEventListener('keydown', spentKey_);
+document.addEventListener('keyup', spentKey_);
+/* ============ v3.114.0 (Scott 11/16/26-17/26): "Age of money · buffer", explained in a small pop-up ============
+   Scott: "can you add an information graphic to describe what the 'age of money buffer' means?", then, on seeing the tall
+   explainer: "I don't need that detailed of an explanation. However, it should give them the average day amount and
+   explanation. Maybe just a pop up window." So the (i) on the Home card (bufInfoBtn_: a real button, "What is Age of
+   money?", a 44 px target; never focused by the page; on a computer one sentence on hover or keyboard focus) opens a
+   small centred dialog (bufOpen_) - the same compact box as the app's short messages (.panel.confirm: 400 px, 20 px
+   padding), centred on a phone too - with only: the title; the sum with the person's own numbers ("$X cash on budget ÷
+   $Y on an average day = N days"; "about N days" when the sum as shown does not round to N; negative cash "→ 0 days"
+   and one kind sentence; not enough data / loading: example numbers labelled "Example" and why); two sentences - what
+   the number means and what the average day is (over the last N FULL months, as bufCalc_ counts them); one line that
+   prevents a wrong reading (the Inbox is not counted); Close. Numbers come ONLY from bufCalc_ (the card's arithmetic):
+     days = round(on-budget cash ÷ average month × 30) - cash is Budget health's "bank" (checking and savings less what
+     is owed on credit cards); the average month is approved outflows (Income, Transfer and hidden envelopes out) over
+     the full months since the person started, at most the last 6 (rounds 2-3: M1, R3-1); under $30 a month, no
+     balances or no full month yet: "Not enough data yet".
+   The 0-60 line graphic, the bands and the longer text were removed (Scott 11/17): the numbers and one sentence say it,
+   and the box fits a 360 x 640 phone without scrolling. No request, nothing stored; a Home refresh redraws only the
+   numbers in place (bufHomeTick_). Focus on the title, Tab stays inside, Escape / Close / a tap outside close it and
+   focus goes back to the (i); key-up of a fresh press opens it (spentKey_); Customize: no (i) at all. */
+var BUF_TIP_ = 'Days of buffer: how long the cash you have on budget would cover your usual spending.';
+var BUF_MIN_MONTH_ = 30;   // round 2 (L3): an average month under $30 (under $1 a day) is too little to say anything true
+var BUF_EXAMPLE_ = { cash:4500, avg:4500 };   // the example: $4,500 on budget, $4,500 spent in an average month ($150 a day) = 30 days
+function bufCalc_(d, ser){
+  if(!d || !ser) return null;   // still loading
+  var cash=(d.health && !d.health.error) ? d.health.bank : null;
+  var complete=ser.slice(0,-1), last6=complete.slice(-6);   // exclude current partial month
+  // round 2 (M1): the series always has 12 months, $0 before the person started. Months before their FIRST month with
+  // any spending are not real $0 months, so the average starts there (at most the last 6 full months; a $0 month AFTER
+  // it still counts). Whoever has spending in the first of the 6 months (or earlier) gets exactly the old average.
+  // Review round 3 (R3-1): the month someone STARTED in is almost always a part month (they began on the 25th...), so
+  // when it falls inside the window it is left out too and the average is over the FULL months after it; none yet ->
+  // "Not enough data yet". Six full months of history (first spending at or before the window's first month): unchanged.
+  var first=-1, start=Math.max(0, complete.length-6);
+  for(var i=0;i<complete.length;i++){ if(Number(complete[i] && complete[i].spend)>0){ first=i; break; } }
+  var used=(first>start) ? complete.slice(first+1) : last6;
+  var avg=used.length ? used.reduce(function(a,m){return a+m.spend;},0)/used.length : 0;
+  if(cash==null || avg<=0 || avg<BUF_MIN_MONTH_) return { enough:false, small:(cash!=null && used.length>0 && avg>0 && avg<BUF_MIN_MONTH_) };
+  var months=cash/avg;
+  return { enough:true, cash:cash, avg:avg, months:months, days:Math.round(months*30), goalPct:Math.min(100, Math.round(months*100)), nMonths:used.length, neg:cash<0 };
+}
+function bufNums_(){
+  var b = bufCalc_(state.dash, state.dashSeries);
+  if(b && b.enough) return { ex:false, cash:b.cash, perDay:b.avg/30, days:(b.neg ? 0 : b.days), neg:!!b.neg, nMonths:b.nMonths };
+  var e = BUF_EXAMPLE_, m = e.cash/e.avg;
+  return { ex:true, small:!!(b && b.small), cash:e.cash, perDay:e.avg/30, days:Math.round(m*30), neg:false, nMonths:6 };
+}
+/* review round 3 (R3-3): ONE rule says whether the rounded N has reached a month (the card's goal line) */
+function bufPastGoal_(days){ return days>=30; }
+/* review round 3 (R3-5): a sheet's Home tick runs on its own; if it throws, Home still draws to the end and the failure is
+   written to the console once per message (no spam on every repaint) */
+var homeTickWarned_ = {};
+function homeTick_(name, f){
+  try{ f(); }catch(e){
+    var m = name+': '+(e && e.message || e);
+    if(!homeTickWarned_[m]){ homeTickWarned_[m] = 1; try{ console.warn('sheet tick:', m); }catch(z){} }
+  }
+}
+function bufInfoBtn_(){
+  if(state.homeCustomize) return '';   // Customize: a tap is for moving cards
+  return '<button type="button" class="binfo" data-act="buf-info" aria-label="What is Age of money?" aria-haspopup="dialog" aria-describedby="bufTip">'+
+    '<span aria-hidden="true">ⓘ</span><span class="btip" id="bufTip" role="tooltip">'+esc(BUF_TIP_)+'</span></button>';
+}
+function bufFigHtml_(){
+  var v = bufNums_(), days = v.days, dTxt = days+(days===1 ? ' day' : ' days');
+  // round 2 (L3): N is the card's number; if $X ÷ $Y as shown would not round to it, say "about"
+  var about = !v.neg && Math.abs(cents(v.cash)/Math.max(1, cents(v.perDay)) - days) >= 1;
+  var row = function(op, sr, val, cap, cls){ return '<div class="brow'+(cls ? ' '+cls : '')+'"><span class="bop" aria-hidden="true">'+op+'</span>'+(sr ? '<span class="bsr">'+sr+'</span>' : '')+
+    '<span class="bvk"><span class="bv">'+val+'</span>'+(cap ? ' <span class="bk">'+cap+'</span>' : '')+'</span></div>'; };
+  return (v.ex ? '<div class="bufex">Example</div><p class="bufnote">'+(v.small ? 'Your usual spending is too small to work this out yet.'
+      : 'Yours show here once SBC Money has your bank balances and a full month of spending.')+'</p>' : '')+
+    '<div class="bufsum">'+
+      row('', '', money(v.cash), 'cash on budget')+
+      row('÷', ' divided by ', money(v.perDay), 'on an average day')+
+      '<div class="brule" aria-hidden="true"></div>'+
+      (v.neg ? row('→', ' so ', dTxt, '', 'bres') : row('=', ' equals ', (about ? 'about ' : '')+dTxt, '', 'bres'))+'</div>'+
+    (v.neg ? '<p class="bufnote">Your cards owe more than your checking and savings hold, so there’s no buffer yet.</p>' : '')+
+    '<p class="bufwhat" id="bufWhat">How many days the cash you have on budget would cover your usual spending. An average day is your average month of approved spending over the last '+
+      (v.nMonths===1 ? 'full month' : v.nMonths+' full months')+', divided by 30.</p>'+
+    '<p class="bufnote">Spending still waiting in your Inbox isn’t counted.</p>';
+}
+/* review round 2 (L4): Escape hides the tip while the (i) has focus or the pointer (WCAG 1.4.13); it comes back after */
+function bufTipKey_(ev){
+  if(!ev || ev.key!=='Escape') return false;
+  try{ if(document.querySelector('#ovl .ovl')) return false; }catch(e){}   // a sheet is open: Escape is the sheet's
+  var t = ev.target, b = (t && t.classList && t.classList.contains('binfo')) ? t : null;
+  if(!b){ try{ var h = document.querySelector('.dtile[data-id="buffer"] .binfo'); if(h && h.matches && h.matches(':hover')) b = h; }catch(e){} }
+  if(!b) return false;
+  b.classList.add('tipoff');
+  return true;
+}
+function bufTipBack_(ev){
+  var t = ev && ev.target, b = (t && t.closest) ? t.closest('.binfo') : null;
+  if(!b || (ev.type==='mouseout' && ev.relatedTarget && b.contains && b.contains(ev.relatedTarget))) return;
+  b.classList.remove('tipoff');
+}
+document.addEventListener('keydown', bufTipKey_);
+document.addEventListener('focusout', bufTipBack_);
+document.addEventListener('mouseout', bufTipBack_);
+function bufOn_(){ try{ return !!document.querySelector('#ovl .bufsheet'); }catch(e){ return false; } }
+function bufOpen_(){
+  if(state.homeCustomize || state.view!=='dash') return;   // Customize: the (i) does nothing
+  if(state.bufSheet && bufOn_()) return;
+  var o = $('#ovl'); if(!o) return;
+  if(state.spentSheet) spentClose_(true);   // review round 2 (L6): one sheet at a time
+  state.bufSheet = { drawnFor:state.dash, ser:state.dashSeries };
+  o.innerHTML = '<div class="ovl bufovl" data-act="buf-close"><div class="panel bufsheet" role="dialog" aria-modal="true" aria-labelledby="bufTitle" aria-describedby="bufWhat">'+
+    '<h3 id="bufTitle" tabindex="-1">Age of money · buffer</h3>'+
+    '<div class="buffig" id="bufFig">'+bufFigHtml_()+'</div>'+
+    '<button class="btn bufclose" data-act="buf-close" data-arg="x">Close</button></div></div>';
+  spentFocus_('#bufTitle');   // the title - never a control
+}
+function bufClose_(quiet){
+  var was = !!state.bufSheet || bufOn_();
+  state.bufSheet = null;
+  if(!was) return;
+  try{ var o = $('#ovl'); if(o && bufOn_()) o.innerHTML = ''; }catch(e){}
+  if(!quiet){ try{ var c = document.querySelector('.dtile[data-id="buffer"] .binfo'); if(c) focusSafe_(c); }catch(e){} }   // back to the (i)
+}
+/* Home's numbers changed while it is open: only the numbers are drawn again (the title and Close stay, so focus stays) */
+function bufHomeTick_(){
+  var s = state.bufSheet; if(!s || !bufOn_()) return;
+  if(s.drawnFor===state.dash && s.ser===state.dashSeries) return;
+  s.drawnFor = state.dash; s.ser = state.dashSeries;
+  try{ var f = document.querySelector('#ovl #bufFig'); if(f) f.innerHTML = bufFigHtml_(); }catch(e){}
+}
 /* v3.105.0 — replaced accounts. apiReplacements (mirror) finds an account whose
    first Tiller batch was a backfill that re-plays most of an older account that
    then went quiet — a card re-linked under a new name (Brady 11/6/26: Discover ->
@@ -6584,6 +7003,7 @@ function approveErr(e, cid, sent){   // Task 7 (R2-L2): releases THIS card only 
      approveAll()   hold 'approve-all'   scope inbox  (Approve all is one batch: every card waits for it)
      replRemove_()  hold 'remove-copies' scope inbox
      fundGo()       hold 'fund'          scope fund   (the Fund page only - funding never greys the Inbox again)
+     spentFetch_()  hold 'spent-sheet'   scope spent  (v3.114.0: Home's Spent this month - one request in flight; a read, greys nothing of its own)
    A single approve holds nothing page-wide: only ITS card is busy (state.ibxBusy[cid], released by afterApprove or
    approveErr for that card), so a save that never answers freezes that card alone; Approve all stays off meanwhile
    (Task 6, M1). A write that never answers is finally released by the mutation queue's watchdog (pumpMutations_,
@@ -10365,6 +10785,10 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.114.0', d:'Nov 17, 2026', items:[
+    'New: tap Spent this month on Home to see which envelopes your money went to this month. Tap an envelope to see its transactions.',
+    'New: tap the ⓘ on the Age of money card to see your average day of spending and what the number means.',
+    'Age of money now uses only your full months of spending, so it is more accurate when you are new. If you started recently your number may drop, or show Not enough data yet until you have one full month.' ]},
   { v:'v3.113.2', d:'Nov 16, 2026', items:[
     'Home shows your numbers right away again when you open the app after a while away, instead of a blank screen while it signs you in.',
     'On a shared computer, a notice about one person\u2019s older transactions no longer shows for the next person who signs in.' ]},
@@ -12596,6 +13020,7 @@ function forgetPerson_(){
   state.inboxNotes = {}; state.noteEdit = {}; state.tagEdit = {}; state._fetchedAt = {};
   state.prestartDef = null; state.prestartAsking = null;   // v3.109.0 (Task 9)
   state.rulesFromSheetUntil = 0;
+  spentForget_();   // v3.114.0 (lane SPENT): where this person's money went is theirs
   state.books = null; booksAsked_ = false;   // post-v3.113.1 (lane UI-H, H1): the books check in memory is this person's too; the next person's runs afresh
 }
 var LAST_EMAIL_KEY = 'sbcLastEmail';
@@ -13644,7 +14069,7 @@ function renderHowTo(){
     PL('⚠ <b>A manual account is a balance, not a spending account.</b> It will never have transactions and nothing you spend from it touches an envelope. That\u2019s right for an HSA or a car. It is <i>not</i> the way to track cash in your wallet — for that, keep an envelope and let the money live in the pool.'), {g:'trust'}),
 
   S('📊','Checking on yourself',
-    B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards.')+
+    B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards. Tap <b>Spent this month</b> to see which envelopes the money went to, then tap an envelope to see its transactions.')+
     B('<b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full Activity (every movement names the other envelope — tap to jump). With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top. <b>Hide from lists</b> quiets an envelope you never want to see (it stays pickable, leaves the list, and stops counting toward available to fund); <b>Archive</b> is for one that is finished for good.')+
     B('<b>Transactions</b> — everything approved; search by description, filter by account or envelope, tap a row for its choices (move it, split it, tags, a note, or un-approve it), or <b>🏷 Tag many</b> to tag a whole trip at once. The search box finds words in notes too.')+
     B('<b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶; every report is scoped to your <b>spending accounts</b> and filters by group, envelope, or tag. Start on <b>Period summary</b>.')+
@@ -14004,6 +14429,13 @@ document.addEventListener('click', function(ev){
   if(act!=='ibx-rule' && act!=='ibx-sheet-close' && el.closest && el.closest('.ibxsheet')){ if(state.view==='txns') txnSheetClose_(true); else ibxSheetClose_(true); }   // v3.110.0: + the Transactions sheet
   switch(act){
     case 'goview': go(arg); break;
+    case 'spent-open': spentOpen_(); break;   // v3.114.0 (lane SPENT): Home's Spent this month
+    case 'spent-close': if(arg==='x' || ev.target===el) spentClose_(); break;
+    case 'spent-env': spentEnv_(arg); break;
+    case 'spent-back': spentBack_(); break;
+    case 'spent-retry': spentRetry_(); break;
+    case 'buf-info': bufOpen_(); break;   // v3.114.0: Age of money's (i) - a small pop-up: the sum and what it means
+    case 'buf-close': if(arg==='x' || ev.target===el) bufClose_(); break;
     case 'theme': themeApply_(arg, true); break;   // v3.110.0 (Task 4): Settings → Display → Appearance
     case 'budget-save': budgetSettingsSave_(); break;   // v3.93.0
     /* v3.85.0 — Wealth */
