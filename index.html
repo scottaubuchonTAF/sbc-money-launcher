@@ -1315,10 +1315,25 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
 .trow:hover{background:var(--bg)}
 .trow.sel{background:var(--teal-50)}
 .trow[data-kbd]:focus-visible{outline:3px solid var(--focus);outline-offset:-3px;border-radius:0}
-.trow .splmark{margin-right:4px}   /* v3.110.1 (Scott 11/11): the split mark, inline - the letter-in-a-circle column is gone */
+.trow .splmark{flex:none}   /* v3.110.1 (Scott 11/11): the split mark, inline - the letter-in-a-circle column is gone. v3.114.1: spaced by the line's gap, like the chips */
 .trow .mid{flex:1 1 auto;min-width:0}
 .trow .d{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trow .e{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v3.114.1: the second line is one flex row - ✂, the envelope chip(s), then the grey rest (account · tags · note) - with
+   one 4 px gap between all of them. It never wraps. WHEN SPACE RUNS OUT: (1) the grey rest shortens from its end with
+   "…" down to 3.5em; (2) then the chips shrink together (each in proportion to its width), each ending in "…", down to
+   2.75em; (3) only then is the line cut at its right edge (many split lines on a very narrow phone). ✂ never shrinks.
+   A chip is also capped at min(65%, 220 px), so one long name always leaves room for the account.
+   (The first build used inline-blocks inside a text-overflow:ellipsis line: an inline-block cannot be cut, so the whole
+   second chip and the account were swapped for "…" as soon as the line was a little too long.) */
+.trow .e{display:flex;align-items:center;gap:4px;min-width:0;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;position:relative}
+.trow .trest{flex:1 1 0;min-width:3.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the envelope chip - the Inbox suggestion pill's look (teal tint, teal edge), one colour for every envelope. 18 px tall
+   (16 + a 1 px edge) inside the 18 px line, so the row keeps its height. Not a control. */
+.trow .tenv{flex:0 1 auto;min-width:2.75em;max-width:min(65%,220px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:12px;font-weight:700;line-height:16px;padding:0 8px;border:1px solid var(--teal-600);border-radius:99px;background:var(--teal-50);color:var(--teal-800)}
+.trow.sel .tenv{background:var(--teal-100)}   /* the selected row is teal-50 itself */
+.trow .tenv.none{border-color:var(--line);background:var(--chip);color:var(--ink-2);font-weight:500}
+.trow .tvh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .trow .amt{font-weight:800;font-size:14.5px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
 .trow .amt.in{color:var(--green)}
 .trow .flag{font-size:10.5px;font-weight:800;color:var(--amber-600,#b45309);margin-left:6px}
@@ -1857,11 +1872,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.114.0';
+var FE_VERSION = 'v3.114.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.114.0+20261117.0936';
+var BUILD_ID = 'v3.114.1+20261117.1110';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -7852,12 +7867,22 @@ function txnDayLabel_(s, now){
 function txnFlag_(t){
   return t.unknown ? 'needs an answer' : t.preStart ? 'before start' : t.unspent ? 'recorded only' : '';
 }
+/* v3.114.1 (Scott 11/17: "more visible when an item is assigned to an envelope - whether it be auto or selected").
+   The envelope is a soft teal chip at the start of the row's second line - one look for every envelope, however it
+   was picked; the account, tags and note stay small grey text after it. The chip is text, not a control: the whole
+   row is still the one thing you tap, and the chip adds no tab stop. A line with no envelope (a blank Envelope cell
+   in the Register - both back ends pass it through as '') says "No envelope" in a quiet grey chip, so the gap shows.
+   A split: the ✂ mark, then one chip per envelope; a screen reader hears "Split: Groceries, Kids". */
+function txnEnvChip_(name, hidden){
+  if(name==null || String(name).trim()==='') return '<span class="tenv none">No envelope</span>';
+  return '<span class="tenv">'+esc(name)+(hidden?' (hidden)':'')+'</span>';
+}
 function txnEnvLine_(t){
   var legs = t.legs || [];
   var hid = legs.length>1 ? hiddenEnvIds_() : {};   // v3.111.0: a split's hidden line says so
-  if(legs.length>1) return '<span class="splmark" aria-hidden="true">✂</span>Split · '+legs.map(   // v3.110.1: the split mark sits here, not in a circle
-    function(l){ return esc(l.envelopeName)+(hid[l.envelopeId]?' (hidden)':''); }).join(', ');
-  return esc((legs[0]||{}).envelopeName || '');
+  if(legs.length>1) return '<span class="splmark" aria-hidden="true">✂</span><span class="tvh">Split: </span>'+legs.map(   // v3.110.1: the split mark sits here, not in a circle
+    function(l){ return txnEnvChip_(l.envelopeName, hid[l.envelopeId]); }).join('<span class="tvh">, </span>');
+  return txnEnvChip_((legs[0]||{}).envelopeName);
 }
 function txnRowHtml_(t){
   var rid = regRowId_(t); t._rid = rid;   // v3.109.0: the tag chips / tag editor use it
@@ -7871,7 +7896,7 @@ function txnRowHtml_(t){
   return '<div class="trow'+(on?' sel':'')+'" data-act="txn-open" data-arg="'+esc(rid)+'"'+(on?' aria-current="true"':'')+' tabindex="0" role="button" data-kbd="1">'+   // Task 6 (M-R3-1): focusable when drawn
     (state.tagSel ? '<span class="tsel" data-act="txn-sel-wrap">'+selBoxHtml(t)+'</span>' : '')+
     '<div class="mid"><div class="d" title="'+esc(t.description)+'">'+esc(t.description)+(flag ? '<span class="flag">'+flag+'</span>' : '')+'</div>'+
-    '<div class="e">'+sub.filter(Boolean).join(' · ')+'</div></div>'+
+    '<div class="e">'+sub[0]+(sub.slice(1).filter(Boolean).length ? '<span class="trest"> · '+sub.slice(1).filter(Boolean).join(' · ')+'</span>' : '')+'</div></div>'+   // v3.114.1: chip(s), then the grey rest
     '<div class="amt'+(t.amount>0?' in':'')+'">'+money(t.amount)+'</div></div>';
 }
 /* A row's open editors (phone: right under the row; wide: in the detail). */
@@ -10785,6 +10810,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.114.1', d:'Nov 17, 2026', items:[
+    'On Transactions, each row now shows its envelope in a coloured label, so you can see at a glance where it went. A transaction with no envelope says so.' ]},
   { v:'v3.114.0', d:'Nov 17, 2026', items:[
     'New: tap Spent this month on Home to see which envelopes your money went to this month. Tap an envelope to see its transactions.',
     'New: tap the ⓘ on the Age of money card to see your average day of spending and what the number means.',
