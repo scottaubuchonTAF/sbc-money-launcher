@@ -807,6 +807,8 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .signin .sname span{color:var(--teal-300)}
 .signin .shint{color:var(--side-ink);font-size:13px;max-width:300px}
 .signin .serr{color:var(--signin-err);font-size:13px;max-width:320px;min-height:18px}
+.sessbtn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;font-weight:600;line-height:1;font-family:inherit;padding:13px 26px;border-radius:999px;cursor:pointer;min-height:46px;min-width:240px}   /* v3.115.0: stay signed in */
+.sessbtn:disabled{opacity:.7;cursor:default}
 
 /* ================= Reports (v3.21) ================= */
 /* ---- v3.59 Reports v2 ---- */
@@ -1411,6 +1413,8 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
 <div class="signin" id="signin" style="display:none">
   <img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="SBC Money">
   <div class="sname">SBC <span>Money</span></div>
+  <button type="button" class="sessbtn" id="sessBtn" style="display:none">Sign in with Google</button>
+  <div class="shint" id="sessHint" style="display:none">You stay signed in on this device.</div>
   <div id="gsiBtn"></div>
   <div class="serr" id="signinErr"></div>
   <div class="shint">Sign in with the Google account you set SBC Money up with.<br><a href="start.html" style="color:var(--teal-300)">New here? Get started →</a></div>
@@ -1872,11 +1876,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.114.4';
+var FE_VERSION = 'v3.115.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.114.4+20261118.1044';
+var BUILD_ID = 'v3.115.0+20261118.1314';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2058,6 +2062,164 @@ var authWaiters = [];
 var gsiUp = false;
 function authValid(){ return !!auth.token && (Date.now()/1000) < (auth.exp - 90); }
 function persistAuth(){ try{ localStorage.setItem('sbcAuth', JSON.stringify(auth)); }catch(e){} }
+/* ============================ stay signed in (v3.115.0) ============================
+   The Google sign-in lasts one hour. Renewing it used to depend on Google's One Tap appearing by itself, and on
+   an iPhone home-screen app it usually does not - so people were asked to sign in again and again. Now the
+   sign-in button goes to Google ONCE per device (a full-page trip, which works in a home-screen app), the server
+   keeps that device's Google renewal key (sealed) and this device keeps a random device key. When the hour is
+   up, ensureAuth() swaps the device key for a fresh Google sign-in without showing anything.
+   Nothing that CHECKS a sign-in changed: what comes back is an ordinary Google ID token
+   (supabase/functions/api/session.ts). Off switch: STAY_SIGNED_IN = false is exactly the sign-in it was before.
+   On any address other than the real site (tests, the video and Wayback builds) it is off by itself, because
+   Google only returns to the real one. If the server part is not set up, or anything here fails, the Google
+   button and One Tap are still there and work as they always did. */
+var STAY_SIGNED_IN = true;
+var SESS_DEVICE_KEY = 'sbcDevice';            // { key, email }: this device's key (the server keeps only its hash)
+var SESS_PENDING_KEY = 'sbcSigninPending';    // { state, at }: a trip to Google this device started
+var SESS_REDIRECT = 'https://sbc.theaubuchonfamily.com/';   // must be on the OAuth client's list at Google, and in session.ts REDIRECTS
+var SESS_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+var SESS_PENDING_MS = 10*60*1000, SESS_TIMEOUT_MS = 20000;
+var sessDevice_ = null, sessRenewing_ = null, sessStarting_ = null, sessFallback_ = false;
+try{ var sd0 = JSON.parse(localStorage.getItem(SESS_DEVICE_KEY)||'null'); if(sd0 && sd0.key) sessDevice_ = sd0; }catch(e){}
+function sessionAvailable_(){ try{ return !!STAY_SIGNED_IN && (location.origin + '/') === SESS_REDIRECT; }catch(e){ return false; } }
+function sessionHas_(){ return sessionAvailable_() && !!(sessDevice_ && sessDevice_.key); }
+function sessionSave_(d){
+  sessDevice_ = d || null;
+  try{ if(d) localStorage.setItem(SESS_DEVICE_KEY, JSON.stringify(d)); else localStorage.removeItem(SESS_DEVICE_KEY); }catch(e){}
+}
+/* One request to the server's apiSession* (no sign-in token: that is the point). Resolves the answer
+   ({ok:true,...} or {ok:false, code, error, gone}); rejects only when the server could not be reached. */
+function sessionPost_(fn, arg){
+  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, SESS_TIMEOUT_MS);
+  return fetch(SUPA_API, { method:'POST', body: JSON.stringify({ fn:fn, args:[arg] }), signal: ctrl ? ctrl.signal : undefined })
+    .then(function(r){ clearTimeout(timer); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); },
+          function(e){ clearTimeout(timer); throw e; });
+}
+/* A fresh Google sign-in for this device, without showing anything. One request at a time: everyone who asks
+   while it is out gets the same answer. Resolves true when a valid sign-in is in hand. The device key is dropped
+   only when the server says this device must sign in again (gone); a server that cannot be reached keeps it. */
+function sessionRenew_(){
+  if(!sessionHas_()) return Promise.resolve(false);
+  if(sessRenewing_) return sessRenewing_;
+  var key0 = sessDevice_.key;
+  sessRenewing_ = sessionPost_('apiSessionRenew', { key:key0 }).then(function(res){
+    if(!sessDevice_ || sessDevice_.key !== key0) return false;   // logged out (or another person signed in) while it was out
+    if(res && res.ok && res.token){ onCredential({ credential: res.token }); return authValid(); }
+    if(res && res.gone) sessionSave_(null);
+    return false;
+  }, function(){ return false; }).then(function(ok){ sessRenewing_ = null; return ok; });
+  return sessRenewing_;
+}
+/* This device stops being kept signed in: the key leaves the device now and the server is told (best effort -
+   a row the server never hears about is unusable without the key, and is swept after 90 days unused). */
+function sessionForget_(){
+  var d = sessDevice_;
+  sessionSave_(null);
+  if(d && d.key){
+    try{ fetch(SUPA_API, { method:'POST', keepalive:true, body: JSON.stringify({ fn:'apiSessionEnd', args:[{ key:d.key }] }) }).catch(function(){}); }catch(e){}
+  }
+}
+function sessRandom_(){
+  var a = new Uint8Array(16); crypto.getRandomValues(a);
+  var s = ''; for(var i=0;i<a.length;i++) s += ('0'+a[i].toString(16)).slice(-2);
+  return s;
+}
+function sessLabel_(){
+  var u = ''; try{ u = String(navigator.userAgent||''); }catch(e){}
+  if(/iPhone/.test(u)) return 'iPhone';
+  if(/iPad/.test(u)) return 'iPad';
+  if(/Android/.test(u)) return 'Android';
+  if(/Windows/.test(u)) return 'Windows PC';
+  if(/Macintosh|Mac OS X/.test(u)) return 'Mac';
+  if(/CrOS/.test(u)) return 'Chromebook';
+  return 'Browser';
+}
+/* Which sign-in buttons show. The new button whenever staying signed in is possible here; Google's own button
+   when it is not, or once the new way has failed on this page (so nobody is ever left without a way in). */
+function sessButtons_(){
+  if(!sessionAvailable_()) return;   // nothing to change: the page starts with the new button hidden and Google's button as it always was
+  try{
+    var b = $('#sessBtn'), hn = $('#sessHint'), g = $('#gsiBtn');
+    if(b) b.style.display = '';
+    if(hn) hn.style.display = '';
+    if(g) g.style.display = sessFallback_ ? '' : 'none';
+  }catch(e){}
+}
+function sessBusy_(on){
+  try{ var b = $('#sessBtn'); if(b){ b.disabled = !!on; b.textContent = on ? 'Signing in…' : 'Sign in with Google'; } }catch(e){}
+}
+function sessFail_(msg){
+  sessFallback_ = true;
+  try{ var el = $('#signinErr'); if(el) el.textContent = msg || ''; }catch(e){}
+  sessBusy_(false); sessButtons_();
+}
+/* The sign-in button. A device that still has its key first asks the server again (the usual reason it is on
+   the sign-in screen is that the server could not be reached); otherwise the page goes to Google and comes back
+   to sessionReturn_(). select_account: the person picks who they are, so a second person can use this device. */
+function sessionBegin_(){
+  if(!sessionAvailable_()) return;
+  var go = function(){
+    var st = sessRandom_();
+    try{ localStorage.setItem(SESS_PENDING_KEY, JSON.stringify({ state:st, at:Date.now() })); }
+    catch(e){ sessFail_('This browser would not let SBC Money remember the sign-in. Use the Google button below.'); return; }
+    var p = new URLSearchParams({ client_id:CLIENT_ID, redirect_uri:SESS_REDIRECT, response_type:'code', scope:'openid email',
+      access_type:'offline', prompt:'select_account consent', state:st });
+    location.assign(SESS_AUTH_URL + '?' + p.toString());
+  };
+  sessBusy_(true);
+  if(sessionHas_()) sessionRenew_().then(function(ok){ if(ok || authValid()){ sessBusy_(false); return; } go(); });
+  else go();
+}
+/* Back from Google (?code=...&state=...). The one-time code leaves the address bar at once. It is used only when
+   THIS device started the trip in the last ten minutes (the state matches what was saved); anything else is ignored. */
+function sessionReturn_(){
+  if(!sessionAvailable_()) return;
+  var q; try{ q = new URLSearchParams(location.search); }catch(e){ return; }
+  if(!q.has('state') || !(q.has('code') || q.has('error'))){
+    // No answer from Google in the address - but a trip was started and never came back (Back was pressed, or Google
+    // showed an error page): offer Google's own button as well, so there is always another way in.
+    try{ if(localStorage.getItem(SESS_PENDING_KEY)){ localStorage.removeItem(SESS_PENDING_KEY); sessFallback_ = true; } }catch(e){}
+    return;
+  }
+  var code = q.get('code') || '', st = q.get('state') || '', err = q.get('error') || '';
+  var pend = null;
+  try{ pend = JSON.parse(localStorage.getItem(SESS_PENDING_KEY)||'null'); localStorage.removeItem(SESS_PENDING_KEY); }catch(e){}
+  try{
+    ['code','state','error','scope','authuser','hd','prompt'].forEach(function(k){ q.delete(k); });
+    var rest = q.toString();
+    history.replaceState(history.state, '', location.pathname + (rest ? '?'+rest : '') + location.hash);
+  }catch(e){}
+  if(!pend || !pend.state || pend.state !== st || (Date.now() - Number(pend.at||0)) > SESS_PENDING_MS){
+    // Not a trip this device started in the last ten minutes: the code is NOT used. Said plainly, with Google's own
+    // button offered, because one real cause is a phone that came back from Google in a different browser than it left in.
+    if(code) sessFail_('That sign-in did not come back to where it started, so it was not used. Try again, or use the Google button below.');
+    return;
+  }
+  if(err || !code){ sessFail_(err === 'access_denied' ? '' : 'Google did not finish the sign-in. Try again.'); return; }
+  sessStarting_ = sessionPost_('apiSessionStart', { code:code, redirect:SESS_REDIRECT, label:sessLabel_() }).then(function(res){
+    if(res && res.ok && res.token && res.key){
+      sessionSave_({ key:String(res.key), email:String(res.email||'').toLowerCase() });
+      onCredential({ credential: res.token });
+      return authValid();
+    }
+    sessFail_(((res && res.error) || 'The sign-in could not be finished.') + ' You can use the Google button below instead.');
+    return false;
+  }, function(){
+    sessFail_('SBC Money could not be reached to finish the sign-in. Check your connection and try again.');
+    return false;
+  }).then(function(ok){ sessStarting_ = null; return ok; });
+}
+/* Settings - Account & privacy - Log out of every device. Needs a valid sign-in (the server checks it). */
+function signOutEverywhere(){
+  confirmUi('Log out of SBC Money on every phone and computer, including this one?', 'Log out everywhere').then(function(ok){
+    if(!ok) return;
+    ensureAuth().then(function(){ return sessionPost_('apiSessionEndAll', { token:auth.token }); }).then(function(res){
+      if(res && res.ok){ signOutNow_(); return; }
+      toast((res && res.error) || 'Could not log out the other devices. Try again.');
+    }, function(){ toast('SBC Money could not be reached. Try again.'); });
+  });
+}
 /* v3.22: surface a GSI load failure — previously the sign-in screen showed no
    button and no error, and ensureAuth() returned a promise that never resolved. */
 function gsiFailed(){
@@ -2071,6 +2233,11 @@ function gsiReady(){
   var b = $('#gsiBtn');
   if(b) google.accounts.id.renderButton(b, { theme:'outline', size:'large', shape:'pill', text:'signin_with' });
   /* silent one-tap refresh for returning users */
+  // v3.115.0: a device that is kept signed in asks the SERVER for its fresh sign-in (sessionRenew_); One Tap is asked only if that fails
+  if(!authValid() && (sessionHas_() || sessStarting_)){
+    (sessStarting_ || sessionRenew_()).then(function(ok){ if(!ok && !authValid()) gsiPrompt_(); });
+    return;
+  }
   if(!authValid()) gsiPrompt_();
 }
 /* v3.69.0 (review F3): the token expires hourly, so "returning user with a
@@ -2108,6 +2275,8 @@ function onCredential(resp){
        then another Google account picked). Everything on screen and in memory belongs to the
        previous person - drop it and start the page clean, signed in as the new one. */
     var nowE = String(auth.email||'').toLowerCase(), wasE = '';
+    // v3.115.0: someone ELSE signed in on this device (Google's own button or One Tap): the earlier person's device key must never bring them back
+    if(sessDevice_ && String(sessDevice_.email||'').toLowerCase() !== nowE) sessionForget_();
     try{ wasE = String(localStorage.getItem(LAST_EMAIL_KEY)||'').toLowerCase(); localStorage.setItem(LAST_EMAIL_KEY, nowE); }catch(e0){}
     if(wasE && nowE && wasE !== nowE){ forgetPerson_(); try{ location.reload(); }catch(e1){} return; }
   }catch(e){ return; }
@@ -2119,7 +2288,14 @@ function onCredential(resp){
   if(!state._booted) snapSignedInPaint_();   // v3.113.2 (lane UI-H): the same person's saved Home, after the email check
   if(!state._booted) boot(); // v3.28: _booted (not state.boot) — a hydrated cache sets state.boot
 }
+/* v3.115.0 (stay signed in): a device that holds a device key gets its fresh sign-in from the server, silently;
+   the sign-in screen (ensureAuthAsk_, the function this used to be) is shown only when that is not possible. */
 function ensureAuth(){
+  if(authValid()) return Promise.resolve();
+  if(!sessionHas_()) return ensureAuthAsk_();
+  return sessionRenew_().then(function(ok){ return (ok || authValid()) ? undefined : ensureAuthAsk_(); });
+}
+function ensureAuthAsk_(){
   if(authValid()) return Promise.resolve();
   if(state._snap && !state._booted) snapDrop_(!!state._snap.signIn);   // v3.113.2 (lane UI-H): the server said the sign-in is not good - no saved Home behind the sign-in screen; round 3 (G1): after a fresh sign-in that answer also takes the snapshot off the device
   $('#signin').style.display = 'flex';
@@ -10824,6 +11000,10 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.115.0', d:'Nov 18, 2026', items:[
+    'New: you stay signed in. Sign in with Google once on each phone or computer, and SBC Money keeps that device signed in instead of asking again and again. The first time after this update you will be asked to sign in once more, and Google will ask you to confirm.',
+    'A device stays signed in until you log out on it, or it goes 90 days without being used.',
+    'Lost a phone? Settings → Account & privacy → Log out of every device signs you out everywhere at once.' ]},
   { v:'v3.114.4', d:'Nov 18, 2026', items:[
     'Fixed: the numbers on Home (Available to fund, Funded, Spent this month and the rest) could take a long time to appear. They now load quickly every time.' ]},
   { v:'v3.114.3', d:'Nov 17, 2026', items:[
@@ -12725,6 +12905,10 @@ function drawAdmin(){
   }
   /* v3.111.0 (U1): Connect Tiller - only when boot.tiller is not null (design 6.1 / 6.2) */
   if(tillerBoot_()) h += '<div class="grp"><h3>Tiller connection</h3><div id="tlcard">'+tillerCardHtml_()+'</div></div>';
+  /* v3.115.0: stay signed in - one button that logs out every device */
+  if(sessionAvailable_()) h += '<div class="grp"><h3>Signed-in devices</h3><div class="card" style="padding:12px">'+
+    '<div class="note" style="padding:0 0 10px">Each phone or computer you sign in on stays signed in until you log out there, or it goes 90 days without being used. Lost one, or signed in somewhere you should not have? Log out of every device at once. This one is logged out too, and the others within the hour.</div>'+
+    '<div class="actions"><button class="btn ghost" data-act="logout-all">Log out of every device</button></div></div></div>';
   /* v3.99.0: the operator access card - loaded after the list so the page never waits on it */
   h += '<div class="grp"><h3>Who has read the database</h3><div id="opacc">'+
     (state.opAccess ? opAccessHtml_(state.opAccess) : '<div class="card"><div class="spin"></div></div>')+'</div></div>';
@@ -13084,6 +13268,7 @@ function signOutNow_(){
   // v3.109.0 (Task 9, N1): the device leaves notifications with the sign-in still valid. Everything of this person is
   // cleared NOW; only the sign-in token itself is kept until the server has been told (at most 3 s), and is then
   // cleared - unless someone has signed in again in the meantime (then their new token stays).
+  sessionForget_();   // v3.115.0: this device is no longer kept signed in (its key leaves the device; the server deletes its row)
   var tok0 = auth.token;
   var pf; try{ pf = pushForgetDevice_(); }catch(e){ pf = null; }
   var dropAuth = function(){ if(auth.token === tok0){ auth = { token:'', email:'', exp:0 }; persistAuth(); } };
@@ -13988,7 +14173,7 @@ function renderHowTo(){
     PL('Do that consistently and something great happens: you stop living paycheck to paycheck, because each envelope fills up <i>before</i> its bill arrives. The long-term goal is to be a full month ahead.'), {g:'start', open:true}),
 
   S('🚀','Your first day',
-    P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you set SBC Money up with (the one that owns your SBC sheet) — any Google account works once it is registered. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
+    P('<b>Sign in</b> at sbc.theaubuchonfamily.com with the Google account you set SBC Money up with (the one that owns your SBC sheet) — any Google account works once it is registered. Sign in once on each phone or computer and <b>you stay signed in there</b>, until you log out on it or it goes 90 days without being used. On a phone, add it to your Home Screen (Share → <b>Add to Home Screen</b> on iPhone; the browser menu → <b>Install app</b> on Android) so it opens like an app.')+
     P('<b>What you will see.</b> Your envelopes already exist — one per category in your Tiller sheet — and every one of them is <b>$0</b>. That is on purpose: your history is kept, but budgeting starts today. The <b>Inbox</b> only shows transactions from today onward.')+
     P('<b>Put your real money on the books (5 minutes, once).</b> Open <b>Balances</b> and check that the bank balances look right. Then <b>Settings → Maintenance → Reconcile to bank</b>: SBC puts the cash you actually have into the <b>Income Cash Pool</b>. Now open <b>Fund</b> and deal that money out — this month\u2019s rent, groceries until payday, a little in each envelope you will touch before the next paycheck. Leave what is left in the pool or park it in savings.')+
     P('<b>Leave 💳 CC Payment at $0.</b> It is plumbing, not a spending envelope — the credit-card section below explains why.')+
@@ -14169,6 +14354,7 @@ function renderHowTo(){
   S('🔐','Who can see your money',
     P('Your bank data lives in <b>your</b> Tiller sheet and <b>your</b> companion sheet, in your own Google Drive. Two service accounts have access so the app works: the SBC app account (an editor — it imports your transactions hourly and writes your categorizations back) and a read-only account that feeds the fast view. <b>Scott is on neither sheet, is not on your access list, and nothing in the app shows him your numbers.</b>')+
     P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. So the app keeps a record: every hour, any database session that is not the app itself — the operator opening the database console, a command line, his own check scripts — is copied, statement by statement, into a log you can read at <b>Settings → Account &amp; privacy</b>, under <b>Who has read the database</b>. Each row is chained to the one before it, so a deleted or edited row shows; the card also says whether the recording is switched on and when it last checked. It cannot tell whose rows a statement returned, so it shows you the statement. The record covers the <b>database only</b>: Scott also holds the password of the SBC app account, which is an editor on your two sheets, and opening a sheet in Google Drive that way is not in it \u2014 the sheet\u2019s own Activity panel in Google Sheets is the record there. If that is not enough, say so — the alternative is running your own copy.')+
+    P('<b>Staying signed in.</b> So you are not asked to sign in over and over, the server keeps one <b>sign-in key</b> from Google for each phone or computer you sign in on, locked with a second key that exists only in the server’s settings. That key only says who you are: your email address. It cannot open your Google account, your mail or your Drive. It is in the honest caveat too: with it and the server’s settings, the operator could technically sign in to SBC Money as you. Logging out on a device deletes that device’s key. <b>Log out of every device</b>, on Settings → Account &amp; privacy, deletes all of yours at once and cancels them at Google; use it if a phone is lost. A key also goes when its device has not been used for 90 days.')+
     PL('<b>Settings → Account &amp; privacy</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: <b>Delete my account</b> on the same page removes everything of yours from the app, and Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
 
   S('🗺️','Every page, one line each',
@@ -14757,6 +14943,7 @@ document.addEventListener('click', function(ev){
     case 'tiller-refresh': tillerRefresh_(); break;
     case 'tiller-link': tillerLinkUsed_(); break;   // Task 2 (L8): the browser follows the link; then it goes (it works once)
     case 'logout': signOut(); break;
+    case 'logout-all': signOutEverywhere(); break;   // v3.115.0
     case 'rmtxn-search': removeTxnSearch(); break;
     case 'rmtxn-go': removeTxnGo(arg); break;
     case 'recon-update': reconUpdate(arg); break;
@@ -15119,6 +15306,7 @@ SBC.WEALTH_TABS = WEALTH_TABS; SBC.WEALTH_DEFS = WEALTH_DEFS; SBC.WEALTH_VIEWS =
 SBC.rptSideHtml_ = rptSideHtml_; SBC.wealthInReports_ = wealthInReports_;   // v3.91.0
 SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
+SBC.sessionRenew_ = sessionRenew_; SBC.sessionReturn_ = sessionReturn_; SBC.sessionBegin_ = sessionBegin_; SBC.sessionHas_ = sessionHas_; SBC.sessionAvailable_ = sessionAvailable_; SBC.sessionForget_ = sessionForget_; SBC.sessLabel_ = sessLabel_; SBC.ensureAuth = ensureAuth; SBC.sessState_ = function(){ return { device:sessDevice_, fallback:sessFallback_, renewing:!!sessRenewing_, starting:!!sessStarting_ }; };   // v3.115.0
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
 SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
 SBC.ruleDelete_ = ruleDelete_; SBC.ruleSave_ = ruleSave_; SBC.ruleWriteFailed_ = ruleWriteFailed_;   // v3.79.1
@@ -15126,6 +15314,15 @@ SBC.renderSettings = renderSettings; SBC.toast = toast; SBC.afterApprove = after
 SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_VIEWS = MORE_VIEWS; SBC.NAV_LABELS = NAV_LABELS; SBC.ICONS = ICONS;
 
 (function start(){
+  // v3.115.0 (stay signed in), FIRST - before Google's script is replayed below, so One Tap is not asked while a
+  // sign-in that just came back from Google is being finished: take the one-time code out of the address bar.
+  sessionReturn_();
+  if(sessionAvailable_()){
+    sessButtons_();
+    try{ var sb0 = $('#sessBtn'); if(sb0) sb0.addEventListener('click', sessionBegin_); }catch(e){}
+    // Back from Google's page without signing in (the page was kept as it was): the button works again, and Google's own is offered too
+    try{ window.addEventListener('pageshow', function(ev){ if(ev && ev.persisted){ try{ localStorage.removeItem(SESS_PENDING_KEY); }catch(e2){} sessFallback_ = true; sessBusy_(false); sessButtons_(); } }); }catch(e){}
+  }
   // v3.57.1: if Google's script loaded before this script finished parsing, its
   // onload attribute recorded the signal without calling anything (gsiReady did
   // not exist yet) — replay it now that the real handlers exist. gsiUp guards
@@ -15151,6 +15348,17 @@ SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_V
     // while the (possibly cold, 10-25s) apiBoot round trip runs.
     if(!hydrated){ try{ $('#shell').innerHTML = homeSkeletonHtml_(); }catch(e){} }
     boot();
+  } else if(sessionHas_() || sessStarting_){
+    // v3.115.0: this device is kept signed in (or is just back from Google): the server hands it a fresh sign-in.
+    // It does not wait for Google's script. Not possible -> the sign-in screen, as before.
+    if(!hydrated){ try{ $('#shell').innerHTML = homeSkeletonHtml_(); }catch(e){} }
+    setRefreshing_(true);
+    (sessStarting_ || sessionRenew_()).then(function(ok){
+      if(ok || authValid()) return;   // onCredential has started the app
+      setRefreshing_(false);
+      if(!hydrated){ try{ $('#shell').innerHTML = ''; }catch(e){} }
+      ensureAuthAsk_();
+    });
   } else if(hydrated){
     setRefreshing_(true); // cached view stays up; GSI will refresh the token and boot()
   } else {

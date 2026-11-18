@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy — SBC Money</title>
 <link rel="icon" href="icon-192.png">
-<!-- v3.111.0: + "Connecting Tiller (optional)", the exact words of Connect-Tiller-Design-2026-11-11.md 4.3 (the app's Connect card shows the same).
+<!-- v3.115.0: + staying signed in (the sign-in key the server keeps per device; What it keeps, Who can see, Leaving).
+     v3.111.0: + "Connecting Tiller (optional)", the exact words of Connect-Tiller-Design-2026-11-11.md 4.3 (the app's Connect card shows the same).
      v3.102.6 (v3.102.7: Leaving = Delete my account) — sbc.theaubuchonfamily.com/privacy.html. The privacy policy the Google sign-in
      consent screen links to (Google Auth Platform → Branding). Plain words, the same facts the
      in-app help gives under "Who can see your money". Ships with the release (release.ps1 step 7). -->
@@ -55,6 +56,7 @@ ul,ol{padding-left:22px}
   <section class="sec">
     <h2>What it keeps</h2>
     <p>To open quickly, the app keeps a copy of the rows in those two sheets in a database it runs (hosted on Supabase, in the United States). That copy is refreshed from your sheets every hour and rebuilt each time; your sheets stay the source of truth. The app also keeps your settings, your approvals and the notes you add, and a record of each time the database is read outside the app (see below). If you connect Tiller it also keeps a locked Tiller sign-in key, the Tiller login's email (locked) and each of your banks' connection status, until you disconnect — the full list is under “What SBC Money keeps if you connect Tiller”.</p>
+    <p><b>To keep you signed in</b>, so you are not asked to sign in over and over, the server keeps one sign-in key from Google for each phone or computer you sign in on, locked with a second key that exists only in the server’s settings. With it are a scrambled form of a random key that stays on that device, your email address, a one-word name for the device (“iPhone”) and when it was last used. The sign-in key only says who you are (your email address); it cannot open your Google account, your mail or your Drive. It is deleted when you log out on that device, when you tap <i>Settings → Account &amp; privacy → Log out of every device</i> (which also cancels your keys at Google), when you delete your account, or when the device has gone 90 days unused.</p>
   </section>
   <section class="sec">
     <h2>Who can see your money</h2>
@@ -62,6 +64,7 @@ ul,ol{padding-left:22px}
     <p><b>Two service identities</b>, so the app can work: an app account (editor on your two sheets — it imports your transactions hourly and writes your categorisations back) and a read-only account that feeds the fast view. They are not people.</p>
     <p><b>The operator</b> — the person who runs the server. Like any app's operator he could technically query the database. He does not, and the app has no screen that would. Reading the database leaves a mark: every statement anyone other than the app itself runs against it is recorded and shown inside your own account at <i>Settings → Account &amp; privacy → Who has read the database</i>, together with whether that recording is switched on. It records statements, not whose rows came back. He also holds the app account's password, and opening your sheets in Google Drive as that account is <b>not</b> in that record — your sheet's own Activity panel in Google Sheets is the record there.</p>
     <p>If you connect Tiller, the operator’s check scripts can also read the status codes, the times and the counts, and the Account IDs they are filed under — never the key, the Tiller email or who connected it (see “What SBC Money keeps if you connect Tiller”). They can read your account names and your Tiller sheet’s ID, as they can the rest of the app’s copy of your sheets: SBC Money keeps those whether or not you connect Tiller.</p>
+    <p>The sign-in keys that keep your devices signed in are in the same database, locked. The operator’s check script counts them, for everyone together, and reads nothing else of them. Because he also holds the server’s settings, he could technically use one to sign in to SBC Money as you. <i>Log out of every device</i> deletes yours and cancels them at Google.</p>
   </section>
   <section class="sec" id="tiller">
     <h2>Connecting Tiller (optional)</h2>
@@ -102,7 +105,7 @@ ul,ol{padding-left:22px}
   </section>
   <section class="sec">
     <h2>Leaving</h2>
-    <p>In the app, <i>Settings → Account &amp; privacy → Delete my account</i>. It deletes every row of yours from the database, takes you off the app's lists, and removes the two service accounts from your sheets — in one go, after you type DELETE. If you connected Tiller, it also deletes the Tiller sign-in key and everything listed under “What SBC Money keeps if you connect Tiller”. Your sheets stay in your Google Drive, and Tiller keeps your complete history in your own spreadsheet; Tiller itself is a separate subscription you cancel with Tiller.</p>
+    <p>In the app, <i>Settings → Account &amp; privacy → Delete my account</i>. It deletes every row of yours from the database, takes you off the app's lists, and removes the two service accounts from your sheets — in one go, after you type DELETE. It also deletes the sign-in keys that kept your devices signed in. If you connected Tiller, it also deletes the Tiller sign-in key and everything listed under “What SBC Money keeps if you connect Tiller”. Your sheets stay in your Google Drive, and Tiller keeps your complete history in your own spreadsheet; Tiller itself is a separate subscription you cancel with Tiller.</p>
   </section>
   <section class="sec">
     <h2>Questions</h2>
