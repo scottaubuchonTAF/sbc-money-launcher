@@ -1872,11 +1872,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.114.3';
+var FE_VERSION = 'v3.114.4';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.114.3+20261117.1627';
+var BUILD_ID = 'v3.114.4+20261118.1044';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -10824,6 +10824,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.114.4', d:'Nov 18, 2026', items:[
+    'Fixed: the numbers on Home (Available to fund, Funded, Spent this month and the rest) could take a long time to appear. They now load quickly every time.' ]},
   { v:'v3.114.3', d:'Nov 17, 2026', items:[
     'Fixed: Spent this month now puts what you approve under its envelope right away. Before, it could keep showing approved transactions as not in an envelope for an hour or more.',
     'Because it now follows what you approved, a card payment or transfer you filed that way no longer counts as spending, so the number may be lower than before. Something you filed as spending counts, even if Tiller calls it a transfer.',
