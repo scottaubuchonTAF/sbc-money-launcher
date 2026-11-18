@@ -809,6 +809,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .signin .serr{color:var(--signin-err);font-size:13px;max-width:320px;min-height:18px}
 .sessbtn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;font-weight:600;line-height:1;font-family:inherit;padding:13px 26px;border-radius:999px;cursor:pointer;min-height:46px;min-width:240px}   /* v3.115.0: stay signed in */
 .sessbtn:disabled{opacity:.7;cursor:default}
+.lockscr{z-index:120}   /* v3.116.0: the app lock sits over everything, the sign-in screen included */
 
 /* ================= Reports (v3.21) ================= */
 /* ---- v3.59 Reports v2 ---- */
@@ -1419,6 +1420,13 @@ table.w-t tr.total td{border-top:2px solid var(--line);color:var(--ink);font-wei
   <div class="serr" id="signinErr"></div>
   <div class="shint">Sign in with the Google account you set SBC Money up with.<br><a href="start.html" style="color:var(--teal-300)">New here? Get started →</a></div>
 </div>
+<div class="signin lockscr" id="lock" style="display:none" role="dialog" aria-modal="true" aria-label="SBC Money is locked">
+  <img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="">
+  <div class="sname">SBC <span>Money</span></div>
+  <button type="button" class="sessbtn" id="lockBtn">Unlock</button>
+  <div class="serr" id="lockErr"></div>
+  <div class="shint">Locked on this device.<br><a href="#" id="lockOut" style="color:var(--teal-300)">Log out instead</a></div>
+</div>
 <div class="app">
   <aside class="side">
     <div class="brand">
@@ -1876,11 +1884,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.115.0';
+var FE_VERSION = 'v3.116.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.115.0+20261118.1314';
+var BUILD_ID = 'v3.116.0+20261118.1358';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2220,6 +2228,172 @@ function signOutEverywhere(){
     }, function(){ toast('SBC Money could not be reached. Try again.'); });
   });
 }
+/* ============================ app lock: Face ID / fingerprint (v3.116.0) ============================
+   A device now stays signed in for months (v3.115.0), so a person can ask SBC Money to stay locked until the
+   device itself says it is them: Face ID or Touch ID on an iPhone, a fingerprint or the screen lock on Android,
+   Windows Hello on a PC. Off unless turned on, per device, on Settings - Account & privacy.
+   HOW: the browser's passkey API (WebAuthn) with the device's built-in authenticator and "user verification
+   required". Turning it on makes a passkey for this site on this device and keeps its id here (LOCK_KEY).
+   Locked = an opaque screen over the app until the device verifies the person: on opening the app, and after it
+   has been in the background for LOCK_AFTER_MS.
+   WHAT IT IS NOT: a second password. Nothing is sent to or checked by the server; it is this page declining to
+   show itself. It keeps the numbers from someone who picks up an unlocked phone. Someone who removes the app
+   from the device and adds it again starts without the lock (and then needs the Google sign-in).
+   The lock belongs to the person (their email) on this device: it survives Log out, and signing in again as the
+   same person is locked at once - otherwise "Log out instead" would be the way round it. A different person
+   signing in removes it. Off switch: APP_LOCK = false. Where the browser has no passkey API (and in the tests)
+   none of this touches the page. */
+var APP_LOCK = true;
+var LOCK_KEY = 'sbcLock';                  // { id, email, at }: the passkey's id (base64url), whose lock it is, when it was turned on
+var LOCK_AFTER_MS = 5*60*1000;             // in the background this long -> locked again
+var lockCfg_ = null, lockOpen_ = false, lockShown_ = false, lockBusy_ = false, lockHiddenAt_ = 0, lockWired_ = false, lockVisWired_ = false;
+try{ var lk0 = JSON.parse(localStorage.getItem(LOCK_KEY)||'null'); if(lk0 && lk0.id && lk0.email) lockCfg_ = lk0; }catch(e){}
+function lockSupported_(){
+  try{ return !!APP_LOCK && typeof PublicKeyCredential !== 'undefined' && !!(navigator.credentials && navigator.credentials.create && navigator.credentials.get); }
+  catch(e){ return false; }
+}
+/* What this device calls it - for the button and the help line. */
+function lockWord_(){
+  var u = ''; try{ u = String(navigator.userAgent||''); }catch(e){}
+  if(/iPhone|iPad/.test(u)) return 'Face ID';
+  if(/Android/.test(u)) return 'your fingerprint';
+  if(/Windows/.test(u)) return 'Windows Hello';
+  if(/Macintosh|Mac OS X/.test(u)) return 'Touch ID';
+  return 'this device';
+}
+function lockB64_(buf){
+  var a = new Uint8Array(buf), s = '';
+  for(var i=0;i<a.length;i++) s += String.fromCharCode(a[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function lockBytes_(b64){
+  var s = atob(String(b64).replace(/-/g,'+').replace(/_/g,'/')), a = new Uint8Array(s.length);
+  for(var i=0;i<s.length;i++) a[i] = s.charCodeAt(i);
+  return a;
+}
+/* Whose app is open on this device right now ('' = nobody: the sign-in screen has nothing to hide). */
+function lockWho_(){ return String(auth.email || (sessDevice_ && sessDevice_.email) || '').trim().toLowerCase(); }
+function lockOn_(){ return lockSupported_() && !!lockCfg_; }
+function lockApplies_(){ return lockOn_() && !lockOpen_ && lockWho_() !== '' && lockWho_() === String(lockCfg_.email||'').toLowerCase(); }
+function lockSave_(c){
+  lockCfg_ = c || null;
+  try{ if(c) localStorage.setItem(LOCK_KEY, JSON.stringify(c)); else localStorage.removeItem(LOCK_KEY); }catch(e){}
+}
+/* Ask the device to verify the person with the passkey `id`. Resolves true only when the device says it
+   VERIFIED them (the UV bit of the answer), not merely that someone was present. */
+function lockAssert_(id){
+  var ch = new Uint8Array(32); crypto.getRandomValues(ch);
+  return navigator.credentials.get({ publicKey:{ challenge:ch, rpId:location.hostname, timeout:60000, userVerification:'required',
+      allowCredentials:[{ type:'public-key', id:lockBytes_(id) }] } }).then(function(c){
+    var ad = new Uint8Array((c && c.response && c.response.authenticatorData) || 0);
+    if(!(ad.length > 32 && (ad[32] & 0x04))) throw new Error('not verified');
+    return true;
+  });
+}
+function lockInert_(on){ try{ var ap = document.querySelector('.app'); if(ap) ap.inert = !!on; }catch(e){} }
+function lockShow_(){
+  lockShown_ = true;
+  try{
+    var el = $('#lock'), b = $('#lockBtn'), o = $('#lockOut'), er = $('#lockErr');
+    if(!lockWired_){
+      lockWired_ = true;
+      if(b) b.addEventListener('click', function(){ lockTry_(true); });
+      if(o) o.addEventListener('click', function(ev){ try{ ev.preventDefault(); }catch(e){} lockLogOut_(); });
+    }
+    if(b){ b.disabled = false; b.textContent = 'Unlock with ' + lockWord_(); }
+    if(er) er.textContent = '';
+    if(el) el.style.display = 'flex';
+  }catch(e){}
+  lockInert_(true);
+  lockTry_(false);   // straight away, without a tap, where the browser allows it; otherwise the button is there
+}
+function lockHide_(){
+  lockShown_ = false;
+  try{ var el = $('#lock'); if(el) el.style.display = 'none'; }catch(e){}
+  lockInert_(false);
+}
+function lockTry_(tapped){
+  if(lockBusy_ || !lockCfg_) return;
+  lockBusy_ = true;
+  var done = function(){ lockBusy_ = false; };
+  lockAssert_(lockCfg_.id).then(function(){
+    done(); lockOpen_ = true; lockHide_();
+  }, function(){
+    done();
+    // said only after a tap: the first, untapped try is refused by some browsers as a matter of course
+    try{ var er = $('#lockErr'); if(er && tapped) er.textContent = 'Not unlocked. Tap the button to try again.'; }catch(e){}
+  });
+}
+/* "Log out instead": the way out for someone whose device will not verify them. The lock stays for this
+   person on this device, so signing in again as them is locked again. */
+function lockLogOut_(){
+  lockHide_();
+  signOutNow_();
+}
+/* Show the lock when it applies. Called on opening the app, on coming back to the front, and after a sign-in. */
+function lockCheck_(){
+  if(!lockOn_()) return;
+  if(lockApplies_()){ if(!lockShown_) lockShow_(); }
+  else if(lockShown_ && lockWho_() === '') lockHide_();   // logged out underneath it
+}
+/* Watch for the app going to the background and coming back (once; from opening the app, or from turning the lock on). */
+function lockWatch_(){
+  if(lockVisWired_) return;
+  lockVisWired_ = true;
+  try{ document.addEventListener('visibilitychange', lockOnVisibility_); }catch(e){}
+}
+function lockOnVisibility_(){
+  if(!lockOn_()) return;
+  var hidden = false; try{ hidden = document.visibilityState === 'hidden'; }catch(e){}
+  if(hidden){ if(!lockHiddenAt_) lockHiddenAt_ = Date.now(); return; }
+  if(lockHiddenAt_ && (Date.now() - lockHiddenAt_) >= LOCK_AFTER_MS) lockOpen_ = false;
+  lockHiddenAt_ = 0;
+  lockCheck_();
+}
+/* Settings - Account & privacy - Turn on app lock. Makes the passkey, then PROVES it unlocks before anything is
+   saved, so a device that can make a passkey but cannot use it never locks its owner out. */
+function lockTurnOn_(){
+  var email = lockWho_();
+  if(!lockSupported_() || !email){ toast('This browser cannot lock the app.'); return; }
+  var ch = new Uint8Array(32), uid = new Uint8Array(16); crypto.getRandomValues(ch); crypto.getRandomValues(uid);
+  var made = null;
+  navigator.credentials.create({ publicKey:{ challenge:ch, rp:{ name:'SBC Money', id:location.hostname },
+      user:{ id:uid, name:email, displayName:'SBC Money app lock' },
+      pubKeyCredParams:[{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
+      authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged' },
+      timeout:60000, attestation:'none' } }).then(function(c){
+    made = lockB64_(c.rawId);
+    return confirmUi('Almost there. Check that it unlocks: if this check does not pass, the lock is not turned on.', 'Check it');
+  }).then(function(ok){
+    if(!ok) throw new Error('cancelled');
+    return lockAssert_(made);
+  }).then(function(){
+    lockSave_({ id:made, email:email, at:Date.now() });
+    lockOpen_ = true; lockWatch_();
+    toast('App lock is on for this device');
+    if(state.view === 'admin') renderAdmin();
+  }).catch(function(){
+    toast('The lock was not turned on.');
+  });
+}
+function lockTurnOff_(){
+  confirmUi('Turn off the app lock on this device?', 'Turn off').then(function(ok){
+    if(!ok) return;
+    lockSave_(null); lockOpen_ = false;
+    toast('App lock is off for this device');
+    if(state.view === 'admin') renderAdmin();
+  });
+}
+function lockCardHtml_(){
+  var w = lockWord_();
+  if(lockCfg_ && lockWho_() === String(lockCfg_.email||'').toLowerCase()){
+    return '<div class="note" style="padding:0 0 10px"><b>On for this device.</b> SBC Money asks for '+esc(w)+' when you open it, and again after it has been in the background for 5 minutes.</div>'+
+      '<div class="actions"><button class="btn ghost" data-act="lock-off">Turn off app lock</button></div>';
+  }
+  return '<div class="note" style="padding:0 0 10px">Ask for '+esc(w)+' (or this device’s passcode) each time SBC Money is opened on this device. It is set on each device separately and nothing about it leaves the device. '+
+    'It keeps your numbers from someone who picks up your unlocked phone; it is not a second password.</div>'+
+    '<div class="actions"><button class="btn" data-act="lock-on">Turn on app lock</button></div>';
+}
 /* v3.22: surface a GSI load failure — previously the sign-in screen showed no
    button and no error, and ensureAuth() returned a promise that never resolved. */
 function gsiFailed(){
@@ -2277,6 +2451,7 @@ function onCredential(resp){
     var nowE = String(auth.email||'').toLowerCase(), wasE = '';
     // v3.115.0: someone ELSE signed in on this device (Google's own button or One Tap): the earlier person's device key must never bring them back
     if(sessDevice_ && String(sessDevice_.email||'').toLowerCase() !== nowE) sessionForget_();
+    if(lockCfg_ && String(lockCfg_.email||'').toLowerCase() !== nowE) lockSave_(null);   // v3.116.0: the lock was the earlier person's
     try{ wasE = String(localStorage.getItem(LAST_EMAIL_KEY)||'').toLowerCase(); localStorage.setItem(LAST_EMAIL_KEY, nowE); }catch(e0){}
     if(wasE && nowE && wasE !== nowE){ forgetPerson_(); try{ location.reload(); }catch(e1){} return; }
   }catch(e){ return; }
@@ -2286,6 +2461,7 @@ function onCredential(resp){
   authWaiters.splice(0).forEach(function(r){ r(); });
   state._signedOut = false;                  // round 2 (F5)
   if(!state._booted) snapSignedInPaint_();   // v3.113.2 (lane UI-H): the same person's saved Home, after the email check
+  lockCheck_();   // v3.116.0: signed in as the person whose lock is on this device -> locked until the device verifies them
   if(!state._booted) boot(); // v3.28: _booted (not state.boot) — a hydrated cache sets state.boot
 }
 /* v3.115.0 (stay signed in): a device that holds a device key gets its fresh sign-in from the server, silently;
@@ -11000,6 +11176,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.116.0', d:'Nov 18, 2026', items:[
+    'New: app lock. Settings → Account & privacy → Turn on app lock, and SBC Money asks for Face ID (or a fingerprint, or the device passcode) each time you open it on that device, and again after five minutes in the background.',
+    'It is off unless you turn it on, and you turn it on separately on each phone or computer.' ]},
   { v:'v3.115.0', d:'Nov 18, 2026', items:[
     'New: you stay signed in. Sign in with Google once on each phone or computer, and SBC Money keeps that device signed in instead of asking again and again. The first time after this update you will be asked to sign in once more, and Google will ask you to confirm.',
     'A device stays signed in until you log out on it, or it goes 90 days without being used.',
@@ -12909,6 +13088,8 @@ function drawAdmin(){
   if(sessionAvailable_()) h += '<div class="grp"><h3>Signed-in devices</h3><div class="card" style="padding:12px">'+
     '<div class="note" style="padding:0 0 10px">Each phone or computer you sign in on stays signed in until you log out there, or it goes 90 days without being used. Lost one, or signed in somewhere you should not have? Log out of every device at once. This one is logged out too, and the others within the hour.</div>'+
     '<div class="actions"><button class="btn ghost" data-act="logout-all">Log out of every device</button></div></div></div>';
+  /* v3.116.0: app lock (Face ID / fingerprint) - only where the browser can do it */
+  if(lockSupported_()) h += '<div class="grp"><h3>App lock</h3><div class="card" style="padding:12px">'+lockCardHtml_()+'</div></div>';
   /* v3.99.0: the operator access card - loaded after the list so the page never waits on it */
   h += '<div class="grp"><h3>Who has read the database</h3><div id="opacc">'+
     (state.opAccess ? opAccessHtml_(state.opAccess) : '<div class="card"><div class="spin"></div></div>')+'</div></div>';
@@ -14355,6 +14536,7 @@ function renderHowTo(){
     P('Your bank data lives in <b>your</b> Tiller sheet and <b>your</b> companion sheet, in your own Google Drive. Two service accounts have access so the app works: the SBC app account (an editor — it imports your transactions hourly and writes your categorizations back) and a read-only account that feeds the fast view. <b>Scott is on neither sheet, is not on your access list, and nothing in the app shows him your numbers.</b>')+
     P('The honest caveat: Scott runs the server the app uses, so like the operator of any app he <i>could</i> technically query its database. So the app keeps a record: every hour, any database session that is not the app itself — the operator opening the database console, a command line, his own check scripts — is copied, statement by statement, into a log you can read at <b>Settings → Account &amp; privacy</b>, under <b>Who has read the database</b>. Each row is chained to the one before it, so a deleted or edited row shows; the card also says whether the recording is switched on and when it last checked. It cannot tell whose rows a statement returned, so it shows you the statement. The record covers the <b>database only</b>: Scott also holds the password of the SBC app account, which is an editor on your two sheets, and opening a sheet in Google Drive that way is not in it \u2014 the sheet\u2019s own Activity panel in Google Sheets is the record there. If that is not enough, say so — the alternative is running your own copy.')+
     P('<b>Staying signed in.</b> So you are not asked to sign in over and over, the server keeps one <b>sign-in key</b> from Google for each phone or computer you sign in on, locked with a second key that exists only in the server’s settings. That key only says who you are: your email address. It cannot open your Google account, your mail or your Drive. It is in the honest caveat too: with it and the server’s settings, the operator could technically sign in to SBC Money as you. Logging out on a device deletes that device’s key. <b>Log out of every device</b>, on Settings → Account &amp; privacy, deletes all of yours at once and cancels them at Google; use it if a phone is lost. A key also goes when its device has not been used for 90 days.')+
+    P('<b>App lock.</b> On Settings → Account &amp; privacy you can turn on an <b>app lock</b> for a phone or computer. SBC Money then asks for Face ID, a fingerprint or the device’s passcode when it is opened there, and again after five minutes in the background. It is set on each device separately and nothing about it leaves the device. It keeps your numbers from someone holding your unlocked phone. It is not a second password: removing SBC Money from the device and adding it again starts without the lock. Turning it on saves a passkey for sbc.theaubuchonfamily.com with your device’s passwords; it is used only to unlock. If the device will not let you in, <b>Log out instead</b> is on the lock screen.')+
     PL('<b>Settings → Account &amp; privacy</b> is who can sign in to <i>your</i> budget. You are its admin; add a partner\u2019s Google email there and they see exactly what you see. Remove anyone any time. You can leave whenever you like: <b>Delete my account</b> on the same page removes everything of yours from the app, and Tiller keeps your complete history in your own sheet.'), {g:'reference'}),
 
   S('🗺️','Every page, one line each',
@@ -14944,6 +15126,8 @@ document.addEventListener('click', function(ev){
     case 'tiller-link': tillerLinkUsed_(); break;   // Task 2 (L8): the browser follows the link; then it goes (it works once)
     case 'logout': signOut(); break;
     case 'logout-all': signOutEverywhere(); break;   // v3.115.0
+    case 'lock-on': lockTurnOn_(); break;   // v3.116.0
+    case 'lock-off': lockTurnOff_(); break;
     case 'rmtxn-search': removeTxnSearch(); break;
     case 'rmtxn-go': removeTxnGo(arg); break;
     case 'recon-update': reconUpdate(arg); break;
@@ -15306,6 +15490,7 @@ SBC.WEALTH_TABS = WEALTH_TABS; SBC.WEALTH_DEFS = WEALTH_DEFS; SBC.WEALTH_VIEWS =
 SBC.rptSideHtml_ = rptSideHtml_; SBC.wealthInReports_ = wealthInReports_;   // v3.91.0
 SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
+SBC.lockSupported_ = lockSupported_; SBC.lockCheck_ = lockCheck_; SBC.lockCardHtml_ = lockCardHtml_; SBC.lockState_ = function(){ return { cfg:lockCfg_, open:lockOpen_, shown:lockShown_ }; };   // v3.116.0
 SBC.sessionRenew_ = sessionRenew_; SBC.sessionReturn_ = sessionReturn_; SBC.sessionBegin_ = sessionBegin_; SBC.sessionHas_ = sessionHas_; SBC.sessionAvailable_ = sessionAvailable_; SBC.sessionForget_ = sessionForget_; SBC.sessLabel_ = sessLabel_; SBC.ensureAuth = ensureAuth; SBC.sessState_ = function(){ return { device:sessDevice_, fallback:sessFallback_, renewing:!!sessRenewing_, starting:!!sessStarting_ }; };   // v3.115.0
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
 SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
@@ -15317,6 +15502,8 @@ SBC.HOME_CARDS = HOME_CARDS; SBC.HOME_CARDS_SINCE = HOME_CARDS_SINCE; SBC.MORE_V
   // v3.115.0 (stay signed in), FIRST - before Google's script is replayed below, so One Tap is not asked while a
   // sign-in that just came back from Google is being finished: take the one-time code out of the address bar.
   sessionReturn_();
+  // v3.116.0 (app lock), before anything is painted: a locked device shows the lock, not the saved Home
+  if(lockOn_()){ lockCheck_(); lockWatch_(); }
   if(sessionAvailable_()){
     sessButtons_();
     try{ var sb0 = $('#sessBtn'); if(sb0) sb0.addEventListener('click', sessionBegin_); }catch(e){}
