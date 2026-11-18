@@ -1884,11 +1884,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.116.0';
+var FE_VERSION = 'v3.116.1';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.116.0+20261118.1358';
+var BUILD_ID = 'v3.116.1+20261118.1509';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2820,7 +2820,13 @@ function goHistoryReplay_(st){
   try{ go(st.v); } finally { goReplaying_ = false; }
 }
 window.addEventListener('popstate', function(ev){ goHistoryReplay_(ev.state); });
+/* v3.116.1: put the page back at its top (the window scrolls on a phone; .main is asked too in case a layout scrolls there). */
+function pageTop_(){
+  try{ window.scrollTo(0, 0); }catch(e){}
+  try{ var m = document.querySelector('.main'); if(m) m.scrollTop = 0; }catch(e){}
+}
 function go(view){
+  var cameFrom = state.view;   // v3.116.1
   // v3.77.2: arriving on About is a fresh request - clear a previous failure so
   // the page asks again instead of opening straight onto the retry link.
   if(view==='about' && state.verProbe) state.verProbe.failed = false;
@@ -2843,6 +2849,9 @@ function go(view){
          SETTINGS_VIEWS.indexOf(view)!==-1 || MORE_VIEWS.indexOf(view)!==-1)));
   });
   render();
+  // v3.116.1 (Scott, 11/18: "The What's New page doesn't start at the top where the newest releases are"): it opened
+  // wherever Settings had been scrolled to. Arriving on it starts at the top; a redraw while reading does not move it.
+  if(view==='whatsnew' && cameFrom!=='whatsnew') pageTop_();
 }
 
 /* ============================ boot ============================ */
@@ -11176,6 +11185,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.116.1', d:'Nov 18, 2026', items:[
+    'Fixed: What’s new now opens at the top, where the newest release is.' ]},
   { v:'v3.116.0', d:'Nov 18, 2026', items:[
     'New: app lock. Settings → Account & privacy → Turn on app lock, and SBC Money asks for Face ID (or a fingerprint, or the device passcode) each time you open it on that device, and again after five minutes in the background.',
     'It is off unless you turn it on, and you turn it on separately on each phone or computer.' ]},
