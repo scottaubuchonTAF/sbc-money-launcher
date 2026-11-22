@@ -44,7 +44,7 @@
   --fill-600:var(--teal-700); --fill-700:var(--teal-700); --fill-800:var(--teal-800);   /* filled controls: white text 5.5:1 */
   --on-fill:#ffffff; --on-dark:#ffffff;            /* text on a fill / on a surface that is dark in both modes */
   --fill-red:var(--red); --fill-amber:var(--amber);
-  --hero-a:var(--teal-700); --hero-b:var(--teal-600); --hero-c:var(--teal-800); --hero-d:var(--teal-900); --hero-owe:#fde68a;
+  --hero-a:var(--teal-700); --hero-b:var(--teal-600); --hero-c:var(--teal-800); --hero-d:var(--teal-900); --hero-owe:#fde68a; --hero-rule:rgba(255,255,255,.22);
   --nw-a:#059669; --nw-b:#10b981;
   --side-lbl:#8fb5ae; --side-ink:#9fc0bb; --side-ink2:#d7efe9; --side-beta:#d7efe9; --side-foot:#9fc0bb; --signin-err:#fca5a5;
   --skel-a:#e8edf2; --skel-b:#f4f7f9;
@@ -87,7 +87,7 @@
   /* the same in both modes, said out loud: these sit on surfaces that are dark in BOTH modes (the sidebar, the
      sign-in screen, heroes, toasts and tooltips), or are mid tones that read on either (bars, the progress line) */
   --teal-900:#0d3b36; --teal-500:#14b8a6; --teal-300:#5eead4; --teal-400:#2dd4bf;
-  --on-dark:#ffffff; --hero-owe:#fde68a; --side-lbl:#8fb5ae; --side-ink:#9fc0bb; --side-ink2:#d7efe9; --side-beta:#d7efe9;
+  --on-dark:#ffffff; --hero-owe:#fde68a; --hero-rule:rgba(255,255,255,.22); --side-lbl:#8fb5ae; --side-ink:#9fc0bb; --side-ink2:#d7efe9; --side-beta:#d7efe9;
   --side-foot:#9fc0bb; --signin-err:#fca5a5; --tact-ink:#0f172a; --tip-ink2:#e2e8f0; --tip-ink3:#94a3b8;
   --wpill-ok:rgba(94,234,212,.28); --wpill-bad:rgba(254,202,202,.35); --chart-muted:rgba(148,163,184,.45);
 }
@@ -313,6 +313,8 @@ aside.side{display:none}
 .dpl .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dpl .v{flex:none;font-variant-numeric:tabular-nums}
 .dpl .ok{color:var(--teal-600,#0d9488);font-weight:700} .dpl .wait{color:var(--ink-3)}
+.dpl .neg{color:var(--red);font-weight:700}   /* v3.117.0 */
+.hlessbtn{appearance:none;background:none;border:0;color:var(--teal-700);font-weight:700;font-size:13px;font-family:inherit;padding:0;margin-top:6px;min-height:44px;align-self:flex-start;cursor:pointer}
 .bsplan{padding:8px 0;border-top:1px solid var(--line)} .bsplan:first-of-type{border-top:none}
 .dtile .dscroll{overflow:auto;flex:1;min-height:0;margin:0 -18px;padding:0 18px}
 .dkv{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)}
@@ -387,6 +389,30 @@ aside.side{display:none}
      It takes the full row; if that leaves an odd number of tiles, the next one does too, so none sits alone. */
   .hstats .dtile.hero{grid-column:1 / -1}
   .hstats .dtile.hero + .dtile:nth-last-child(odd){grid-column:1 / -1}
+  /* v3.117.0 (Scott, 11/19: "a lot of wasted space on the right of those top 2 chips"; "Inbox and Budget health are
+     probably the 2 most important widgets"). Phone Home:
+       1. Available to fund uses its right side: the breakdown (Cash in accounts / Cards owed / Waiting in your inbox)
+          sits beside the number instead of under it. CSS only, on the same markup. With a 4th row or a note (income
+          held in another envelope) it stays stacked as before - a sentence does not fit beside a number.
+       2. Inbox and Budget health come straight after it, side by side (renderDashNow_ / healthStatTile_).
+     A browser without :has() simply keeps the stacked card. */
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:14px;align-content:center}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dlbl,
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dnum,
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dsub{grid-column:1;min-width:0}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dbrk{grid-column:2;grid-row:1 / span 3;align-self:center;margin:0;border-top:0;border-left:1px solid var(--hero-rule);padding:0 0 0 14px}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dbrk > .r{display:block;text-align:right;line-height:1.3}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dbrk > .r + .r{margin-top:5px}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dbrk > .r .k{display:block;font-size:10.5px;overflow:visible}
+  .hstats .dtile.hero:has(> .dbrk):not(:has(> .dbrk > .n)):not(:has(> .dbrk > .r:nth-child(4))) > .dbrk > .r .v{display:block;font-size:13px}
+  .hstats .dtile.hfull{grid-column:1 / -1}                                   /* Budget health with something to say, or opened */
+  .hstats .dtile[data-id="inbox"]:has(+ .dtile.hfull){grid-column:1 / -1}    /* ...then the Inbox above it takes its own row */
+  .hstats .dtile.hcmp .dpls{margin-top:auto}
+  /* at half width a plan's name was cut to "E…" by its "$870.00 of $4,287.00": the amount drops to its own line when
+     both do not fit (a ✓ still sits beside the name) */
+  .hstats .dtile[data-id="funded"] .dpl{flex-wrap:wrap;row-gap:0}
+  .hstats .dtile[data-id="funded"] .dpl .nm{flex:1 1 auto;min-width:60%}
+  .hstats .dtile[data-id="funded"] .dpl .v{margin-left:auto}
   .hbody{column-count:1}
   .dwlibgrid{grid-template-columns:1fr}
 }
@@ -1884,11 +1910,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.116.1';
+var FE_VERSION = 'v3.117.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.116.1+20261118.1509';
+var BUILD_ID = 'v3.117.0+20261122.1119';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2003,11 +2029,19 @@ function toast(msg, opts){
    the confirmation window. If the write that produced opId hasn't landed on
    the sheet yet, apiUndo on the mirror reverses the mirror's copy and queues
    its own write-back (v3.33), so this is safe seconds after the action. */
-function undoNow_(opId, what){
+/* v3.117.0 (Scott, 11/22/26: "When I undo a transaction from the inbox, it doesn't work" - the message said Undone).
+   Two things were wrong; (2) is the one he saw. (1) The op id a mirror-first save hands back is the database copy's id for it, which the sheet did not know: every
+   Undo on a message answered "Unknown op". The sheet now finds the op by that id (Audit.gs auditOpForKey_). When the
+   save has not reached the sheet yet it says so, and the Undo waits and asks again by itself (UNDO_WAIT_TRIES_ times,
+   UNDO_WAIT_MS_ apart) instead of failing. (2) An approved card is hidden from the Inbox for ten minutes
+   (markPendingApproved), and an undone approval stayed hidden: `keys` are the cards to show again. */
+var UNDO_WAIT_RE_ = /still being saved to your sheet/i, UNDO_WAIT_TRIES_ = 10, UNDO_WAIT_MS_ = 4000;
+function undoNow_(opId, what, keys, tries_){
   if(!opId){ toast('⚠ Nothing to undo — open Settings → History & undo'); return Promise.resolve(); }
-  toast('Undoing'+(what?' '+what:'')+'…');
+  toast(tries_ ? 'Still undoing'+(what?' '+what:'')+'… waiting for the save to reach your sheet' : 'Undoing'+(what?' '+what:'')+'…');
   return run('apiUndo', opId).then(function(){   // v3.109.0: returned, so a caller can wait for the undo
     toast('Undone ✓');
+    (keys||[]).forEach(function(k){ if(k) delete state.pendingApproved[k]; });   // v3.117.0: the card comes back now
     state.ibxMaybe = {};   // Task 10 (R-M1): an undo may bring a card back - an old "maybe" no longer describes it
     try{ localStorage.removeItem(REPL_GONE_KEY); }catch(e){}   // v3.105.0: ...and an undone copy removal
     state.inbox=null; state.history=null; state.rules=null;   // v3.79.0: +rules
@@ -2020,7 +2054,13 @@ function undoNow_(opId, what){
     else if(state.view==='fund') renderFund();
     else if(state.view==='history') renderHistory();
     else if(state.view==='txns') renderTxns(true);   // v3.110.0 (Task 5): a Move / split undone from its toast shows at once
-  }).catch(function(e){ toast('⚠ Undo didn\u2019t save — '+(e.message||e)+' (Settings → History & undo)'); });
+  }).catch(function(e){
+    var msg = String(e && e.message || e);
+    if(UNDO_WAIT_RE_.test(msg) && (tries_||0) < UNDO_WAIT_TRIES_){   // v3.117.0: not in the sheet yet - wait, ask again
+      return new Promise(function(res){ setTimeout(res, UNDO_WAIT_MS_); }).then(function(){ return undoNow_(opId, what, keys, (tries_||0)+1); });
+    }
+    toast('⚠ Undo didn\u2019t save — '+msg+' (Settings → History & undo)');
+  });
 }
 /* v3.69.0 (U7): a failed page load used to replace the page with the error and
    nothing else — the only way out was another tab tap. "Try again" re-runs
@@ -4511,7 +4551,8 @@ var DASH_WIDGETS = {
     var brk=availBreakdown_(d);
     if(sz==='s') return '<div class="dlbl">Available to fund</div><div class="dnum big">'+n+'</div>'+brk;
     if(sz==='m') return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
-      '<div class="dsub">in the income pool · put it to work →</div>'+brk;
+      (homePhone_() ? '<div class="dsub">in the pool · put it to work →</div>'   // v3.117.0: on a phone the breakdown sits beside this line
+      : '<div class="dsub">in the income pool · put it to work →</div>')+brk;
     return '<div class="dlbl">Available to fund</div><div class="dnum">'+n+'</div>'+
       '<div class="dsub">in the income pool · put it to work →</div>'+brk+
       (d?'<div class="dscroll" style="margin-top:8px">'+
@@ -4523,9 +4564,11 @@ var DASH_WIDGETS = {
     var b=d.budget||{source:'targets'};
     var p=dpct_(d.totals.funded,d.totals.target), tp=fundPctText_(d.totals.funded,d.totals.target);
     if(sz==='s') return '<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum big">'+(b.source==='off'?money(d.totals.funded):tp+'%')+'</div><div class="dsub">'+(b.source==='off'?'this month':'of budget')+'</div>';
-    var head='<div class="dlbl">Funded · '+esc(d.monthLabel)+'</div><div class="dnum">'+money(d.totals.funded)+'</div>'+
+    // v3.117.0: beside another tile on a phone (homePair_) the month is "Nov" and the budget amount is left out - the
+    // full line is two lines at half width. Everywhere else, the same words as before.
+    var head='<div class="dlbl">Funded · '+esc(homePair_ ? String(d.monthLabel||'').split(' ')[0].slice(0,3) : d.monthLabel)+'</div><div class="dnum">'+money(d.totals.funded)+'</div>'+
       (b.source==='off' ? '<div class="dsub">this month · no budget set</div>' :
-      '<div class="dbar"><i style="width:'+p+'%"></i></div><div class="dsub">'+fundVsBudgetText_(d.totals.funded,d.totals.target,b.source)+'</div>')+
+      '<div class="dbar"><i style="width:'+p+'%"></i></div><div class="dsub">'+(homePair_ ? fundVsBudgetText_(d.totals.funded,d.totals.target,b.source).replace(' of '+money(d.totals.target)+' ', ' of ') : fundVsBudgetText_(d.totals.funded,d.totals.target,b.source))+'</div>')+
       fundPlanRows_(b);
     if(sz==='m') return head;
     var rows=(d.rows||[]).slice(0,5).map(function(r){var q=dpct_(r.funded,r.target);
@@ -5372,11 +5415,54 @@ function renderDash(){
     renderDashNow_();
   });
 }
+/* ---- v3.117.0: the phone's top of Home ----------------------------------------------------------------------
+   Order: Available to fund (full width) - Inbox | Budget health - Funded | Spent. Only on a phone-width window and
+   never in Customize (there every card is drawn the ordinary way, so it can be found and moved). The desktop page
+   is unchanged. A card the person has hidden stays hidden; the rest keep this order. */
+var homeDrawnPhone_ = null;   // how Home was last drawn (homeResized_ redraws it when the window crosses 900 px)
+var homePair_ = false;   // true while renderDashNow_ draws the phone arrangement (the Funded tile asks)
+function homePhone_(){
+  try{ return !state.homeCustomize && typeof window!=='undefined' && Number(window.innerWidth) > 0 && window.innerWidth < 900; }
+  catch(e){ return false; }
+}
+var HOME_PHONE_ORDER_ = ['avail','inbox','health','funded','spent'];
+function homePhoneStats_(stats){
+  return HOME_PHONE_ORDER_.filter(function(id){ return id==='health' || stats.indexOf(id)!==-1; })
+    .concat(stats.filter(function(id){ return HOME_PHONE_ORDER_.indexOf(id)===-1; }));
+}
+/* Budget health in the top grid. While everything is accounted for (the green pill) it is a small tile: the
+   percentage, the pill's own words, the negative envelopes. A tap opens the whole card in place (the sentence, Show
+   the math, every row) with "Show less" to fold it again. With ANYTHING else to say - money not traced, an account
+   out of step, balances that could not be read, still loading - it is the whole card, full width, and cannot be
+   folded: a problem is never tucked behind a tap. The words come from the card's own small form, so the two agree. */
+function healthStatTile_(){
+  var w = DASH_WIDGETS.health, small = '';
+  try{ small = String(w.render('s') || ''); }catch(e){ small = ''; }
+  var m = /<span class="dokpill">✓ 100%(?: · | )?([^<]*)<\/span>/.exec(small);
+  if(m && !state.healthOpen){
+    var d = state.dash, neg = '';
+    if(d && d.negatives && d.negatives.count)
+      neg = '<div class="dpls"><div class="dpl"><span class="nm">'+d.negatives.count+' negative</span><span class="v neg">'+money(d.negatives.total)+'</span></div></div>';
+    return '<div class="dtile nav hcmp" data-id="health" data-act="health-toggle" aria-expanded="false" aria-label="Budget health: 100%, '+esc(m[1] || 'accounted for')+'. Show the details">'+
+      '<div class="dlbl">Budget health</div><div style="margin-top:7px"><span class="dokpill">✓ 100%</span></div>'+
+      (m[1] ? '<div class="dsub" style="margin-top:7px">'+esc(m[1])+'</div>' : '')+neg+'</div>';
+  }
+  return '<div class="dtile hfull" data-id="health">'+w.render('l')+
+    (m ? '<button type="button" class="hlessbtn" data-act="health-toggle" aria-expanded="true">Show less</button>' : '')+'</div>';
+}
 function renderDashNow_(){
   dashDestroyCharts();
   var st = homeState();
   var stats = HOME_CARDS.filter(function(c){ return c.slot==='stats' && st.visible[c.id] && DASH_WIDGETS[c.id]; }).map(function(c){return c.id;});
   var body  = st.order.filter(function(id){ return st.visible[id] && DASH_WIDGETS[id]; });
+  // v3.117.0: on a phone Budget health sits in the top grid next to the Inbox (and is not drawn again below)
+  homePair_ = false;
+  homeDrawnPhone_ = homePhone_();
+  if(homeDrawnPhone_ && stats.length && st.visible.health && DASH_WIDGETS.health){
+    homePair_ = true;
+    stats = homePhoneStats_(stats);
+    body = body.filter(function(id){ return id!=='health'; });
+  }
   var h='<div class="htop"><span class="sgreet" id="dashGreet"></span><span class="sp"></span>'+
     '<button class="dwbtn'+(state.homeCustomize?' on':'')+'" data-act="home-customize">'+(state.homeCustomize?'Done':'Customize')+'</button></div>';
   h += updateBanner_();          // v3.69.0 (U4) — a stale shell explains every other oddity, so it goes first
@@ -5385,7 +5471,7 @@ function renderDashNow_(){
   h += freezeBanner_();          // v3.55 — above everything; it explains the health card
   h += bdayNudge_();             // v3.102.7 — "Add your birthday?" once, for people who left it blank in the wizard
   h += booksNotices_();          // v3.109.0 — first sign-in "Put your real money on the books" + the 1A.4 tidy-up
-  if(stats.length) h+='<div class="hstats">'+stats.map(tile_).join('')+'</div>';
+  if(stats.length) h+='<div class="hstats">'+stats.map(function(id){ return (homePair_ && id==='health') ? healthStatTile_() : tile_(id); }).join('')+'</div>';
   h+='<div class="hbody">'+body.map(tile_).join('')+'</div>';
   if(!stats.length && !body.length) h+='<div class="dtile" style="align-items:center;color:var(--ink-3)">Everything is hidden — tap Customize to bring cards back.</div>';
   if(state.homeCustomize) h+=homeCustHtml(st);
@@ -5426,7 +5512,13 @@ function fitDnums_(){
 }
 if(typeof window!=='undefined' && window.addEventListener){
   var fitDnumsT_=0;
-  window.addEventListener('resize', function(){ clearTimeout(fitDnumsT_); fitDnumsT_=setTimeout(fitDnums_, 120); });
+  window.addEventListener('resize', function(){ clearTimeout(fitDnumsT_); fitDnumsT_=setTimeout(function(){ if(!homeResized_()) fitDnums_(); }, 120); });
+}
+/* v3.117.0: the phone arrangement is chosen when Home is drawn. A window dragged across 900 px (or a tablet turned)
+   would keep the other arrangement until the next redraw, so Home is drawn again - only then, and only on Home. */
+function homeResized_(){
+  if(state.view!=='dash' || homeDrawnPhone_===null || state.homeCustomize || homePhone_()===homeDrawnPhone_) return false;
+  renderDash(); return true;
 }
 function homeCustHtml(st){
   function row(id, movable){
@@ -7306,8 +7398,8 @@ function afterApprove(cid, key, ruleInfo, rawId){
   return function(r){
     markPendingApproved([key || rawId || cid]); // v3.32: hide from refetches until write-back lands
     var opId = r && r.opId;              // v3.69.0 (U5): one tap undo, right here
-    if(!ruleInfo) toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval'); } } : null);
-    else afterApproveRuleToast_(r, opId, ruleInfo);   // v3.79.0 (screen 5)
+    if(!ruleInfo) toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval', [key || rawId || cid]); } } : null);
+    else afterApproveRuleToast_(r, opId, ruleInfo, [key || rawId || cid]);   // v3.79.0 (screen 5)
     // v3.110.0 (Task 3, M3): on a wide screen the detail moves to the NEXT card (the one below; the one above if it was last)
     var ibxNext = '', ord = inboxOrder_().map(inboxId_), oi = ord.indexOf(cid), nextCid = ord[oi+1] || ord[oi-1] || '';
     if(inboxWide_() && state.ibxCur===cid) ibxNext = nextCid;
@@ -7352,7 +7444,7 @@ function envBalancesRefresh_(){
 /* v3.79.0 (screen 5): a new "Always suggest this" rule says which words it
    matches, and the toast offers Edit rule next to Undo. The rule list is
    stale from here on. */
-function afterApproveRuleToast_(r, opId, ruleInfo){
+function afterApproveRuleToast_(r, opId, ruleInfo, keys){
   state.rules = null;
   /* v3.108.0 (11/10 review, finding 15): the rule is created by Apps Script, in the SHEET, when
      this approve's write-back lands. The Rules page reads the mirror (v3.95.1), and nothing
@@ -7361,7 +7453,7 @@ function afterApproveRuleToast_(r, opId, ruleInfo){
      certainly run, read rules from the sheet. Same answer, same shape (loadRules_). */
   state.rulesFromSheetUntil = Date.now() + 70*60000;
   toast(tillerNote('Approved \u2713 \u00b7 rule \u201c'+ruleInfo.text+'\u201d', r), {
-    label:'Undo', fn: opId ? function(){ undoNow_(opId, 'approval'); } : function(){ toast('\u26a0 Nothing to undo \u2014 open Settings \u2192 History & undo'); },
+    label:'Undo', fn: opId ? function(){ undoNow_(opId, 'approval', keys); } : function(){ toast('\u26a0 Nothing to undo \u2014 open Settings \u2192 History & undo'); },
     also:{ label:'Edit rule', fn:function(){ ruleOpenByText_(ruleInfo.text, ruleInfo.envelopeId); } } });
 }
 function approveErr(e, cid, sent){   // Task 7 (R2-L2): releases THIS card only (it used to clear every card's mark)
@@ -11185,6 +11277,12 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.117.0', d:'Nov 22, 2026', items:[
+    'Home on a phone: Inbox and Budget health are now right under Available to fund, side by side, with Funded and Spent after them.',
+    'Available to fund is shorter on a phone: cash, cards owed and what is waiting in your Inbox sit beside the number.',
+    'While everything is accounted for, Budget health is a small card. Tap it for the details. If something needs you, it shows in full.',
+    'Fixed: Undo on the message after you approve, move, split or fund. If the save is still on its way to your sheet, Undo waits for it.',
+    'Fixed: a transaction you un-approve with Undo comes straight back to the Inbox.' ]},
   { v:'v3.116.1', d:'Nov 18, 2026', items:[
     'Fixed: What’s new now opens at the top, where the newest release is.' ]},
   { v:'v3.116.0', d:'Nov 18, 2026', items:[
@@ -14495,7 +14593,7 @@ function renderHowTo(){
     PL('⚠ <b>A manual account is a balance, not a spending account.</b> It will never have transactions and nothing you spend from it touches an envelope. That\u2019s right for an HSA or a car. It is <i>not</i> the way to track cash in your wallet — for that, keep an envelope and let the money live in the pool.'), {g:'trust'}),
 
   S('📊','Checking on yourself',
-    B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards. Tap <b>Spent this month</b> to see which envelopes the money went to, then tap an envelope to see its transactions.')+
+    B('<b>Home</b> (the Dashboard) — available to fund, Funded, Spent this month, Budget health, Obligations, Goals, recent transactions. Tap <b>Customize</b> at the top to show, hide or reorder the cards. On a phone, <b>Inbox</b> and <b>Budget health</b> sit side by side right under Available to fund; while everything is accounted for Budget health is a small card, and a tap opens the details (<b>Show less</b> folds it). If anything needs your attention it shows in full by itself. Tap <b>Spent this month</b> to see which envelopes the money went to, then tap an envelope to see its transactions.')+
     B('<b>Envelopes</b> — every balance at a glance; negatives in red. Tap one for its full Activity (every movement names the other envelope — tap to jump). With dozens of envelopes, type in the <b>Find an envelope…</b> box at the top. <b>Hide from lists</b> quiets an envelope you never want to see (it stays pickable, leaves the list, and stops counting toward available to fund); <b>Archive</b> is for one that is finished for good.')+
     B('<b>Transactions</b> — everything approved; search by description, filter by account or envelope, tap a row for its choices (move it, split it, tags, a note, or un-approve it), or <b>🏷 Tag many</b> to tag a whole trip at once. The search box finds words in notes too.')+
     B('<b>Reports</b> — pick <b>Weekly / Monthly / Quarterly / Yearly</b> and step through periods with ◀ ▶; every report is scoped to your <b>spending accounts</b> and filters by group, envelope, or tag. Start on <b>Period summary</b>.')+
@@ -15137,6 +15235,7 @@ document.addEventListener('click', function(ev){
     case 'tiller-link': tillerLinkUsed_(); break;   // Task 2 (L8): the browser follows the link; then it goes (it works once)
     case 'logout': signOut(); break;
     case 'logout-all': signOutEverywhere(); break;   // v3.115.0
+    case 'health-toggle': state.healthOpen = !state.healthOpen; renderDash(); break;   // v3.117.0: phone Home - Budget health opens / folds in place
     case 'lock-on': lockTurnOn_(); break;   // v3.116.0
     case 'lock-off': lockTurnOff_(); break;
     case 'rmtxn-search': removeTxnSearch(); break;
@@ -15502,6 +15601,7 @@ SBC.rptSideHtml_ = rptSideHtml_; SBC.wealthInReports_ = wealthInReports_;   // v
 SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
 SBC.lockSupported_ = lockSupported_; SBC.lockCheck_ = lockCheck_; SBC.lockCardHtml_ = lockCardHtml_; SBC.lockState_ = function(){ return { cfg:lockCfg_, open:lockOpen_, shown:lockShown_ }; };   // v3.116.0
+SBC.homeResized_ = homeResized_; SBC.homePhone_ = homePhone_; SBC.homePhoneStats_ = homePhoneStats_; SBC.healthStatTile_ = healthStatTile_;   // v3.117.0
 SBC.sessionRenew_ = sessionRenew_; SBC.sessionReturn_ = sessionReturn_; SBC.sessionBegin_ = sessionBegin_; SBC.sessionHas_ = sessionHas_; SBC.sessionAvailable_ = sessionAvailable_; SBC.sessionForget_ = sessionForget_; SBC.sessLabel_ = sessLabel_; SBC.ensureAuth = ensureAuth; SBC.sessState_ = function(){ return { device:sessDevice_, fallback:sessFallback_, renewing:!!sessRenewing_, starting:!!sessStarting_ }; };   // v3.115.0
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
 SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
