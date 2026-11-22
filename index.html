@@ -58,6 +58,9 @@
   --chart-1:#0d9488; --chart-2:#5eead4; --chart-other:#94a3b8; --chart-fill:rgba(13,148,136,.12); --chart-fill2:rgba(13,148,136,.10);
   --chart-muted:rgba(148,163,184,.45);
   --chart-cat:#0d9488,#d97706,#3b82f6,#e11d48,#8b5cf6,#65a30d;
+  /* v3.118.0: one colour per envelope (or group) where a chart compares them - no red or rose, red means negative or wrong */
+  --env-1:#0d9488; --env-2:#d97706; --env-3:#3b82f6; --env-4:#8b5cf6; --env-5:#65a30d; --env-6:#475569; --env-7:#5eead4; --env-8:#93c5fd;
+  --chart-env:#0d9488,#d97706,#3b82f6,#8b5cf6,#65a30d,#475569,#5eead4,#93c5fd;   /* the same eight, as the list the charts read */
   --chart-seq:#0f766e,#0d9488,#14b8a6,#5eead4,#99f6e4,#ccfbf1,#2dd4bf,#115e59;
   --theme-meta:#0f766e; --chart-text:#666666; --chart-border:rgba(0,0,0,0.1);   /* Chart.js's own defaults, kept for light */
 }
@@ -82,6 +85,8 @@
   --ink-fill:#1e293b;
   --chart-1:#2dd4bf; --chart-2:#0f766e; --chart-other:#64748b; --chart-fill:rgba(45,212,191,.15); --chart-fill2:rgba(45,212,191,.12);
   --chart-cat:#2dd4bf,#fbbf24,#60a5fa,#fb7185,#a78bfa,#a3e635;
+  --env-1:#2dd4bf; --env-2:#fbbf24; --env-3:#60a5fa; --env-4:#a78bfa; --env-5:#a3e635; --env-6:#cbd5e1; --env-7:#0f766e; --env-8:#1d4ed8;
+  --chart-env:#2dd4bf,#fbbf24,#60a5fa,#a78bfa,#a3e635,#cbd5e1,#0f766e,#1d4ed8;
   --chart-seq:#2dd4bf,#14b8a6,#0d9488,#5eead4,#99f6e4,#0f766e,#ccfbf1,#115e59;
   --theme-meta:#0b1220; --chart-text:#94a3b8; --chart-border:#23314a;
   /* the same in both modes, said out loud: these sit on surfaces that are dark in BOTH modes (the sidebar, the
@@ -578,6 +583,7 @@ aside.side{display:none}
 .goalcard .gbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
 .goalcard .gbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
 .goalcard.done .gbar i{background:var(--fill-700)}
+.goalcard.behind .gbar i{background:var(--amber,#d97706)} .goalcard.someday .gbar i{background:var(--ink-3)}   /* v3.118.0 */
 /* v3.76.8 - a CAP is not a goal: the bar fills toward a line you would rather
    not cross, so it is quiet until you do, then amber. Never red - being over a
    max is a nudge, not a problem (the envelope still has the money). */
@@ -890,6 +896,7 @@ h2.viewtitle{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:2px 4px
 .rpthbar .nm{width:128px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rpthbar .trk{flex:1;height:9px;background:var(--line);border-radius:99px;overflow:hidden}
 .rpthbar .trk i{display:block;height:100%;background:var(--teal-500);border-radius:99px}
+.rpthbar .trk i.e1{background:var(--env-1)} .rpthbar .trk i.e2{background:var(--env-2)} .rpthbar .trk i.e3{background:var(--env-3)} .rpthbar .trk i.e4{background:var(--env-4)} .rpthbar .trk i.e5{background:var(--env-5)} .rpthbar .trk i.e6{background:var(--env-6)} .rpthbar .trk i.e7{background:var(--env-7)} .rpthbar .trk i.e8{background:var(--env-8)} .rpthbar .trk i.eo{background:var(--chart-other)}   /* v3.118.0 */
 .rpthbar .amt{width:74px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .rpttxlist{max-height:340px;overflow:auto}
 .rpttx{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
@@ -1910,11 +1917,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.117.0';
+var FE_VERSION = 'v3.118.0';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.117.0+20261122.1119';
+var BUILD_ID = 'v3.118.0+20261122.1247';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -4924,7 +4931,7 @@ var DASH_WIDGETS = {
     init:function(cv,sz){ var ta=(state.dash&&state.dash.topAreas)||[];
       return chartMake_(cv, function(){ return {type:'doughnut',data:{labels:ta.map(function(x){return x.name;}),
         datasets:[{data:ta.map(function(x){return x.spent;}),
-          backgroundColor:chartList_('--chart-seq','#0f766e,#0d9488,#14b8a6,#5eead4,#99f6e4,#ccfbf1,#2dd4bf,#115e59'),borderWidth:0}]},
+          backgroundColor:envCols_(ta.length),borderWidth:0}]},   // v3.118.0: one colour per envelope (was eight shades of teal: chartList_('--chart-seq'))
         options:{maintainAspectRatio:false,animation:false,cutout:'60%',
           plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:11},color:cssVar_('--chart-tick','#94a3b8')}}}}}; });}},
 
@@ -4941,7 +4948,7 @@ var DASH_WIDGETS = {
     init:function(cv,sz){ var ser=state.dashSeries||[]; var data=(sz==='l')?ser:ser.slice(-6);
       return chartMake_(cv, function(){ return {type:'bar',data:{labels:data.map(function(x){return x.label;}),
         datasets:[{label:'Income',data:data.map(function(x){return x.income;}),backgroundColor:cssVar_('--chart-1','#0d9488'),borderRadius:5,categoryPercentage:.6,barPercentage:.85},
-          {label:'Spending',data:data.map(function(x){return x.spend;}),backgroundColor:cssVar_('--chart-2','#5eead4'),borderRadius:5,categoryPercentage:.6,barPercentage:.85}]},
+          {label:'Spending',data:data.map(function(x){return x.spend;}),backgroundColor:chartList_('--chart-cat','#0d9488,#d97706')[1] || cssVar_('--chart-2','#5eead4'),borderRadius:5,categoryPercentage:.6,barPercentage:.85}]},   // v3.118.0: amber, the pair Reports uses (was a second teal)
         options:dAxisOpts(true)}; });}},
 
   accounts:{title:'Accounts',icon:'🏦',nav:'balances',report:'worth',render:function(sz){
@@ -5098,10 +5105,22 @@ function themeMode_(pref){
 }
 function themeLabel_(p){ for(var i=0;i<THEME_OPTS.length;i++) if(THEME_OPTS[i][0]===p) return THEME_OPTS[i][1]; return 'Automatic'; }
 function chartList_(name, fb){ return String(cssVar_(name, fb)).split(',').map(function(x){ return x.trim(); }).filter(Boolean); }
+/* v3.118.0 (Scott, 11/22/26: "It feels weird to me that the entire app is a green gradient. Shouldn't some of the
+   graphs have more color?"). Colour only where it says something: a chart that compares envelopes gives each its own
+   colour, by rank, from --chart-env - the same set on Home's Top spending areas, Reports' Where it goes, a tag's
+   envelopes and the Top envelopes bars, so the biggest is teal on all of them. Past the set, the "other" grey. */
+var RENV = [];
+function envCols_(n){
+  var set = (RENV && RENV.length) ? RENV : chartList_('--chart-env', '#0d9488,#d97706,#3b82f6,#8b5cf6,#65a30d,#475569,#5eead4,#93c5fd');
+  var other = cssVar_('--chart-other', '#94a3b8'), out = [];
+  for(var i=0;i<n;i++) out.push(i<set.length ? set[i] : other);
+  return out;
+}
 function chartPalRefresh_(){
   W_TEAL = RTEAL = cssVar_('--chart-1', '#0d9488');
   W_CAT = chartList_('--chart-cat', '#0d9488,#d97706,#3b82f6,#e11d48,#8b5cf6,#65a30d'); RCAT = W_CAT.slice(0);
   W_OTHER = ROTHER = cssVar_('--chart-other', '#94a3b8');
+  RENV = chartList_('--chart-env', '#0d9488,#d97706,#3b82f6,#8b5cf6,#65a30d,#475569,#5eead4,#93c5fd');   // v3.118.0
   RLINE = cssVar_('--chart-grid', '#e8edf2'); RINK3 = cssVar_('--chart-tick', '#94a3b8'); RINK2 = cssVar_('--ink-2', '#475569');
   // Chart.js's defaults (legend and label text it is not told about) follow the theme too
   try{ if(typeof Chart!=='undefined' && Chart.defaults){ Chart.defaults.color = cssVar_('--chart-text', '#666666'); Chart.defaults.borderColor = cssVar_('--chart-border', 'rgba(0,0,0,0.1)'); } }catch(e){}
@@ -9853,7 +9872,9 @@ function goalCardHtml_(item, compact, nowMs, noNav){
   var bal = Number(item.balanceCents)||0, target = g ? Number(g.amountCents) : 0;
   // Cap-only: no goal to render, so the card is about the ceiling instead.
   if(!g) return goalCapCardHtml_(item, c, compact, noNav);
-  var h = '<div class="goalcard'+(compact?' compact':'')+(c.reached?' done':'')+'"'+
+  // v3.118.0: the bar says the goal's state, as its chip does - teal on track (or reached), amber behind, grey with no date
+  var gst = c.reached ? '' : (c.pastDue || c.pace==='behind') ? ' behind' : (c.pace==='ontrack' ? '' : ' someday');
+  var h = '<div class="goalcard'+(compact?' compact':'')+(c.reached?' done':'')+gst+'"'+
     (noNav ? '' : ' data-act="env-open" data-arg="'+esc(item.envelopeId)+'"')+'>';
   h += '<div class="grow"><span class="gnm">🎯 '+esc(item.name)+(item.hidden?' <span class="dim">· hidden</span>':'')+'</span>'+
     '<span class="gamt">'+money(bal/100)+' <span class="dim">/ '+money(target/100)+'</span></span></div>';
@@ -10544,8 +10565,8 @@ function rptStatTiles(stats, prev){
     (stats.txns!==undefined?'<div class="rptstat"><div class="k">Transactions</div><div class="v">'+stats.txns+'</div></div>':'')+
   '</div>';
 }
-function rptHBar(name, amt, max, col){
-  return '<div class="rpthbar"><span class="nm">'+esc(name)+'</span><span class="trk"><i style="width:'+Math.max(2,Math.round(amt/(max||1)*100))+'%'+(col?';background:'+col:'')+'"></i></span><span class="amt">'+money(amt)+'</span></div>';
+function rptHBar(name, amt, max, col, cls){   // v3.118.0: cls e1..e8 / eo = the envelope's colour by rank (a class, so dark mode follows without a redraw)
+  return '<div class="rpthbar"><span class="nm">'+esc(name)+'</span><span class="trk"><i'+(cls?' class="'+cls+'"':'')+' style="width:'+Math.max(2,Math.round(amt/(max||1)*100))+'%'+(col?';background:'+col:'')+'"></i></span><span class="amt">'+money(amt)+'</span></div>';
 }
 
 /* ---- the seven report bodies ---- */
@@ -10553,7 +10574,7 @@ function rptBodySummary(d){
   var h=rptStatTiles(d.stats, d.compareStats||null);
   var max=(d.topEnvelopes&&d.topEnvelopes[0])?d.topEnvelopes[0].spent:1;
   h+='<div class="rpttwocol"><div class="rptmini"><h4>Top envelopes</h4>'+
-    ((d.topEnvelopes||[]).map(function(e0){ return rptHBar(e0.name, e0.spent, max); }).join('')||'<div class="fnote2">No spending in this period.</div>')+
+    ((d.topEnvelopes||[]).map(function(e0, i){ return rptHBar(e0.name, e0.spent, max, '', i<8 ? 'e'+(i+1) : 'eo'); }).join('')||'<div class="fnote2">No spending in this period.</div>')+
   '</div><div class="rptmini"><h4>Largest transactions</h4>'+
     ((d.largest||[]).map(function(t){
       return '<div class="rpttx"><span class="dt">'+esc(t.date)+'</span><span class="ds">'+esc(t.desc)+
@@ -10674,7 +10695,7 @@ function rptChartBuild_(r, d){
     var other=rest.reduce(function(a,x){return a+x.spent;},0);
     var labs=top.map(function(x){return x.name;}), data3=top.map(function(x){return x.spent;});
     if(other>0){ labs.push('Other ('+rest.length+')'); data3.push(Math.round(other*100)/100); }
-    var cols=labs.map(function(_,i){ return (i<RCAT.length&&i<top.length)?RCAT[i]:ROTHER; });
+    var cols=envCols_(top.length).concat(labs.length>top.length ? [ROTHER] : []);   // v3.118.0: --chart-env (was RCAT, which has a rose)
     if(r.areaView==='donut'){
       return {type:'doughnut',data:{labels:labs,datasets:[{data:data3,backgroundColor:cols,borderColor:cssVar_('--card','#fff'),borderWidth:2}]},
         options:{maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,color:RINK2,font:{size:12}}},
@@ -10694,7 +10715,7 @@ function rptChartBuild_(r, d){
   };
   if(r.id==='tags'&&r.tagDetail&&d.detail) return function(){
     var be=(d.detail.byEnvelope||[]).slice(0,8);
-    var cols5=be.map(function(_,i){return i<RCAT.length?RCAT[i]:ROTHER;});
+    var cols5=envCols_(be.length);   // v3.118.0
     return {type:'doughnut',data:{labels:be.map(function(x){return x.name;}),datasets:[{data:be.map(function(x){return x.spent;}),backgroundColor:cols5,borderColor:cssVar_('--card','#fff'),borderWidth:2}]},
       options:{maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:12,color:RINK2,font:{size:12}}},
         tooltip:{callbacks:{label:function(c){ return ' '+c.label+': '+money(c.parsed); }}}}}};
@@ -11277,6 +11298,11 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.0', d:'Nov 22, 2026', items:[
+    'More colour where it tells you something. Charts that compare envelopes give each one its own colour: Top spending areas on Home, and Where it goes and Top envelopes in Reports. The biggest is the same colour on all of them.',
+    'A goal\u2019s bar shows how it is doing: teal when on track, amber when behind, grey when it has no date.',
+    'Income vs spending on Home is teal and amber, the same as in Reports.',
+    'Red still means only one thing: negative, or something to look at.' ]},
   { v:'v3.117.0', d:'Nov 22, 2026', items:[
     'Home on a phone: Inbox and Budget health are now right under Available to fund, side by side, with Funded and Spent after them.',
     'Available to fund is shorter on a phone: cash, cards owed and what is waiting in your Inbox sit beside the number.',
@@ -15601,7 +15627,7 @@ SBC.rptSideHtml_ = rptSideHtml_; SBC.wealthInReports_ = wealthInReports_;   // v
 SBC.wealthHelpHtml_ = wealthHelpHtml_; SBC.wealthDef_ = wealthDef_; SBC.wealthRouteFromHash_ = wealthRouteFromHash_; SBC.wealthSheetRead_ = wealthSheetRead_; SBC.wealthTab_ = wealthTab_; SBC.goPushHistory_ = SBC.goPushHistory_ || goPushHistory_;
 SBC.state_ = function(){ return state; };
 SBC.lockSupported_ = lockSupported_; SBC.lockCheck_ = lockCheck_; SBC.lockCardHtml_ = lockCardHtml_; SBC.lockState_ = function(){ return { cfg:lockCfg_, open:lockOpen_, shown:lockShown_ }; };   // v3.116.0
-SBC.homeResized_ = homeResized_; SBC.homePhone_ = homePhone_; SBC.homePhoneStats_ = homePhoneStats_; SBC.healthStatTile_ = healthStatTile_;   // v3.117.0
+SBC.envCols_ = envCols_; SBC.homeResized_ = homeResized_; SBC.homePhone_ = homePhone_; SBC.homePhoneStats_ = homePhoneStats_; SBC.healthStatTile_ = healthStatTile_;   // v3.117.0
 SBC.sessionRenew_ = sessionRenew_; SBC.sessionReturn_ = sessionReturn_; SBC.sessionBegin_ = sessionBegin_; SBC.sessionHas_ = sessionHas_; SBC.sessionAvailable_ = sessionAvailable_; SBC.sessionForget_ = sessionForget_; SBC.sessLabel_ = sessLabel_; SBC.ensureAuth = ensureAuth; SBC.sessState_ = function(){ return { device:sessDevice_, fallback:sessFallback_, renewing:!!sessRenewing_, starting:!!sessStarting_ }; };   // v3.115.0
 SBC.drawRules = drawRules; SBC.rulePreviewHtml_ = rulePreviewHtml_; SBC.ruleEditWarnHtml_ = ruleEditWarnHtml_;
 SBC.ruleBusyHtml_ = ruleBusyHtml_; SBC.ruleMove_ = ruleMove_;   // v3.79.2
