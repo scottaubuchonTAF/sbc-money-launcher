@@ -1921,11 +1921,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.6';
+var FE_VERSION = 'v3.118.7';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.6+20261123.1245';
+var BUILD_ID = 'v3.118.7+20261123.1439';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -11364,6 +11364,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.7', d:'Nov 23, 2026', items:[
+    'Fixed: a card you have just paid no longer shows last month\u2019s statement as due next month. Each statement keeps its own due date, and what you have paid since it closed comes off.',
+    'Between a card\u2019s due date and its next closing date, nothing is shown as due. The new amount appears when the next statement closes.' ]},
   { v:'v3.118.5', d:'Nov 23, 2026', items:[
     'Undo tells you what it is doing. The message stays up with a spinner until it is finished, and says so if it is taking a while.',
     'When you undo an approval, the card is back in the Inbox at once, marked \u201cPutting it back\u2026\u201d until it is done.' ]},
