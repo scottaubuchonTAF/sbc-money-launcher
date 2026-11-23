@@ -1709,6 +1709,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
   apiMirrorAccountHide:1, // v3.107.0: the Accounts page's Hide wrote Tiller's Accounts tab; carry that flag into the mirror now
+  apiTags:1,            // v3.118.3: the tag list from the mirror (database plan Stage 1; parity OK for all 4 people 11/23). Tag saves are mirror-first, so NOT in MIRROR_REFRESH_ONE: nothing to re-read from the sheet
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
   apiTillerStart:1, apiTillerConfirm:1, apiTillerStatus:1, apiTillerRefresh:1, apiTillerDisconnect:1, // v3.111.0: Connect Tiller (also MIRROR_ONLY: no Apps Script fallback, no strike; never MUTATING)
@@ -1917,11 +1918,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.2';
+var FE_VERSION = 'v3.118.3';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.2+20261122.1629';
+var BUILD_ID = 'v3.118.3+20261123.1048';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -11298,6 +11299,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.3', d:'Nov 23, 2026', items:[
+    'The tag list opens faster, and a tag you just added is in it right away.',
+    'Undo tapped straight after approving is more reliable.' ]},
   { v:'v3.118.0', d:'Nov 22, 2026', items:[
     'More colour where it tells you something. Charts that compare envelopes give each one its own colour: Top spending areas on Home, and Where it goes and Top envelopes in Reports. The biggest is the same colour on all of them.',
     'A goal\u2019s bar shows how it is doing: teal when on track, amber when behind, grey when it has no date.',
