@@ -1918,11 +1918,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.3';
+var FE_VERSION = 'v3.118.4';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.3+20261123.1048';
+var BUILD_ID = 'v3.118.4+20261123.1125';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2049,7 +2049,13 @@ function undoNow_(opId, what, keys, tries_){
   toast(tries_ ? 'Still undoing'+(what?' '+what:'')+'… waiting for the save to reach your sheet' : 'Undoing'+(what?' '+what:'')+'…');
   return run('apiUndo', opId).then(function(){   // v3.109.0: returned, so a caller can wait for the undo
     toast('Undone ✓');
-    (keys||[]).forEach(function(k){ if(k) delete state.pendingApproved[k]; });   // v3.117.0: the card comes back now
+    /* v3.117.0: the card comes back now. v3.118.4 (Scott, 11/23/26: "it put a 1 in the inbox but there is nothing
+       there"): the undo of a just-made approval runs in the SHEET; the database copy's Inbox learns of it only
+       when it next re-reads that tab, and the list is asked for at the same moment as the count - so the count
+       said 1 and the list came back empty. A CARD handed in here is put back in the list at once
+       (markPendingUnapproved - the same overlay Un-approve on Transactions has used since v3.33.1) and is
+       dropped as soon as a real read carries it. A plain key only un-hides. */
+    (keys||[]).forEach(function(k){ if(!k) return; if(typeof k==='object') markPendingUnapproved(k); else delete state.pendingApproved[k]; });
     state.ibxMaybe = {};   // Task 10 (R-M1): an undo may bring a card back - an old "maybe" no longer describes it
     try{ localStorage.removeItem(REPL_GONE_KEY); }catch(e){}   // v3.105.0: ...and an undone copy removal
     state.inbox=null; state.history=null; state.rules=null;   // v3.79.0: +rules
@@ -7418,8 +7424,11 @@ function afterApprove(cid, key, ruleInfo, rawId){
   return function(r){
     markPendingApproved([key || rawId || cid]); // v3.32: hide from refetches until write-back lands
     var opId = r && r.opId;              // v3.69.0 (U5): one tap undo, right here
-    if(!ruleInfo) toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval', [key || rawId || cid]); } } : null);
-    else afterApproveRuleToast_(r, opId, ruleInfo, [key || rawId || cid]);   // v3.79.0 (screen 5)
+    // v3.118.4: the card itself, kept for Undo (it is about to leave state.inbox) - see undoNow_
+    var undoCard = null; try{ undoCard = (state.inbox||[]).filter(function(x){ return inboxId_(x)===cid; })[0] || null; }catch(e){ undoCard = null; }
+    var undoKeys = [key || rawId || cid, undoCard];
+    if(!ruleInfo) toast(tillerNote('Approved ✓', r), opId ? { label:'Undo', fn:function(){ undoNow_(opId, 'approval', undoKeys); } } : null);
+    else afterApproveRuleToast_(r, opId, ruleInfo, undoKeys);   // v3.79.0 (screen 5)
     // v3.110.0 (Task 3, M3): on a wide screen the detail moves to the NEXT card (the one below; the one above if it was last)
     var ibxNext = '', ord = inboxOrder_().map(inboxId_), oi = ord.indexOf(cid), nextCid = ord[oi+1] || ord[oi-1] || '';
     if(inboxWide_() && state.ibxCur===cid) ibxNext = nextCid;
@@ -11299,6 +11308,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.4', d:'Nov 23, 2026', items:[
+    'Fixed: after Undo on an approval, the card is back in the Inbox list straight away. The Inbox could show a count of 1 with nothing in the list.' ]},
   { v:'v3.118.3', d:'Nov 23, 2026', items:[
     'The tag list opens faster, and a tag you just added is in it right away.',
     'Undo tapped straight after approving is more reliable.' ]},
