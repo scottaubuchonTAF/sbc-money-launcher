@@ -815,6 +815,9 @@ input.amt:focus,select.amt:focus{outline:none;border-color:var(--teal-500)}
   pointer-events:none;max-width:90vw;
 }
 .toast.show{opacity:1;pointer-events:auto;cursor:pointer} /* v3.68.0 U6: tap to dismiss */
+/* v3.118.5: a message for something still going on - it stays until the next message replaces it, with a spinner */
+.toast.busy{cursor:default} .toast.busy::before{content:'';display:inline-block;width:13px;height:13px;margin-right:9px;vertical-align:-2px;border:2px solid var(--on-dark);border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.toast.busy::before{animation:none}}
 .toast:has(.tact){display:flex;align-items:center;gap:12px;text-align:left;width:max-content;max-width:min(90vw,420px)} /* v3.69.0 U5: message + button side by side */
 .toast .tact{flex:none;margin-left:2px;padding:6px 12px;min-height:32px;border:none;border-radius:8px;background:var(--teal-400,#2dd4bf);color:var(--tact-ink);font:inherit;font-weight:800;cursor:pointer} /* v3.69.0 U5: action on the toast */
 @media(min-width:900px){.toast{bottom:32px}}
@@ -1918,11 +1921,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.4';
+var FE_VERSION = 'v3.118.5';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.4+20261123.1125';
+var BUILD_ID = 'v3.118.5+20261123.1146';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -2020,6 +2023,12 @@ function plainMsg_(m){
 function toast(msg, opts){
   msg = plainMsg_(msg);   // Task 7: never a raw transaction key
   var t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  /* v3.118.5 (Scott, 11/23/26, of an Undo that took a while: "I wasn't sure what was happening"): {hold:true} is a
+     message for work still going on. It shows a spinner, does not time out and a tap does not dismiss it; the
+     next toast() replaces it. Whoever shows one must show another when the work ends. */
+  var hold = !!(opts && opts.hold);
+  t.classList.toggle('busy', hold);
+  if(hold){ clearTimeout(t._h); t.onclick = null; return; }
   var ms = toastMs(msg);
   var act = opts && typeof opts.fn==='function' ? opts : null;
   if(act){
@@ -2044,10 +2053,52 @@ function toast(msg, opts){
    UNDO_WAIT_MS_ apart) instead of failing. (2) An approved card is hidden from the Inbox for ten minutes
    (markPendingApproved), and an undone approval stayed hidden: `keys` are the cards to show again. */
 var UNDO_WAIT_RE_ = /still being saved to your sheet/i, UNDO_WAIT_TRIES_ = 10, UNDO_WAIT_MS_ = 4000;
+/* v3.118.5 (Scott, 11/23/26: "it worked that time - it just took a long time and I wasn't sure what was
+   happening"). An Undo on a message is done in the sheet, behind whatever save is still going: several seconds,
+   sometimes many. Now it says so the whole time:
+     - the message stays, with a spinner, until the Undo ends (toast {hold:true}); after UNDO_SLOW_MS_ it says
+       it is still working;
+     - for an approval, the card is back in the Inbox AT ONCE, marked "Putting it back…" and switched off until
+       the Undo ends (undoShow_). If the Undo fails the card leaves again and the message says why. */
+var UNDO_SLOW_MS_ = 7000, undoSlowT_ = 0;
+function undoSay_(what, slow){
+  toast((slow ? 'Still undoing' : 'Undoing')+(what?' '+what:'')+(slow ? '… your sheet is being updated. It can take up to half a minute.' : '… this takes a few seconds'), { hold:true });
+}
+function undoCards_(keys){ return (keys||[]).filter(function(k){ return k && typeof k==='object'; }); }
+/* on = the Undo has started: show each card now, switched off. off + ok = it worked (the mark goes; the overlay
+   and the next read keep the card). off + !ok = it failed: the card leaves the list again, still approved. */
+function undoShow_(keys, on, ok){
+  var cards = undoCards_(keys); if(!cards.length) return;
+  state.ibxUndoing = state.ibxUndoing || {};
+  cards.forEach(function(c){
+    var cid = inboxId_(c), k = pendingKeyOf(c);
+    if(on){
+      if(state.ibxUndoing[cid]) return;
+      state.ibxUndoing[cid] = true;
+      if(Array.isArray(state.inbox) && !state.inbox.some(function(x){ return inboxId_(x)===cid; })){ state.inbox.unshift(c); bumpInboxCount_(1); }
+    } else {
+      if(!state.ibxUndoing[cid]) return;
+      delete state.ibxUndoing[cid];
+      if(!ok){
+        if(k){ delete state.pendingUnapproved[k]; state.pendingApproved[k] = Date.now(); }
+        if(Array.isArray(state.inbox)){ var n0 = state.inbox.length; state.inbox = state.inbox.filter(function(x){ return inboxId_(x)!==cid; }); if(state.inbox.length < n0) bumpInboxCount_(-1); }
+      }
+    }
+  });
+  try{ updateBadges(inboxCountEff_()); }catch(e){}
+  if(state.view==='inbox' && Array.isArray(state.inbox)){ try{ drawInbox(); }catch(e){} }
+}
 function undoNow_(opId, what, keys, tries_){
   if(!opId){ toast('⚠ Nothing to undo — open Settings → History & undo'); return Promise.resolve(); }
-  toast(tries_ ? 'Still undoing'+(what?' '+what:'')+'… waiting for the save to reach your sheet' : 'Undoing'+(what?' '+what:'')+'…');
+  if(tries_) toast('Still undoing'+(what?' '+what:'')+'… waiting for the save to reach your sheet', { hold:true });
+  else {
+    undoSay_(what, false);
+    clearTimeout(undoSlowT_); undoSlowT_ = setTimeout(function(){ undoSay_(what, true); }, UNDO_SLOW_MS_);
+    undoShow_(keys, true);
+  }
   return run('apiUndo', opId).then(function(){   // v3.109.0: returned, so a caller can wait for the undo
+    clearTimeout(undoSlowT_);
+    undoShow_(keys, false, true);
     toast('Undone ✓');
     /* v3.117.0: the card comes back now. v3.118.4 (Scott, 11/23/26: "it put a 1 in the inbox but there is nothing
        there"): the undo of a just-made approval runs in the SHEET; the database copy's Inbox learns of it only
@@ -2071,8 +2122,11 @@ function undoNow_(opId, what, keys, tries_){
   }).catch(function(e){
     var msg = String(e && e.message || e);
     if(UNDO_WAIT_RE_.test(msg) && (tries_||0) < UNDO_WAIT_TRIES_){   // v3.117.0: not in the sheet yet - wait, ask again
+      clearTimeout(undoSlowT_);   // the "waiting for the save" message stays up meanwhile
       return new Promise(function(res){ setTimeout(res, UNDO_WAIT_MS_); }).then(function(){ return undoNow_(opId, what, keys, (tries_||0)+1); });
     }
+    clearTimeout(undoSlowT_);
+    undoShow_(keys, false, false);   // v3.118.5: the card that was shown early leaves again - it is still approved
     toast('⚠ Undo didn\u2019t save — '+msg+' (Settings → History & undo)');
   });
 }
@@ -6279,6 +6333,8 @@ function inboxGoHtml_(t, hint){
   /* v3.110.0 (Task 3, L5): while an approve is in flight every envelope button stays off, and the tapped one keeps
      saying "Approving…", even if the Inbox is drawn again meanwhile (a background refresh). */
   var mine = !!(state.ibxBusy && state.ibxBusy[cid]);
+  // v3.118.5: a card on its way back from an Undo - shown, and nothing on it can be tapped until the Undo ends
+  if(state.ibxUndoing && state.ibxUndoing[cid]) return '<button class="go ghost" disabled aria-label="Putting this transaction back in your Inbox"><span class="gn">Putting it back…</span></button>';
   if(nm) return '<button class="go'+(replCopyOf_(t.txnId)?' ghost':'')+'"'+(ibxCardBusy_(cid)?' disabled':'')+' data-act="approve" data-arg="'+esc(cid)+'" '+
     'aria-label="Approve into '+esc(nm)+(hTag?', a hidden envelope':'')+'"><span class="gn">'+(mine ? 'Approving…' : '✓ '+esc(nm)+hTag)+'</span>'+(hint && !mine?'<small>tap to approve</small>':'')+'</button>';
   /* v3.108.0 - a suggestion LEARNED from your own approvals of this store. Weaker than a rule, so one tap PICKS it
@@ -6365,8 +6421,8 @@ function ruleWhyInline_(t){
   return ' · <span class="rwhyi">Suggested by rule <b>'+esc(ruleLabel_(r))+'</b> '+
     '<button class="rlink" data-act="rule-open-from" data-arg="'+esc(r.ruleId)+'">edit ›</button></span>';
 }
-function ibxBusyAny_(){ return busyHeld_('inbox') || Object.keys(state.ibxBusy||{}).length > 0; }   // Approve all is off while anything is on its way
-function ibxCardBusy_(cid){ return busyHeld_('inbox') || !!(state.ibxBusy && state.ibxBusy[cid]); }   // Task 7 (R2-L2): a card's own buttons
+function ibxBusyAny_(){ return busyHeld_('inbox') || Object.keys(state.ibxBusy||{}).length > 0 || Object.keys(state.ibxUndoing||{}).length > 0; }   // Approve all is off while anything is on its way
+function ibxCardBusy_(cid){ return busyHeld_('inbox') || !!(state.ibxBusy && state.ibxBusy[cid]) || !!(state.ibxUndoing && state.ibxUndoing[cid]); }   // Task 7 (R2-L2): a card's own buttons
 /* v3.110.0 (Task 8, reviewer F-H1) - ONE SEND PER TRANSACTION. While a transaction has a send on its way - Inbox: its
    approve or approve split, an Approve all, a Remove copies; Transactions: its Move, Save split, Un-approve or a
    start-date answer - nothing anywhere can start another send for it or change its choices: every sender checks first
@@ -11308,6 +11364,9 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.5', d:'Nov 23, 2026', items:[
+    'Undo tells you what it is doing. The message stays up with a spinner until it is finished, and says so if it is taking a while.',
+    'When you undo an approval, the card is back in the Inbox at once, marked \u201cPutting it back\u2026\u201d until it is done.' ]},
   { v:'v3.118.4', d:'Nov 23, 2026', items:[
     'Fixed: after Undo on an approval, the card is back in the Inbox list straight away. The Inbox could show a count of 1 with nothing in the list.' ]},
   { v:'v3.118.3', d:'Nov 23, 2026', items:[
