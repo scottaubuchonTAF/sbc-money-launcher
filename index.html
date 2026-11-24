@@ -583,7 +583,7 @@ aside.side{display:none}
 .goalcard .gbar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
 .goalcard .gbar i{display:block;height:100%;border-radius:99px;background:var(--teal-500)}
 .goalcard.done .gbar i{background:var(--fill-700)}
-.goalcard.behind .gbar i{background:var(--amber,#d97706)} .goalcard.someday .gbar i{background:var(--ink-3)}   /* v3.118.0 */
+.goalcard.behind .gbar i{background:var(--amber,#d97706)} .goalcard.someday .gbar i{background:var(--ink-3)} .goalcard.pastdue .gbar i{background:var(--red)}   /* v3.118.0 */
 /* v3.76.8 - a CAP is not a goal: the bar fills toward a line you would rather
    not cross, so it is quiet until you do, then amber. Never red - being over a
    max is a nudge, not a problem (the envelope still has the money). */
@@ -593,7 +593,7 @@ aside.side{display:none}
 .goalcard .gnote{font-size:12.5px;color:var(--ink-2);margin-top:6px}
 .goalcard .gact{margin-top:8px}
 .gchip{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:var(--line);color:var(--ink-2);white-space:nowrap}
-.gchip.ok{background:var(--teal-50);color:var(--teal-700)} .gchip.bad{background:var(--red-bg);color:var(--red)}
+.gchip.ok{background:var(--teal-50);color:var(--teal-700)} .gchip.bad{background:var(--red-bg);color:var(--red)} .gchip.warn{background:var(--amber-soft);color:var(--amber-ink)}
 .gbadge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:var(--teal-50);color:var(--teal-700);white-space:nowrap;margin-left:6px;border:none;font:inherit;font-size:11px;font-weight:700}
 .gbadge.done{background:var(--fill-600);color:var(--on-fill)}
 .gbadge.over{background:var(--amber-bg,#fff4e0);color:var(--amber,#b26a00);cursor:pointer}
@@ -1921,11 +1921,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.9';
+var FE_VERSION = 'v3.118.10';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.9+20261124.1150';
+var BUILD_ID = 'v3.118.10+20261124.1256';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -9909,7 +9909,7 @@ function goalPaceChip_(c, item){
   if(!item.goal) return '';
   if(c.pace==='reached') return '<span class="gchip ok">Reached ✓</span>';
   if(c.pastDue) return '<span class="gchip bad">Behind · was due '+esc(goalFmtDay_(item.goal.date))+'</span>';
-  if(c.pace==='behind') return '<span class="gchip bad">Behind</span>';
+  if(c.pace==='behind') return '<span class="gchip warn">Behind</span>';   // v3.118.10: amber like its bar (Scott 11/24); past due stays red
   if(c.pace==='ontrack') return '<span class="gchip ok">On track</span>';
   return '<span class="gchip">Someday</span>';
 }
@@ -9939,7 +9939,7 @@ function goalCardHtml_(item, compact, nowMs, noNav){
   // Cap-only: no goal to render, so the card is about the ceiling instead.
   if(!g) return goalCapCardHtml_(item, c, compact, noNav);
   // v3.118.0: the bar says the goal's state, as its chip does - teal on track (or reached), amber behind, grey with no date
-  var gst = c.reached ? '' : (c.pastDue || c.pace==='behind') ? ' behind' : (c.pace==='ontrack' ? '' : ' someday');
+  var gst = c.reached ? '' : c.pastDue ? ' behind pastdue' : (c.pace==='behind') ? ' behind' : (c.pace==='ontrack' ? '' : ' someday');
   var h = '<div class="goalcard'+(compact?' compact':'')+(c.reached?' done':'')+gst+'"'+
     (noNav ? '' : ' data-act="env-open" data-arg="'+esc(item.envelopeId)+'"')+'>';
   h += '<div class="grow"><span class="gnm">🎯 '+esc(item.name)+(item.hidden?' <span class="dim">· hidden</span>':'')+'</span>'+
@@ -11364,6 +11364,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.10', d:'Nov 24, 2026', items:[
+    'A goal that is behind has an amber chip, the same as its bar. Red is kept for a goal that is past its date.' ]},
   { v:'v3.118.9', d:'Nov 24, 2026', items:[
     'Behind the scenes: the hourly copy of your sheets now handles the history log separately, so the rest finishes even when that part is slow.' ]},
   { v:'v3.118.8', d:'Nov 23, 2026', items:[
