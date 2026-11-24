@@ -1712,6 +1712,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
   apiMirrorAccountHide:1, // v3.107.0: the Accounts page's Hide wrote Tiller's Accounts tab; carry that flag into the mirror now
+  apiHistory:1,         // v3.118.12: History + Sign-ins & activity from the database (Stage 1; parity 11/24: every row the copy had was the same). Each open first copies the newest Audit Log rows into it (the server does it, no dirty flag needed), so NOT in MIRROR_REFRESH_ONE. Undo is unchanged (apiUndo)
   apiTags:1,            // v3.118.3: the tag list from the mirror (database plan Stage 1; parity OK for all 4 people 11/23). Tag saves are mirror-first, so NOT in MIRROR_REFRESH_ONE: nothing to re-read from the sheet
   apiRules:1,           // v3.95.1: the Rules page from the mirror (parity OK for all 3 people 10/8; its writes are Apps-Script-only -> MIRROR_REFRESH_ONE)
   apiOperatorAccess:1,  // v3.99.0: the Access page's operator-access card (mirror-only; the audit tables exist only there)
@@ -1921,11 +1922,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.11';
+var FE_VERSION = 'v3.118.12';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.11+20261124.1458';
+var BUILD_ID = 'v3.118.12+20261124.1623';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -11364,6 +11365,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.12', d:'Nov 24, 2026', items:[
+    'History opens faster, and a change you just made is at the top straight away, including the hourly bank import and an Undo you just did.' ]},
   { v:'v3.118.10', d:'Nov 24, 2026', items:[
     'A goal that is behind has an amber chip, the same as its bar. Red is kept for a goal that is past its date.' ]},
   { v:'v3.118.9', d:'Nov 24, 2026', items:[
