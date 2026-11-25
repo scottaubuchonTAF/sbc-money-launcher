@@ -1688,7 +1688,7 @@ function withMirrorRefresh_(fn, args){
    serve the pre-refresh numbers again and undo the button in front of the user.
    Short window on purpose: long enough to cover the session you pressed it in,
    not so long that Balances permanently gives up the mirror's speed. */
-var MIRROR_BYPASS_FNS = { apiBalances:1 };
+var MIRROR_BYPASS_FNS = { apiBalances:1, apiReconcile:1 };   // v3.118.17: + the Reconcile list (it IS apiBalances plus Inbox counts) - after Update balance / Refresh from Tiller the database's balances are up to an hour old
 var TILLER_BAL_FRESH_KEY = 'sbcTillerBalFresh', TILLER_BAL_FRESH_TTL = 15*60*1000;
 function markTillerBalFresh_(){ try{ localStorage.setItem(TILLER_BAL_FRESH_KEY, String(Date.now())); }catch(e){} }
 function tillerBalFresh_(){
@@ -1712,6 +1712,7 @@ var SUPA_READS = { apiRegister:1, apiReport:1, apiDashboard:1, apiDashSeries:1, 
   apiPushClear:1,       // v3.94.0: the Inbox reached zero here - clear the other devices (same rule)
   apiRefreshSettings:1, // v3.93.4: re-read the Settings tab into the mirror after an Apps-Script settings write
   apiMirrorAccountHide:1, // v3.107.0: the Accounts page's Hide wrote Tiller's Accounts tab; carry that flag into the mirror now
+  apiReconcile:1,       // v3.118.17: the Reconcile page's account list from the database (Stage 1; parity OK for all 4 people 11/25 after v3.118.16). For 15 min after Update balance / Refresh from Tiller it goes to Apps Script (MIRROR_BYPASS_FNS), as Balances does. The feed check on that page stays on Apps Script for now
   apiObligations:1,     // v3.118.14: the Obligations page's list from the database (Stage 1; parity OK for all 4 people 11/25). The server re-reads the tab on every open (its saves are Apps-Script-only), so NOT in MIRROR_REFRESH_ONE. The pickers and Check now stay on Apps Script
   apiHistory:1,         // v3.118.12: History + Sign-ins & activity from the database (Stage 1; parity 11/24: every row the copy had was the same). Each open first copies the newest Audit Log rows into it (the server does it, no dirty flag needed), so NOT in MIRROR_REFRESH_ONE. Undo is unchanged (apiUndo)
   apiTags:1,            // v3.118.3: the tag list from the mirror (database plan Stage 1; parity OK for all 4 people 11/23). Tag saves are mirror-first, so NOT in MIRROR_REFRESH_ONE: nothing to re-read from the sheet
@@ -1923,11 +1924,11 @@ function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)
    CFG.APP_VERSION (server). About shows both; a mismatch means one side of
    the two-sided deploy didn't take. */
 var OPERATOR_EMAIL_ = 'sbc-money-support@theaubuchonfamily.com';   // v3.102.7: where the app says to write (same as start.html / privacy.html)
-var FE_VERSION = 'v3.118.16';
+var FE_VERSION = 'v3.118.17';
 // v3.78.7: FE_VERSION + a build stamp. Both are written from the VERSION file by
 // deploy/set-version.mjs (release.ps1 runs it with --release) - never hand-edit.
 // About prints it; sw.js carries the same value and names its cache after it.
-var BUILD_ID = 'v3.118.16+20261125.1723';
+var BUILD_ID = 'v3.118.17+20261125.1737';
 /* v3.22: also escape quotes — esc() output is used inside double-quoted HTML
    attributes everywhere (value="…", data-arg="…"), so a `"` in an account or
    envelope name broke out of the attribute (sheet-data injection + broken UI). */
@@ -11366,6 +11367,8 @@ function renderSettings(){
    on Settings until this page is opened on this device. Add an entry with every
    release that changes something a person can see. */
 var WHATS_NEW = [
+  { v:'v3.118.17', d:'Nov 25, 2026', items:[
+    'Reconcile accounts opens faster.' ]},
   { v:'v3.118.16', d:'Nov 25, 2026', items:[
     'Fixed: an account Tiller calls a liability (a card or a loan) that has no Class on your Tiller Accounts tab now shows under Liabilities on Balances and Wealth, not under Other assets.' ]},
   { v:'v3.118.14', d:'Nov 25, 2026', items:[
